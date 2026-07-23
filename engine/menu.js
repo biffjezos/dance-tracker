@@ -280,23 +280,13 @@ export class MenuManager {
 
 
 
-    select(item){
-
-
-
+    select(item) {
         console.log(
-
             "MENU SELECTED:",
-
             item
-
         );
-
-
-
+        if(item === "START CAMERA") {
+            window.dispatchEvent( new Event("startCamera") );
+        }
     }
-
-
-
-
 }

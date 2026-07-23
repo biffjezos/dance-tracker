@@ -22,17 +22,9 @@ INITIALIZE APPLICATION
 
 const camera = new Camera();
 const settings = new Settings();
-
-
-
 const menu = new MenuManager();
-
-
-
 const renderer = new Renderer({
-
     settings: settings
-
 });
 
 
