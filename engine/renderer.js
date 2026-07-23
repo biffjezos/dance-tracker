@@ -13,25 +13,47 @@ export class Renderer {
 
         this.video = document.getElementById("camera");
 
+
         this.layers = {
-            background: document.getElementById("background-layer"),
-            effects: document.getElementById("effect-layer"),
-            body: document.getElementById("body-layer"),
-            overlay: document.getElementById("overlay-layer")
+
+            background:
+            document.getElementById("background-layer"),
+
+            effects:
+            document.getElementById("effect-layer"),
+
+            body:
+            document.getElementById("body-layer"),
+
+            overlay:
+            document.getElementById("overlay-layer")
+
         };
 
 
-        Object.values(this.layers).forEach(canvas=>{
+        Object.values(this.layers)
+        .forEach(canvas=>{
+
             canvas.width = 320;
             canvas.height = 240;
+
         });
 
 
         this.contexts = {
-            background: this.layers.background.getContext("2d"),
-            effects: this.layers.effects.getContext("2d"),
-            body: this.layers.body.getContext("2d"),
-            overlay: this.layers.overlay.getContext("2d")
+
+            background:
+            this.layers.background.getContext("2d"),
+
+            effects:
+            this.layers.effects.getContext("2d"),
+
+            body:
+            this.layers.body.getContext("2d"),
+
+            overlay:
+            this.layers.overlay.getContext("2d")
+
         };
 
 
@@ -61,13 +83,20 @@ export class Renderer {
             return;
 
 
-        let delta = time - this.lastTime;
+        let delta =
+            time - this.lastTime;
+
 
         this.lastTime = time;
 
 
         if(delta > 0){
-            this.fps = Math.round(1000 / delta);
+
+            this.fps =
+                Math.round(
+                    1000 / delta
+                );
+
         }
 
 
@@ -106,20 +135,32 @@ export class Renderer {
 
     drawCamera(){
 
-        if(this.video.readyState < 2)
+        if(
+            !this.settings.video.enabled
+        ){
             return;
+        }
 
 
-        if(!this.settings.video.enabled)
+        if(
+            this.video.readyState < 2
+        ){
             return;
+        }
 
 
         this.contexts.effects.drawImage(
+
             this.video,
+
             0,
+
             0,
+
             this.layers.effects.width,
+
             this.layers.effects.height
+
         );
 
     }
@@ -129,15 +170,15 @@ export class Renderer {
     drawStatus(){
 
         let status =
-            document.querySelector(
-                ".statusbar"
-            );
+        document.querySelector(
+            ".statusbar"
+        );
 
 
         if(status){
 
             status.children[1].innerText =
-                "FPS: " + this.fps;
+            "FPS: " + this.fps;
 
         }
 
