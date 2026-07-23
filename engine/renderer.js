@@ -14,15 +14,10 @@ export class Renderer {
         this.video = document.getElementById("camera");
 
         this.layers = {
-
             background: document.getElementById("background-layer"),
-
             effects: document.getElementById("effect-layer"),
-
             body: document.getElementById("body-layer"),
-
             overlay: document.getElementById("overlay-layer")
-
         };
 
 
@@ -33,15 +28,10 @@ export class Renderer {
 
 
         this.contexts = {
-
             background: this.layers.background.getContext("2d"),
-
             effects: this.layers.effects.getContext("2d"),
-
             body: this.layers.body.getContext("2d"),
-
             overlay: this.layers.overlay.getContext("2d")
-
         };
 
 
@@ -114,15 +104,15 @@ export class Renderer {
 
 
 
-
-
     drawCamera(){
 
-    if(this.video.readyState < 2)
-        return;
+        if(this.video.readyState < 2)
+            return;
 
 
-    if(this.settings.video.enabled){
+        if(!this.settings.video.enabled)
+            return;
+
 
         this.contexts.effects.drawImage(
             this.video,
@@ -133,9 +123,6 @@ export class Renderer {
         );
 
     }
-
-}
-
 
 
 
