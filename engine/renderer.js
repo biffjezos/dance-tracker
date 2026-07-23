@@ -5,87 +5,156 @@ RENDER ENGINE
 ==================================================
 */
 
+
 export class Renderer {
+
 
     constructor(options){
 
-        this.settings = options.settings;
-        this.palette = options.palette;
 
-        this.video = document.getElementById("camera");
+        this.settings =
+            options.settings;
+
+
+        this.video =
+            document.getElementById(
+                "camera"
+            );
+
 
 
         this.layers = {
 
+
             background:
-            document.getElementById("background-layer"),
+            document.getElementById(
+                "background-layer"
+            ),
+
+
             effects:
-            document.getElementById("effect-layer"),
+            document.getElementById(
+                "effect-layer"
+            ),
+
+
             body:
-            document.getElementById("body-layer"),
+            document.getElementById(
+                "body-layer"
+            ),
+
+
             overlay:
-            document.getElementById("overlay-layer"),
+            document.getElementById(
+                "overlay-layer"
+            ),
+
+
             master:
-            document.getElementById("master-layer")
+            document.getElementById(
+                "master-layer"
+            )
+
 
         };
+
 
 
         Object.values(this.layers)
         .forEach(canvas=>{
 
+
             canvas.width = 320;
+
             canvas.height = 240;
+
 
         });
 
 
+
         this.contexts = {
 
+
             background:
-            this.layers.background.getContext("2d"),
+            this.layers.background
+            .getContext("2d"),
+
+
+
             effects:
-            this.layers.effects.getContext("2d"),
+            this.layers.effects
+            .getContext("2d"),
+
+
+
             body:
-            this.layers.body.getContext("2d"),
+            this.layers.body
+            .getContext("2d"),
+
+
+
             overlay:
-            this.layers.overlay.getContext("2d"),
+            this.layers.overlay
+            .getContext("2d"),
+
+
+
             master:
-            this.layers.master.getContext("2d")
+            this.layers.master
+            .getContext("2d")
+
+
         };
 
 
+
         this.running = false;
+
         this.lastTime = 0;
+
         this.fps = 0;
 
+
     }
+
+
 
 
 
     start(){
 
+
         this.running = true;
+
 
         requestAnimationFrame(
             this.loop.bind(this)
         );
 
+
     }
+
+
+
 
 
 
     loop(time){
 
+
         if(!this.running)
             return;
+
 
 
         let delta =
             time - this.lastTime;
 
 
+
         this.lastTime = time;
+
 
 
         if(delta > 0){
@@ -97,103 +166,81 @@ export class Renderer {
 
         }
 
-        this.clear();
+
+
+        this.clearMaster();
+
         this.drawCamera();
+
         this.compose();
+
         this.drawStatus();
+
+
 
         requestAnimationFrame(
             this.loop.bind(this)
         );
 
+
     }
 
-    compose(){
-
-        let ctx =
-            this.contexts.master;
 
 
-        ctx.save();
 
 
-        ctx.globalCompositeOperation =
-            "source-over";
+    clearMaster(){
 
 
-        ctx.drawImage(
-            this.layers.background,
+        this.contexts.master.clearRect(
+
             0,
-            0
+
+            0,
+
+            320,
+
+            240
+
         );
 
 
-        if(this.settings.video.enabled){
 
-            ctx.drawImage(
-                this.layers.effects,
-                0,
-                0
-            );
+        this.contexts.effects.clearRect(
 
-        }
-
-
-        if(this.settings.layers.body){
-
-            ctx.drawImage(
-                this.layers.body,
-                0,
-                0
-            );
-
-        }
-
-
-        ctx.globalCompositeOperation =
-            "screen";
-
-
-        ctx.drawImage(
-            this.layers.overlay,
             0,
-            0
+
+            0,
+
+            320,
+
+            240
+
         );
 
 
-        ctx.restore();
-
     }
 
-    clear(){
 
-        Object.values(this.contexts)
-        .forEach(ctx=>{
-            ctx.clearRect(
-                0,
-                0,
-                ctx.canvas.width,
-                ctx.canvas.height
-            );
-        });
-    }
+
 
 
 
     drawCamera(){
 
+
         if(
             !this.settings.video.enabled
-        ){
+        )
             return;
-        }
+
 
 
         if(
             this.video.readyState < 2
-        ){
+        )
             return;
-        }
+
 
 
         this.contexts.effects.drawImage(
@@ -204,54 +251,135 @@ export class Renderer {
 
             0,
 
-            this.layers.effects.width,
+            320,
 
-            this.layers.effects.height
+            240
 
         );
+
 
     }
 
-drawBody(){
-
-    if(!this.settings.layers.body)
-        return;
 
 
-    const ctx = this.contexts.body;
 
 
-    ctx.globalCompositeOperation =
-        "source-over";
 
-}
-
-    drawEffects(){
-
-    const ctx =
-        this.contexts.effects;
+    compose(){
 
 
-    ctx.globalCompositeOperation =
-        "screen";
+        let ctx =
+            this.contexts.master;
 
-}
+
+
+        ctx.save();
+
+
+
+        ctx.globalCompositeOperation =
+            "source-over";
+
+
+
+        ctx.drawImage(
+
+            this.layers.background,
+
+            0,
+
+            0
+
+        );
+
+
+
+        if(
+            this.settings.video.enabled
+        ){
+
+            ctx.drawImage(
+
+                this.layers.effects,
+
+                0,
+
+                0
+
+            );
+
+        }
+
+
+
+
+        if(
+            this.settings.layers.body
+        ){
+
+            ctx.drawImage(
+
+                this.layers.body,
+
+                0,
+
+                0
+
+            );
+
+        }
+
+
+
+
+        ctx.globalCompositeOperation =
+            "screen";
+
+
+
+        ctx.drawImage(
+
+            this.layers.overlay,
+
+            0,
+
+            0
+
+        );
+
+
+
+        ctx.restore();
+
+
+    }
+
+
+
+
+
 
     drawStatus(){
 
+
         let status =
-        document.querySelector(
-            ".statusbar"
-        );
+            document.querySelector(
+                ".statusbar"
+            );
+
 
 
         if(status){
 
+
             status.children[1].innerText =
-            "FPS: " + this.fps;
+                "FPS: " + this.fps;
+
 
         }
 
+
     }
+
 
 }

@@ -53,7 +53,7 @@ export class Settings {
 
             ghost:{
                 enabled:false,
-                amount:0.2
+                amount:0.5
             }
 
         };

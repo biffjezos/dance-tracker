@@ -5,6 +5,7 @@ APPLICATION CORE
 ==================================================
 */
 
+
 import { BackgroundCapture } from "./body/background.js";
 import { Camera } from "./engine/camera.js";
 import { Palette } from "./engine/palette.js";
@@ -17,17 +18,33 @@ import { Rings } from "./effects/rings.js";
 import { Recorder } from "./engine/recorder.js";
 
 
+
 /*
 ==================================================
-INITIALIZE APPLICATION
+INITIALIZE
 ==================================================
 */
 
-const camera = new Camera();
 
-const background = new BackgroundCapture();
-const palette = new Palette();
-const settings = new Settings();
+const camera =
+    new Camera();
+
+
+
+const background =
+    new BackgroundCapture();
+
+
+
+const palette =
+    new Palette();
+
+
+
+const settings =
+    new Settings();
+
+
 
 const segmentation =
     new Segmentation(
@@ -36,14 +53,19 @@ const segmentation =
         palette
     );
 
+
+
 const menu =
     new MenuManager();
 
+
+
 const renderer =
     new Renderer({
-        settings: settings,
-        palette: palette
+        settings:settings
     });
+
+
 
 const rings =
     new Rings(
@@ -51,11 +73,15 @@ const rings =
         palette
     );
 
+
+
 const ghost =
     new Ghost(
         settings,
         palette
     );
+
+
 
 const recorder =
     new Recorder(
@@ -64,41 +90,64 @@ const recorder =
         )
     );
 
+
+
+
 /*
 ==================================================
-MENU SETUP
+MENU
 ==================================================
 */
+
 
 menu.init();
 
 
 
+
 /*
 ==================================================
-START RENDER LOOP
+RENDER LOOP
 ==================================================
 */
+
 
 renderer.start();
 
 
 
 function processBody(){
+
+
     segmentation.process(
         camera.getVideo()
     );
+
+
+
     ghost.update();
+
     rings.update();
+
+
+
     ghost.draw();
+
     rings.draw();
+
+
+
     requestAnimationFrame(
         processBody
     );
+
+
 }
 
 
+
 processBody();
+
 
 
 
@@ -108,12 +157,14 @@ CAMERA
 ==================================================
 */
 
+
 window.addEventListener(
     "startCamera",
     ()=>{
         camera.start();
     }
 );
+
 
 
 window.addEventListener(
@@ -125,15 +176,18 @@ window.addEventListener(
 
 
 
+
 /*
 ==================================================
-VIDEO TOGGLE
+VIDEO
 ==================================================
 */
+
 
 window.addEventListener(
     "toggleVideo",
     ()=>{
+
 
         settings.video.enabled =
             !settings.video.enabled;
@@ -144,8 +198,38 @@ window.addEventListener(
             settings.video.enabled
         );
 
+
     }
 );
+
+
+
+
+/*
+==================================================
+BODY
+==================================================
+*/
+
+
+window.addEventListener(
+    "toggleBody",
+    ()=>{
+
+
+        settings.layers.body =
+            !settings.layers.body;
+
+
+        console.log(
+            "Body:",
+            settings.layers.body
+        );
+
+
+    }
+);
+
 
 
 
@@ -155,35 +239,43 @@ BACKGROUND
 ==================================================
 */
 
+
 window.addEventListener(
     "captureBackground",
     ()=>{
 
+
         background.capture(
             camera.getVideo()
         );
+
 
     }
 );
 
 
 
+
 /*
 ==================================================
-BODY THRESHOLD
+THRESHOLD
 ==================================================
 */
+
 
 window.addEventListener(
     "thresholdUp",
     ()=>{
 
+
         settings.body.threshold += 5;
+
 
         console.log(
             "Threshold:",
             settings.body.threshold
         );
+
 
     }
 );
@@ -194,14 +286,17 @@ window.addEventListener(
     "thresholdDown",
     ()=>{
 
+
         settings.body.threshold -= 5;
 
 
         if(
             settings.body.threshold < 0
-        ){
+        )
+        {
             settings.body.threshold = 0;
         }
+
 
 
         console.log(
@@ -209,29 +304,39 @@ window.addEventListener(
             settings.body.threshold
         );
 
+
     }
 );
+
 
 
 
 /*
 ==================================================
-BODY COLOUR
+COLOUR
 ==================================================
 */
+
 
 window.addEventListener(
     "bodyColour",
     event=>{
 
+
         segmentation.setColour(
+
             event.detail.r,
+
             event.detail.g,
+
             event.detail.b
+
         );
+
 
     }
 );
+
 
 
 
@@ -241,15 +346,12 @@ RINGS
 ==================================================
 */
 
+
 window.addEventListener(
     "ringsOn",
     ()=>{
 
         settings.amiga.rings.enabled = true;
-
-        console.log(
-            "Rings ON"
-        );
 
     }
 );
@@ -262,10 +364,6 @@ window.addEventListener(
 
         settings.amiga.rings.enabled = false;
 
-        console.log(
-            "Rings OFF"
-        );
-
     }
 );
 
@@ -277,11 +375,6 @@ window.addEventListener(
 
         settings.amiga.rings.count++;
 
-        console.log(
-            "Ring count:",
-            settings.amiga.rings.count
-        );
-
     }
 );
 
@@ -291,19 +384,16 @@ window.addEventListener(
     "ringCountDown",
     ()=>{
 
+
         if(
             settings.amiga.rings.count > 1
-        ){
+        )
+        {
 
             settings.amiga.rings.count--;
 
         }
 
-
-        console.log(
-            "Ring count:",
-            settings.amiga.rings.count
-        );
 
     }
 );
@@ -316,12 +406,6 @@ window.addEventListener(
 
         settings.amiga.rings.size += 10;
 
-
-        console.log(
-            "Ring size:",
-            settings.amiga.rings.size
-        );
-
     }
 );
 
@@ -331,37 +415,41 @@ window.addEventListener(
     "ringSizeDown",
     ()=>{
 
+
         if(
             settings.amiga.rings.size > 20
-        ){
+        )
+        {
 
             settings.amiga.rings.size -= 10;
 
         }
 
 
-        console.log(
-            "Ring size:",
-            settings.amiga.rings.size
-        );
-
     }
 );
+
+
+
+
+/*
+==================================================
+GHOSTS
+==================================================
+*/
+
 
 window.addEventListener(
     "ghostUp",
     ()=>{
 
+
         settings.amiga.ghost.count++;
+
 
         settings.amiga.ghost.enabled =
             settings.amiga.ghost.count > 0;
 
-
-        console.log(
-            "Ghosts:",
-            settings.amiga.ghost.count
-        );
 
     }
 );
@@ -372,44 +460,57 @@ window.addEventListener(
     "ghostDown",
     ()=>{
 
-        if(settings.amiga.ghost.count > 0){
+
+        if(
+            settings.amiga.ghost.count > 0
+        )
+        {
 
             settings.amiga.ghost.count--;
 
         }
 
 
+
         settings.amiga.ghost.enabled =
             settings.amiga.ghost.count > 0;
 
 
-        console.log(
-            "Ghosts:",
-            settings.amiga.ghost.count
-        );
-
     }
 );
+
+
+
+
+/*
+==================================================
+RECORDING
+==================================================
+*/
+
 
 window.addEventListener(
     "startRecord",
     ()=>{
+
         recorder.start();
+
     }
 );
+
 
 
 window.addEventListener(
     "stopRecord",
     ()=>{
+
         recorder.stop();
+
     }
 );
-/*
-==================================================
-STATUS
-==================================================
-*/
+
+
+
 
 console.log(
     "Dance Tracker 5000 initialized"

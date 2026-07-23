@@ -5,69 +5,114 @@ DANCE TRACKER 5000
 ==================================================
 */
 
+
 export class Segmentation {
 
-    constructor(background, settings, palette) {
+
+    constructor(background, settings, palette){
+
+
         this.background = background;
+
         this.settings = settings;
+
         this.palette = palette;
-        this.canvas = document.createElement("canvas");
+
+
+        this.canvas =
+            document.createElement(
+                "canvas"
+            );
+
+
         this.canvas.width = 320;
+
         this.canvas.height = 240;
 
-        this.ctx = this.canvas.getContext("2d");
 
-        this.output = document.getElementById("body-layer");
-        this.outputCtx = this.output.getContext("2d");
-
-    }
-
-    getColour(){
-
-        let colour =
-            this.palette.get().body;
+        this.ctx =
+            this.canvas.getContext(
+                "2d"
+            );
 
 
-        let hex =
-            colour.replace("#","");
+
+        this.output =
+            document.getElementById(
+                "body-layer"
+            );
 
 
-        return {
+        this.outputCtx =
+            this.output.getContext(
+                "2d"
+            );
 
-            r:parseInt(
-                hex.substring(0,2),
-                16
-            ),
 
-            g:parseInt(
-                hex.substring(2,4),
-                16
-            ),
+        this.colour = {
 
-            b:parseInt(
-                hex.substring(4,6),
-                16
-            )
+            r:255,
+
+            g:0,
+
+            b:255
 
         };
 
+
     }
-    process(video) {
+
+
+
+
+
+    getColour(){
+
+
+        return this.colour;
+
+
+    }
+
+
+
+
+
+    process(video){
+
+
         if(!this.settings.layers.body)
             return;
-        if (!this.background.hasBackground)
+
+
+
+        if(!this.background.hasBackground)
             return;
 
-        this.ctx.drawImage(video, 0, 0, 320, 240);
 
-        const current = this.ctx.getImageData(
+
+        this.ctx.drawImage(
+            video,
             0,
             0,
             320,
             240
         );
 
-        const bg = this.background.canvas
+
+
+        const current =
+            this.ctx.getImageData(
+                0,
+                0,
+                320,
+                240
+            );
+
+
+
+        const bg =
+            this.background.canvas
             .getContext("2d")
             .getImageData(
                 0,
@@ -77,41 +122,81 @@ export class Segmentation {
             );
 
 
-        const pixels = current.data;
-        const bgPixels = bg.data;
 
-        const result = this.outputCtx.createImageData(
-            320,
-            240
-        );
+        const pixels =
+            current.data;
 
 
-        const threshold = this.settings.body.threshold;
+
+        const bgPixels =
+            bg.data;
 
 
-        for (let i = 0; i < pixels.length; i += 4) {
 
-            const difference =
-                Math.abs(pixels[i] - bgPixels[i]) +
-                Math.abs(pixels[i + 1] - bgPixels[i + 1]) +
-                Math.abs(pixels[i + 2] - bgPixels[i + 2]);
+        const result =
+            this.outputCtx.createImageData(
+                320,
+                240
+            );
 
 
-            if (difference > threshold) {
 
-                let colour = this.getColour();
+        const threshold =
+            this.settings.body.threshold;
+
+
+
+        for(
+            let i=0;
+            i<pixels.length;
+            i+=4
+        ){
+
+
+            let difference =
+                Math.abs(
+                    pixels[i] -
+                    bgPixels[i]
+                )
+                +
+                Math.abs(
+                    pixels[i+1] -
+                    bgPixels[i+1]
+                )
+                +
+                Math.abs(
+                    pixels[i+2] -
+                    bgPixels[i+2]
+                );
+
+
+
+            if(
+                difference > threshold
+            ){
+
 
                 result.data[i] =
-                    colour.r;
+                    this.colour.r;
+
+
                 result.data[i+1] =
-                    colour.g;
+                    this.colour.g;
+
+
                 result.data[i+2] =
-                    colour.b;
-                result.data[i + 3] = 255;
+                    this.colour.b;
+
+
+                result.data[i+3] =
+                    255;
+
 
             }
 
+
         }
+
 
 
         this.outputCtx.putImageData(
@@ -120,13 +205,36 @@ export class Segmentation {
             0
         );
 
+
     }
 
 
-    setColour(r, g, b) {
-        this.colour.r = r;
-        this.colour.g = g;
-        this.colour.b = b;
-        console.log( "Body colour:", r, g, b);
+
+
+
+    setColour(r,g,b){
+
+
+        this.colour = {
+
+            r:r,
+
+            g:g,
+
+            b:b
+
+        };
+
+
+        console.log(
+            "Body colour:",
+            r,
+            g,
+            b
+        );
+
+
     }
+
+
 }
