@@ -66,28 +66,15 @@ export class Renderer {
             overlay:
             this.layers.overlay
             .getContext("2d")
-
-            Object.values(this.layers)
+        };
+        this.running=false;
+        this.lastTime=0;
+        this.fps=0;
+         Object.values(this.layers)
                 .forEach(canvas=>{
                     canvas.width=320;
                     canvas.height=240;
                 });
-        };
-
-
-
-        this.running=false;
-
-
-
-        this.lastTime=0;
-
-
-
-        this.fps=0;
-
-
-
     }
 
 
