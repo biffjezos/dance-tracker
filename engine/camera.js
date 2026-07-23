@@ -5,37 +5,20 @@ CAMERA ENGINE
 ==================================================
 */
 
-
 export class Camera {
-
 
 
     constructor(){
 
 
         this.video =
-
-        document.getElementById(
-
-            "camera"
-
-        );
+        document.getElementById("camera");
 
 
-
-        this.stream=null;
-
-
-
-        this.enabled=false;
-
+        this.stream = null;
 
 
     }
-
-
-
-
 
 
 
@@ -43,103 +26,95 @@ export class Camera {
     async start(){
 
 
+        console.log(
+            "CAMERA START REQUESTED"
+        );
+
 
         try {
 
 
-
             this.stream =
 
-            await navigator.mediaDevices
-            .getUserMedia({
+            await navigator.mediaDevices.getUserMedia({
 
+                video: {
 
+                    width: 320,
 
-                video:{
-
-
-
-                    width:320,
-
-                    height:240
-
-
+                    height: 240
 
                 },
 
-
-
                 audio:false
-
-
 
             });
 
 
 
-
-
-            this.video.srcObject=
-
-            this.stream;
-
-
-
-            this.enabled=true;
-
-
-
             console.log(
-
-                "Camera started"
-
+                "STREAM RECEIVED"
             );
 
 
 
-        }
+            this.video.srcObject = this.stream;
 
+
+
+            this.video.onloadedmetadata = ()=>{
+
+
+                console.log(
+
+                    "VIDEO SIZE:",
+
+                    this.video.videoWidth,
+
+                    this.video.videoHeight
+
+                );
+
+
+                this.video.play();
+
+
+            };
+
+
+
+        }
 
 
         catch(error){
 
 
-
             console.error(
 
-                "Camera error:",
+                "CAMERA FAILED:",
 
-                error
+                error.name,
+
+                error.message
 
             );
 
 
-
         }
-
 
 
     }
 
 
 
-
-
-
-
-
     stop(){
-
 
 
         if(this.stream){
 
 
-
             this.stream
-
             .getTracks()
-
             .forEach(track=>{
 
 
@@ -149,35 +124,10 @@ export class Camera {
             });
 
 
-
         }
 
 
-
-        this.enabled=false;
-
-
-
     }
-
-
-
-
-
-
-
-    getVideo(){
-
-
-
-        return this.video;
-
-
-
-    }
-
-
-
 
 
 }

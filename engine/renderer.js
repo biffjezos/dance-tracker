@@ -48,7 +48,11 @@ export class Renderer {
         };
 
 
-
+    Object.values(this.layers)
+        .forEach(canvas=>{
+                canvas.width=320;
+                canvas.height=240;
+            });
 
         this.contexts = {
             background:
@@ -67,21 +71,11 @@ export class Renderer {
             this.layers.overlay
             .getContext("2d")
         };
+        
         this.running=false;
         this.lastTime=0;
         this.fps=0;
-         Object.values(this.layers)
-                .forEach(canvas=>{
-                    canvas.width=320;
-                    canvas.height=240;
-                });
     }
-
-
-
-
-
-
 
     start(){
 
