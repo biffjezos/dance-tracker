@@ -7,10 +7,10 @@ DANCE TRACKER 5000
 
 export class Segmentation {
 
-    constructor(background, settings) {
+    constructor(background, settings, palette) {
         this.background = background;
         this.settings = settings;
-
+        this.palette = palette;
         this.canvas = document.createElement("canvas");
         this.canvas.width = 320;
         this.canvas.height = 240;
@@ -20,14 +20,38 @@ export class Segmentation {
         this.output = document.getElementById("body-layer");
         this.outputCtx = this.output.getContext("2d");
 
-        this.colour = {
-            r: 255,
-            g: 0,
-            b: 255
-        };
     }
 
+    getColour(){
 
+        let colour =
+            this.palette.get().body;
+
+
+        let hex =
+            colour.replace("#","");
+
+
+        return {
+
+            r:parseInt(
+                hex.substring(0,2),
+                16
+            ),
+
+            g:parseInt(
+                hex.substring(2,4),
+                16
+            ),
+
+            b:parseInt(
+                hex.substring(4,6),
+                16
+            )
+
+        };
+
+    }
     process(video) {
         if(!this.settings.layers.body)
             return;
@@ -75,9 +99,14 @@ export class Segmentation {
 
             if (difference > threshold) {
 
-                result.data[i] = this.colour.r;
-                result.data[i + 1] = this.colour.g;
-                result.data[i + 2] = this.colour.b;
+                let colour = this.getColour();
+
+                result.data[i] =
+                    colour.r;
+                result.data[i+1] =
+                    colour.g;
+                result.data[i+2] =
+                    colour.b;
                 result.data[i + 3] = 255;
 
             }

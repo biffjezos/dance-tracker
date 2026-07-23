@@ -7,6 +7,7 @@ APPLICATION CORE
 
 import { BackgroundCapture } from "./body/background.js";
 import { Camera } from "./engine/camera.js";
+import { Palette } from "./engine/palette.js";
 import { MenuManager } from "./engine/menu.js";
 import { Settings } from "./engine/settings.js";
 import { Renderer } from "./engine/renderer.js";
@@ -24,13 +25,14 @@ INITIALIZE APPLICATION
 const camera = new Camera();
 
 const background = new BackgroundCapture();
-
+const palette = new Palette();
 const settings = new Settings();
 
 const segmentation =
     new Segmentation(
         background,
-        settings
+        settings,
+        palette
     );
 
 const menu =
@@ -38,7 +40,8 @@ const menu =
 
 const renderer =
     new Renderer({
-        settings:settings
+        settings: settings,
+        palette: palette
     });
 
 const rings =

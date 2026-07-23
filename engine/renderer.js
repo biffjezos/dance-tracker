@@ -10,6 +10,7 @@ export class Renderer {
     constructor(options){
 
         this.settings = options.settings;
+        this.palette = options.palette;
 
         this.video = document.getElementById("camera");
 
