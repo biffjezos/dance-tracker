@@ -1,101 +1,201 @@
 /*
 ==================================================
 DANCE TRACKER 5000
-AMIGA RINGS EFFECT
+AMIGA CONCENTRIC RING GENERATOR
 ==================================================
 */
 
 export class Rings {
 
-    constructor(settings) {
+    constructor(settings){
+
         this.settings = settings;
+
+        this.canvas =
+            document.getElementById(
+                "effect-layer"
+            );
+
+        this.ctx =
+            this.canvas.getContext("2d");
+
         this.time = 0;
 
-        this.canvas = document.getElementById("overlay-layer");
-        this.ctx = this.canvas.getContext("2d");
-    }
 
-
-    update() {
-        this.time += 0.03;
-    }
-
-
-    draw() {
-
-        const rings = this.settings.amiga.rings;
-
-        if( !rings.enabled || !this.settings.layers.effects )
-            return;
-
-
-        const ctx = this.ctx;
-
-        ctx.clearRect(
-            0,
-            0,
-            this.canvas.width,
-            this.canvas.height
-        );
-
-
-        const cx = this.canvas.width / 2;
-        const cy = this.canvas.height / 2;
-
-
-        const colours = [
-            "#ff00ff",
-            "#00ffff",
-            "#ffff00",
-            "#ff6600"
+        this.colours = [
+            "rgb(255,0,255)",
+            "rgb(0,255,80)",
+            "rgb(0,150,255)",
+            "rgb(255,180,0)"
         ];
 
 
-        for (let i = 0; i < rings.count; i++) {
+        this.centres = [];
 
-            const radius =
-                rings.size +
-                i * 20 +
-                Math.sin(
-                    this.time + i
-                ) * 15;
+    }
 
 
-            ctx.beginPath();
 
-            ctx.arc(
-                cx,
-                cy,
-                radius,
-                0,
-                Math.PI * 2
-            );
+    update(){
+
+        this.time += 0.03;
 
 
-            ctx.strokeStyle =
-                colours[
-                    i % colours.length
-                ];
+        let count =
+            this.settings.amiga.rings.count;
 
 
-            ctx.lineWidth =
-                rings.width;
+        while(this.centres.length < count){
 
+            this.centres.push({
 
-            ctx.globalAlpha = 0.75;
+                x: Math.random() * this.canvas.width,
 
-            ctx.stroke();
+                y: Math.random() * this.canvas.height,
+
+                phase: Math.random() * Math.PI * 2,
+
+                speed:
+                    0.5 +
+                    Math.random()
+
+            });
 
         }
 
 
-        ctx.globalAlpha = 1;
+        if(this.centres.length > count){
+
+            this.centres.length = count;
+
+        }
 
     }
 
 
-    setEnabled(value) {
-        this.settings.amiga.rings.enabled = value;
+
+
+    draw(){
+
+        const rings =
+            this.settings.amiga.rings;
+
+
+        if(!rings.enabled)
+            return;
+
+
+        let ctx = this.ctx;
+
+
+        ctx.save();
+
+
+        ctx.globalCompositeOperation =
+            rings.blend || "screen";
+
+
+        let count =
+            rings.count;
+
+
+        for(
+            let group = 0;
+            group < count;
+            group++
+        ){
+
+
+            let centre =
+                this.centres[group];
+
+
+            if(!centre)
+                continue;
+
+
+
+            let cx =
+                centre.x +
+                Math.sin(
+                    this.time *
+                    centre.speed +
+                    centre.phase
+                ) * 50;
+
+
+
+            let cy =
+                centre.y +
+                Math.cos(
+                    this.time *
+                    centre.speed * 0.8 +
+                    centre.phase
+                ) * 40;
+
+
+
+            let colour =
+                this.colours[
+                    group %
+                    this.colours.length
+                ];
+
+
+
+            let ringsPerGroup =
+                rings.ringsPerGroup ||
+                8;
+
+
+
+            for(
+                let r = 0;
+                r < ringsPerGroup;
+                r++
+            ){
+
+
+                let radius =
+                    rings.size +
+                    r *
+                    (rings.spacing || 14);
+
+
+
+                ctx.beginPath();
+
+
+                ctx.arc(
+                    cx,
+                    cy,
+                    radius,
+                    0,
+                    Math.PI * 2
+                );
+
+
+                ctx.strokeStyle =
+                    colour;
+
+
+                ctx.lineWidth =
+                    rings.width;
+
+
+                ctx.globalAlpha =
+                    0.8;
+
+
+                ctx.stroke();
+
+            }
+
+        }
+
+
+        ctx.restore();
+
     }
 
 }
