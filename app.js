@@ -5,7 +5,7 @@ APPLICATION CORE
 ==================================================
 */
 
-
+import { Camera } from "./engine/camera.js";
 import { MenuManager } from "./engine/menu.js";
 import { Settings } from "./engine/settings.js";
 import { Renderer } from "./engine/renderer.js";
@@ -20,7 +20,7 @@ INITIALIZE APPLICATION
 ==================================================
 */
 
-
+const camera = new Camera();
 const settings = new Settings();
 
 
@@ -62,7 +62,17 @@ START RENDER LOOP
 renderer.start();
 
 
+window.addEventListener(
 
+    "startCamera",
+
+    ()=>{
+
+        camera.start();
+
+    }
+
+);
 
 
 
