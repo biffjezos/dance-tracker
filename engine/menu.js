@@ -5,7 +5,6 @@ AMIGA TWO ROW MENU SYSTEM
 ==================================================
 */
 
-
 export class MenuManager {
     constructor() {
 
@@ -267,12 +266,9 @@ export class MenuManager {
                 new Event("stopCamera")
             );
         }
-        if(item === "VIDEO ON"){
+        if(item === "VIDEO ON/OFF"){
             window.dispatchEvent(
-                new CustomEvent(
-                    "displayMode",
-                    {detail:"video"}
-                )
+                new Event("toggleVideo")
             );
         }
         
