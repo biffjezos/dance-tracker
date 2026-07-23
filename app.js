@@ -53,20 +53,8 @@ START RENDER LOOP
 
 renderer.start();
 
-
-window.addEventListener(
-
-    "startCamera",
-
-    ()=>{
-
-        camera.start();
-
-    }
-
-);
-
-
+window.addEventListener( "startCamera", ()=>{ camera.start(); } );
+window.addEventListener( "stopCamera", ()=>{ camera.stop(); } );
 
 /*
 ==================================================
@@ -75,8 +63,4 @@ STATUS
 */
 
 
-console.log(
-
-    "Dance Tracker 5000 initialized"
-
-);
+console.log("Dance Tracker 5000 initialized");

@@ -7,9 +7,7 @@ AMIGA TWO ROW MENU SYSTEM
 
 
 export class MenuManager {
-
-
-    constructor(){
+    constructor() {
 
 
         this.subMenu =
@@ -18,19 +16,13 @@ export class MenuManager {
 
 
         this.menus = {
-
-
-
             project:[
-
                 "START CAMERA",
-
+                "STOP CAMERA",
+                "CAPTURE BACKGROUND",
                 "RECORD",
-
-                "STOP",
-
+                "STOP RECORD",
                 "DOWNLOAD"
-
             ],
 
 
@@ -276,17 +268,36 @@ export class MenuManager {
 
 
 
-
-
-
-
     select(item) {
-        console.log(
-            "MENU SELECTED:",
-            item
-        );
-        if(item === "START CAMERA") {
-            window.dispatchEvent( new Event("startCamera") );
+        console.log( "MENU SELECTED:", item );
+        if(item === "START CAMERA"){
+            window.dispatchEvent(
+                new Event("startCamera")
+            );
+        }
+
+        if(item === "STOP CAMERA"){
+            window.dispatchEvent(
+                new Event("stopCamera")
+            );
+        }
+
+        if(item === "CAPTURE BACKGROUND"){
+            window.dispatchEvent(
+                new Event("captureBackground")
+            );
+        }
+
+        if(item === "RECORD"){
+            window.dispatchEvent(
+                new Event("startRecord")
+            );
+        }
+
+        if(item === "STOP RECORD"){
+            window.dispatchEvent(
+                new Event("stopRecord")
+            );
         }
     }
 }
