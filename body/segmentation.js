@@ -10,69 +10,50 @@ export class Segmentation {
 
 
 
-    constructor(background){
+    constructor(background, settings) {
 
 
         this.background = background;
+        this.settings = settings;
 
-
-        this.canvas =
-        document.createElement("canvas");
-
-
+        this.canvas = document.createElement("canvas");
         this.canvas.width = 320;
-
         this.canvas.height = 240;
-
-
-
-        this.ctx =
-        this.canvas.getContext("2d");
+        this.ctx = this.canvas.getContext("2d");
 
 
 
         this.output =
-        document.getElementById(
-            "body-layer"
-        );
+            document.getElementById(
+                "body-layer"
+            );
 
 
 
         this.outputCtx =
-        this.output.getContext("2d");
+            this.output.getContext("2d");
 
 
 
         this.threshold = 40;
+        this.settings = null;
 
 
         this.colour = {
 
-            r:255,
+            r: 255,
 
-            g:0,
+            g: 0,
 
-            b:255
+            b: 255
 
         };
 
 
     }
 
-
-
-
-
-
-
-    process(video){
-
-
-
-        if(
-            !this.background.hasBackground
-        )
-
+    process(video) {
+        if (!this.background.hasBackground)
             return;
 
 
@@ -96,129 +77,111 @@ export class Segmentation {
 
         let current =
 
-        this.ctx.getImageData(
+            this.ctx.getImageData(
 
-            0,
+                0,
 
-            0,
+                0,
 
-            320,
+                320,
 
-            240
+                240
 
-        );
+            );
 
 
 
         let bg =
 
-        this.background.canvas
-        .getContext("2d")
-        .getImageData(
+            this.background.canvas
+            .getContext("2d")
+            .getImageData(
 
-            0,
+                0,
 
-            0,
+                0,
 
-            320,
+                320,
 
-            240
+                240
 
-        );
+            );
 
 
 
         let pixels =
-        current.data;
+            current.data;
 
 
 
         let bgPixels =
-        bg.data;
+            bg.data;
 
 
 
         let result =
 
-        this.outputCtx
-        .createImageData(
+            this.outputCtx
+            .createImageData(
 
-            320,
+                320,
 
-            240
+                240
 
-        );
-
-
+            );
 
 
-        for(
-            let i=0;
-            i<pixels.length;
-            i+=4
-        ){
+
+
+        for (
+            let i = 0; i < pixels.length; i += 4
+        ) {
 
 
 
             let difference =
 
 
+                Math.abs(
+                    pixels[i] -
+                    bgPixels[i]
+                )
+
+            +
+
             Math.abs(
-                pixels[i]
-                -
-                bgPixels[i]
+                pixels[i + 1] -
+                bgPixels[i + 1]
             )
 
             +
 
             Math.abs(
-                pixels[i+1]
-                -
-                bgPixels[i+1]
-            )
-
-            +
-
-            Math.abs(
-                pixels[i+2]
-                -
-                bgPixels[i+2]
+                pixels[i + 2] -
+                bgPixels[i + 2]
             );
 
 
 
 
 
-            if(
-                difference >
-                this.threshold
-            ){
+            if (difference > this.settings.body.threshold)
+
+                result.data[i] = this.colour.r;
+            result.data[i + 1] = this.colour.g;
 
 
 
-                result.data[i]=
-
-                this.colour.r;
-
-
-
-                result.data[i+1]=
-
-                this.colour.g;
-
-
-
-                result.data[i+2]=
+            result.data[i + 2] =
 
                 this.colour.b;
 
 
 
-                result.data[i+3]=
+            result.data[i + 3] =
 
                 255;
-            }
         }
-        this.outputCtx.putImageData(result, 0, 0);
     }
+    this.outputCtx.putImageData(result, 0, 0);
 }

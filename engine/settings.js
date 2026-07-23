@@ -30,39 +30,17 @@ export class Settings {
 
 
         this.body = {
-
-
-            mode:"off",
-
-
-            colourMode:"original",
-
-
-            blendMode:"normal"
-
-
+            mode:"1990",
+            colourMode:"magenta",
+            blendMode:"normal",
+            threshold:40
         };
 
-
-
-
-
-
-
         this.effects = {
-
-
             pixelate:{
-
-
                 enabled:false,
-
                 size:4
-
-
             },
-
-
 
             scanlines:{
 
