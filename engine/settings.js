@@ -38,15 +38,18 @@ export class Settings {
                 size:4
             },
 
+
             scanlines:{
                 enabled:false,
                 height:4
             },
 
+
             rgbShift:{
                 enabled:false,
                 amount:5
             },
+
 
             ghost:{
                 enabled:false,
@@ -54,6 +57,7 @@ export class Settings {
             }
 
         };
+
 
 
         this.amiga = {
@@ -67,7 +71,7 @@ export class Settings {
                 size:30,
                 width:6,
                 blend:"screen"
-            }
+            },
 
 
             plasma:{
@@ -95,19 +99,28 @@ export class Settings {
         };
 
 
+
         this.audio = {
+
             enabled:false,
             bpm:128
+
         };
+
 
 
         this.recording = {
+
             enabled:false
+
         };
 
 
+
         this.debug = {
+
             fps:true
+
         };
 
     }
@@ -129,12 +142,20 @@ export class Settings {
 
     set(path,value){
 
-        let parts = path.split(".");
-        let obj = this;
+        let parts =
+            path.split(".");
+
+
+        let obj=this;
+
 
         while(parts.length > 1){
-            obj = obj[parts.shift()];
+
+            obj =
+                obj[parts.shift()];
+
         }
+
 
         obj[parts[0]] = value;
 
