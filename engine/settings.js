@@ -73,7 +73,11 @@ export class Settings {
                 blend:"screen"
             },
 
-
+            ghost:{
+                enabled:false,
+                count:0,
+                alpha:0.45
+            },
             plasma:{
                 enabled:false,
                 speed:1
