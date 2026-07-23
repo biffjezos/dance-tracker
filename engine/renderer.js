@@ -26,7 +26,7 @@ export class Renderer {
             overlay:
             document.getElementById("overlay-layer"),
             master:
-            document.getElementById("master-layer"),
+            document.getElementById("master-layer")
 
         };
 
@@ -51,7 +51,7 @@ export class Renderer {
             overlay:
             this.layers.overlay.getContext("2d"),
             master:
-            this.layers.master.getContext("2d"),
+            this.layers.master.getContext("2d")
         };
 
 
