@@ -520,13 +520,18 @@ window.addEventListener(
     "startRecord",
     ()=>{
 
-        recorder.start();
+        let started =
+            recorder.start();
 
         document
         .querySelector(".statusbar")
         .children[4]
         .innerText =
-            "REC: ON";
+            started
+            ?
+            "REC: ON"
+            :
+            "REC: ERROR";
 
     }
 );
@@ -537,13 +542,18 @@ window.addEventListener(
     "stopRecord",
     ()=>{
 
-        recorder.stop();
+        let stopped =
+            recorder.stop();
 
         document
         .querySelector(".statusbar")
         .children[4]
         .innerText =
-            "REC: OFF";
+            stopped
+            ?
+            "REC: OFF"
+            :
+            "REC: ERROR";
 
     }
 );
