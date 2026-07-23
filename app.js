@@ -20,8 +20,8 @@ INITIALIZE APPLICATION
 
 const camera = new Camera();
 const background = new BackgroundCapture();
-const segmentation = new Segmentation( background, settings );
 const settings = new Settings();
+const segmentation = new Segmentation( background, settings );
 const menu = new MenuManager();
 const renderer = new Renderer({
     settings: settings
