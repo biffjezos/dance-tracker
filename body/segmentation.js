@@ -1,311 +1,104 @@
 /*
 ==================================================
 DANCE TRACKER 5000
-SETTINGS ENGINE
+1990s STYLE BODY SEGMENTATION
 ==================================================
 */
 
+export class Segmentation {
 
-export class Settings {
+    constructor(background, settings) {
+        this.background = background;
+        this.settings = settings;
 
+        this.canvas = document.createElement("canvas");
+        this.canvas.width = 320;
+        this.canvas.height = 240;
 
-    constructor(){
+        this.ctx = this.canvas.getContext("2d");
 
+        this.output = document.getElementById("body-layer");
+        this.outputCtx = this.output.getContext("2d");
 
-        this.video = {
-
-
-            mirror:false,
-
-
-            width:320,
-
-            height:240
-
-
+        this.colour = {
+            r: 255,
+            g: 0,
+            b: 255
         };
-
-
-
-
-
-        this.body = {
-
-
-            mode:"1990",
-
-
-            colourMode:"magenta",
-
-
-            blendMode:"normal",
-
-
-            threshold:60
-
-
-        };
-
-
-
-
-
-
-
-        this.effects = {
-
-
-            pixelate:{
-
-
-                enabled:false,
-
-
-                size:4
-
-
-            },
-
-
-
-            scanlines:{
-
-
-                enabled:false,
-
-
-                height:4
-
-
-            },
-
-
-
-            rgbShift:{
-
-
-                enabled:false,
-
-
-                amount:5
-
-
-            },
-
-
-
-            ghost:{
-
-
-                enabled:false,
-
-
-                amount:0.2
-
-
-            }
-
-
-
-        };
-
-
-
-
-
-
-
-        this.amiga = {
-
-
-            rings:{
-
-
-                enabled:false,
-
-
-                count:2,
-
-
-                speed:2,
-
-
-                size:80,
-
-
-                width:6,
-
-
-                blend:"screen"
-
-
-            },
-
-
-
-
-
-            plasma:{
-
-
-                enabled:false,
-
-
-                speed:1
-
-
-            },
-
-
-
-
-
-            copper:{
-
-
-                enabled:false
-
-
-            },
-
-
-
-
-
-            stars:{
-
-
-                enabled:false,
-
-
-                count:100
-
-
-            },
-
-
-
-
-
-            vectorBalls:{
-
-
-                enabled:false,
-
-
-                count:40
-
-
-            }
-
-
-
-        };
-
-
-
-
-
-
-
-        this.audio = {
-
-
-            enabled:false,
-
-
-            bpm:128
-
-
-        };
-
-
-
-
-
-
-
-        this.recording = {
-
-
-            enabled:false
-
-
-        };
-
-
-
-
-
-
-
-        this.debug = {
-
-
-            fps:true
-
-
-        };
-
-
-
     }
 
 
+    process(video) {
+
+        if (!this.background.hasBackground)
+            return;
+
+        this.ctx.drawImage(video, 0, 0, 320, 240);
+
+        const current = this.ctx.getImageData(
+            0,
+            0,
+            320,
+            240
+        );
+
+        const bg = this.background.canvas
+            .getContext("2d")
+            .getImageData(
+                0,
+                0,
+                320,
+                240
+            );
 
 
+        const pixels = current.data;
+        const bgPixels = bg.data;
 
-
-
-    get(path){
-
-
-        return path
-
-        .split(".")
-
-        .reduce(
-
-            (obj,key)=>obj[key],
-
-            this
-
+        const result = this.outputCtx.createImageData(
+            320,
+            240
         );
 
 
-    }
+        const threshold = this.settings.body.threshold;
 
 
+        for (let i = 0; i < pixels.length; i += 4) {
+
+            const difference =
+                Math.abs(pixels[i] - bgPixels[i]) +
+                Math.abs(pixels[i + 1] - bgPixels[i + 1]) +
+                Math.abs(pixels[i + 2] - bgPixels[i + 2]);
 
 
+            if (difference > threshold) {
 
+                result.data[i] = this.colour.r;
+                result.data[i + 1] = this.colour.g;
+                result.data[i + 2] = this.colour.b;
+                result.data[i + 3] = 255;
 
-
-    set(path,value){
-
-
-        let parts = path.split(".");
-
-
-        let obj=this;
-
-
-
-        while(parts.length > 1){
-
-
-            obj = obj[parts.shift()];
-
+            }
 
         }
 
 
-
-        obj[parts[0]]=value;
-
+        this.outputCtx.putImageData(
+            result,
+            0,
+            0
+        );
 
     }
 
 
+    setColour(r, g, b) {
+
+        this.colour.r = r;
+        this.colour.g = g;
+        this.colour.b = b;
+
+    }
 
 }
