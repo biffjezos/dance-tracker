@@ -10,7 +10,7 @@ export class Settings {
 
 
     constructor(){
-
+        this.video.enabled = true;
 
 this.video = {
     mirror:false,
