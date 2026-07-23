@@ -7,10 +7,10 @@ AMIGA CONCENTRIC RING GENERATOR
 
 export class Rings {
 
-    constructor(settings){
+    constructor(settings, palette){
 
         this.settings = settings;
-
+        this.palette = palette;
         this.canvas =
             document.getElementById(
                 "overlay-layer"
@@ -21,20 +21,40 @@ export class Rings {
 
         this.time = 0;
 
-
-        this.colours = [
-            "rgb(255,0,255)",
-            "rgb(0,255,80)",
-            "rgb(0,150,255)",
-            "rgb(255,180,0)"
-        ];
-
-
         this.centres = [];
 
     }
+    paletteColour(index) {
+        let colours =  this.palette.get().rings;
+        return colours[  index % colours.length ];
+    }
+
+    hexToRGB(hex){
+
+        hex =
+            hex.replace("#","");
 
 
+        return {
+
+            r:parseInt(
+                hex.substring(0,2),
+                16
+            ),
+
+            g:parseInt(
+                hex.substring(2,4),
+                16
+            ),
+
+            b:parseInt(
+                hex.substring(4,6),
+                16
+            )
+
+        };
+
+    }
 
     update(){
 
@@ -135,11 +155,7 @@ export class Rings {
 
 
 
-            let colour =
-                this.colours[
-                    group %
-                    this.colours.length
-                ];
+            let colour = this.paletteColour(group);
 
 
 

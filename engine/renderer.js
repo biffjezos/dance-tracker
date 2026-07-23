@@ -19,15 +19,14 @@ export class Renderer {
 
             background:
             document.getElementById("background-layer"),
-
             effects:
             document.getElementById("effect-layer"),
-
             body:
             document.getElementById("body-layer"),
-
             overlay:
             document.getElementById("overlay-layer")
+            master:
+            document.getElementById("master-layer"),
 
         };
 
@@ -45,16 +44,14 @@ export class Renderer {
 
             background:
             this.layers.background.getContext("2d"),
-
             effects:
             this.layers.effects.getContext("2d"),
-
             body:
             this.layers.body.getContext("2d"),
-
             overlay:
             this.layers.overlay.getContext("2d")
-
+            master:
+            this.layers.master.getContext("2d"),
         };
 
 
@@ -100,13 +97,10 @@ export class Renderer {
 
         }
 
-
         this.clear();
         this.drawCamera();
-        this.drawBody();
-        this.drawEffects();
+        this.compose();
         this.drawStatus();
-
 
         requestAnimationFrame(
             this.loop.bind(this)
@@ -114,22 +108,74 @@ export class Renderer {
 
     }
 
+    compose(){
 
+        let ctx =
+            this.contexts.master;
+
+
+        ctx.save();
+
+
+        ctx.globalCompositeOperation =
+            "source-over";
+
+
+        ctx.drawImage(
+            this.layers.background,
+            0,
+            0
+        );
+
+
+        if(this.settings.video.enabled){
+
+            ctx.drawImage(
+                this.layers.effects,
+                0,
+                0
+            );
+
+        }
+
+
+        if(this.settings.layers.body){
+
+            ctx.drawImage(
+                this.layers.body,
+                0,
+                0
+            );
+
+        }
+
+
+        ctx.globalCompositeOperation =
+            "screen";
+
+
+        ctx.drawImage(
+            this.layers.overlay,
+            0,
+            0
+        );
+
+
+        ctx.restore();
+
+    }
 
     clear(){
 
         Object.values(this.contexts)
         .forEach(ctx=>{
-
             ctx.clearRect(
                 0,
                 0,
                 ctx.canvas.width,
                 ctx.canvas.height
             );
-
         });
-
     }
 
 

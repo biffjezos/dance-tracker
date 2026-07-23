@@ -48,7 +48,10 @@ const rings =
     new Rings(settings);
 
 const ghost =
-    new Ghost(settings);
+    new Ghost(
+        settings,
+        palette
+    );
 
 
 

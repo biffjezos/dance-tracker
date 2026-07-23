@@ -10,21 +10,15 @@ export class Palette {
     constructor(){
 
         this.palettes = {
-
             classicAmiga:{
-
-                background:"#000000",
-
-                body:"#ff00ff",
-
-                ghost:"#ff00ff",
-
-                rings:[
-                    "#ff00ff",
-                    "#00ff66"
-                ]
-
-            },
+                background:"rgb(0,0,0)",
+                    body:"rgb(255,0,255)",
+                    ghost:"rgb(255,0,255)",
+            rings:[
+                "rgb(255,0,255)",
+                "rgb(0,255,80)"
+            ]
+        }
 
 
             cyberGreen:{

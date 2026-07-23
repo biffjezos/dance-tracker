@@ -7,10 +7,10 @@ BODY GHOST TRAIL EFFECT
 
 export class Ghost {
 
-    constructor(settings){
+    constructor(settings, palette){
 
         this.settings = settings;
-
+        this.palette = palette;
         this.canvas =
             document.getElementById(
                 "overlay-layer"
@@ -30,7 +30,36 @@ export class Ghost {
 
     }
 
+    getColour(){
 
+        let colour =
+            this.palette.get().ghost;
+
+
+        let hex =
+            colour.replace("#","");
+
+
+        return {
+
+            r:parseInt(
+                hex.substring(0,2),
+                16
+            ),
+
+            g:parseInt(
+                hex.substring(2,4),
+                16
+            ),
+
+            b:parseInt(
+                hex.substring(4,6),
+                16
+            )
+
+        };
+
+    }
 
     update(){
 
@@ -109,7 +138,7 @@ export class Ghost {
         ctx.globalCompositeOperation =
             "screen";
 
-
+        let colour = this.getColour();
         for(
             let i=0;
             i<this.history.length;
@@ -123,7 +152,7 @@ export class Ghost {
                     i /
                     this.history.length
                 );
-
+            ctx.globalCompositeOperation = "screen";
 
             ctx.drawImage(
                 this.history[i],
