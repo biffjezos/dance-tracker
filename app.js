@@ -54,6 +54,17 @@ processBody();
 
 window.addEventListener( "startCamera", ()=>{ camera.start(); } );
 window.addEventListener( "stopCamera", ()=>{ camera.stop(); } );
+window.addEventListener("toggleVideo", ()=>{
+
+    settings.video.enabled =
+        !settings.video.enabled;
+
+    console.log(
+        "Video:",
+        settings.video.enabled
+    );
+
+});
 window.addEventListener( "captureBackground", ()=>{ background.capture( camera.getVideo()); } );
 window.addEventListener("thresholdUp", ()=>{
 
