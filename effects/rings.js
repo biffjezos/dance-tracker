@@ -13,7 +13,7 @@ export class Rings {
 
         this.canvas =
             document.getElementById(
-                "effect-layer"
+                "overlay-layer"
             );
 
         this.ctx =
