@@ -25,7 +25,7 @@ export class Rings {
 
         const rings = this.settings.amiga.rings;
 
-        if (!rings.enabled)
+        if( !rings.enabled || !this.settings.layers.effects )
             return;
 
 
