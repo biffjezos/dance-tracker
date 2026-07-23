@@ -41,21 +41,17 @@ export class MenuManager {
 
 
 
-            body:[
-
-                "NORMAL",
-
-                "1990 VIDEO LAB",
-
-                "MODERN AI",
-
-                "HYBRID",
-
-                "COLOUR",
-
-                "OUTLINE"
-
-            ],
+           body:[
+            "OFF",
+            "1990 VIDEO LAB",
+            "MODERN AI",
+            "HYBRID",
+            "THRESHOLD +",
+            "THRESHOLD -",
+            "MAGENTA",
+            "GREEN",
+            "BLUE"
+        ],
 
 
 
@@ -287,7 +283,49 @@ export class MenuManager {
                 new Event("captureBackground")
             );
         }
-
+        if(item === "THRESHOLD +"){
+            window.dispatchEvent(new Event("thresholdUp"));
+        }
+        
+        if(item === "THRESHOLD -"){
+            window.dispatchEvent(new Event("thresholdDown"));
+        }
+        
+        if(item === "MAGENTA"){
+            window.dispatchEvent(
+                new CustomEvent("bodyColour", {
+                    detail:{
+                        r:255,
+                        g:0,
+                        b:255
+                    }
+                })
+            );
+        }
+        
+        if(item === "GREEN"){
+            window.dispatchEvent(
+                new CustomEvent("bodyColour", {
+                    detail:{
+                        r:0,
+                        g:255,
+                        b:0
+                    }
+                })
+            );
+        }
+        
+        if(item === "BLUE"){
+            window.dispatchEvent(
+                new CustomEvent("bodyColour", {
+                    detail:{
+                        r:0,
+                        g:120,
+                        b:255
+                    }
+                })
+            );
+        }
         if(item === "RECORD"){
             window.dispatchEvent(
                 new Event("startRecord")
