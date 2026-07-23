@@ -74,8 +74,8 @@ function processBody(){
         camera.getVideo()
     );
     ghost.update();
-    ghost.draw();
     rings.update();
+    ghost.draw();
     rings.draw();
     requestAnimationFrame(
         processBody
