@@ -50,6 +50,43 @@ processBody();
 window.addEventListener( "startCamera", ()=>{ camera.start(); } );
 window.addEventListener( "stopCamera", ()=>{ camera.stop(); } );
 window.addEventListener( "captureBackground", ()=>{ background.capture( camera.getVideo()); } );
+window.addEventListener("thresholdUp", ()=>{
+
+    settings.body.threshold += 5;
+
+    console.log(
+        "Threshold:",
+        settings.body.threshold
+    );
+
+});
+
+
+window.addEventListener("thresholdDown", ()=>{
+
+    settings.body.threshold -= 5;
+
+    if(settings.body.threshold < 0){
+        settings.body.threshold = 0;
+    }
+
+    console.log(
+        "Threshold:",
+        settings.body.threshold
+    );
+
+});
+
+
+window.addEventListener("bodyColour", (event)=>{
+
+    segmentation.setColour(
+        event.detail.r,
+        event.detail.g,
+        event.detail.b
+    );
+
+});
 /*
 ==================================================
 STATUS
