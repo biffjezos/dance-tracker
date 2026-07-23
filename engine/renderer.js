@@ -24,7 +24,7 @@ export class Renderer {
             body:
             document.getElementById("body-layer"),
             overlay:
-            document.getElementById("overlay-layer")
+            document.getElementById("overlay-layer"),
             master:
             document.getElementById("master-layer"),
 
