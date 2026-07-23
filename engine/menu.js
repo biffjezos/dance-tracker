@@ -30,16 +30,10 @@ export class MenuManager {
 
             video:[
                 "VIDEO ON",
-                "BODY ONLY",
-                "FX ONLY",
-                "BODY + FX",
                 "MIRROR",
                 "BRIGHTNESS",
                 "CONTRAST"
             ],
-
-
-
 
            body:[
             "OFF",
