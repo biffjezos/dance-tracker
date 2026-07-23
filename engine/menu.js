@@ -53,6 +53,8 @@ export class MenuManager {
                 "RING COUNT -",
                 "RING SIZE +",
                 "RING SIZE -",
+                "GHOST +",
+                "GHOST -",
                 "PLASMA",
                 "STARFIELD",
                 "VECTOR BALLS",
@@ -65,7 +67,6 @@ export class MenuManager {
                 "PIXELATE",
                 "SCANLINES",
                 "RGB SHIFT",
-                "GHOST",
                 "CRT"
             ],
 
@@ -324,7 +325,18 @@ export class MenuManager {
                 new Event("ringSizeDown")
             );
         }
-
+        if(item === "GHOST +"){
+            window.dispatchEvent(
+                new Event("ghostUp")
+            );
+        }
+        
+        
+        if(item === "GHOST -"){
+            window.dispatchEvent(
+                new Event("ghostDown")
+            );
+        }
     }
 
 }
