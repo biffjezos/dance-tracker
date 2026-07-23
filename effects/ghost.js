@@ -13,11 +13,17 @@ export class Ghost {
 
         this.canvas =
             document.getElementById(
-                "effect-layer"
+                "overlay-layer"
             );
 
         this.ctx =
             this.canvas.getContext("2d");
+
+
+        this.body =
+            document.getElementById(
+                "body-layer"
+            );
 
 
         this.history = [];
@@ -41,12 +47,6 @@ export class Ghost {
         }
 
 
-        const body =
-            document.getElementById(
-                "body-layer"
-            );
-
-
         let copy =
             document.createElement(
                 "canvas"
@@ -54,20 +54,18 @@ export class Ghost {
 
 
         copy.width =
-            body.width;
+            this.body.width;
 
         copy.height =
-            body.height;
+            this.body.height;
 
 
         let ctx =
-            copy.getContext(
-                "2d"
-            );
+            copy.getContext("2d");
 
 
         ctx.drawImage(
-            body,
+            this.body,
             0,
             0
         );
@@ -91,8 +89,6 @@ export class Ghost {
 
 
 
-
-
     draw(){
 
         const ghost =
@@ -103,10 +99,8 @@ export class Ghost {
             return;
 
 
-
         let ctx =
             this.ctx;
-
 
 
         ctx.save();
@@ -116,24 +110,19 @@ export class Ghost {
             "screen";
 
 
-
         for(
-            let i=this.history.length-1;
-            i>=0;
-            i--
+            let i=0;
+            i<this.history.length;
+            i++
         ){
 
-            let alpha =
+            ctx.globalAlpha =
                 ghost.alpha *
                 (
                     1 -
                     i /
-                    (this.history.length + 1)
+                    this.history.length
                 );
-
-
-            ctx.globalAlpha =
-                alpha;
 
 
             ctx.drawImage(
