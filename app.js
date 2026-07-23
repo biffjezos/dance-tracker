@@ -5,7 +5,6 @@ APPLICATION CORE
 ==================================================
 */
 
-
 import { BackgroundCapture } from "./body/background.js";
 import { Camera } from "./engine/camera.js";
 import { Palette } from "./engine/palette.js";
@@ -19,26 +18,16 @@ import { Recorder } from "./engine/recorder.js";
 
 
 
-/*
-==================================================
-INITIALIZE
-==================================================
-*/
-
-
 const camera =
     new Camera();
-
 
 
 const background =
     new BackgroundCapture();
 
 
-
 const palette =
     new Palette();
-
 
 
 const settings =
@@ -93,36 +82,50 @@ const recorder =
 
 
 
-/*
-==================================================
-MENU
-==================================================
-*/
-
-
 menu.init();
-
-
-
-
-/*
-==================================================
-RENDER LOOP
-==================================================
-*/
 
 
 renderer.start();
 
 
 
+
 function processBody(){
+
+
+    /*
+    CLEAR ONLY EFFECT OVERLAY
+
+    Body layer stays.
+    Camera stays.
+    Effects redraw cleanly.
+    */
+
+
+    const overlay =
+        document.getElementById(
+            "overlay-layer"
+        );
+
+
+    const overlayCtx =
+        overlay.getContext(
+            "2d"
+        );
+
+
+    overlayCtx.clearRect(
+        0,
+        0,
+        overlay.width,
+        overlay.height
+    );
+
 
 
     segmentation.process(
         camera.getVideo()
     );
-
 
 
     ghost.update();
@@ -141,9 +144,7 @@ function processBody(){
         processBody
     );
 
-
 }
-
 
 
 processBody();
@@ -190,14 +191,13 @@ window.addEventListener(
 
 
         settings.video.enabled =
-            !settings.video.enabled;
+        !settings.video.enabled;
 
 
         console.log(
             "Video:",
             settings.video.enabled
         );
-
 
     }
 );
@@ -218,7 +218,7 @@ window.addEventListener(
 
 
         settings.layers.body =
-            !settings.layers.body;
+        !settings.layers.body;
 
 
         console.log(
@@ -233,22 +233,13 @@ window.addEventListener(
 
 
 
-/*
-==================================================
-BACKGROUND
-==================================================
-*/
-
-
 window.addEventListener(
     "captureBackground",
     ()=>{
 
-
         background.capture(
             camera.getVideo()
         );
-
 
     }
 );
@@ -290,12 +281,8 @@ window.addEventListener(
         settings.body.threshold -= 5;
 
 
-        if(
-            settings.body.threshold < 0
-        )
-        {
+        if(settings.body.threshold < 0)
             settings.body.threshold = 0;
-        }
 
 
 
@@ -320,17 +307,13 @@ COLOUR
 
 window.addEventListener(
     "bodyColour",
-    event=>{
+    e=>{
 
 
         segmentation.setColour(
-
-            event.detail.r,
-
-            event.detail.g,
-
-            event.detail.b
-
+            e.detail.r,
+            e.detail.g,
+            e.detail.b
         );
 
 
@@ -351,7 +334,11 @@ window.addEventListener(
     "ringsOn",
     ()=>{
 
-        settings.amiga.rings.enabled = true;
+        settings.amiga.rings.enabled=true;
+
+        console.log(
+            "RINGS ON"
+        );
 
     }
 );
@@ -362,7 +349,11 @@ window.addEventListener(
     "ringsOff",
     ()=>{
 
-        settings.amiga.rings.enabled = false;
+        settings.amiga.rings.enabled=false;
+
+        console.log(
+            "RINGS OFF"
+        );
 
     }
 );
@@ -375,6 +366,11 @@ window.addEventListener(
 
         settings.amiga.rings.count++;
 
+        console.log(
+            "Ring groups:",
+            settings.amiga.rings.count
+        );
+
     }
 );
 
@@ -385,14 +381,14 @@ window.addEventListener(
     ()=>{
 
 
-        if(
-            settings.amiga.rings.count > 1
-        )
-        {
-
+        if(settings.amiga.rings.count > 1)
             settings.amiga.rings.count--;
 
-        }
+
+        console.log(
+            "Ring groups:",
+            settings.amiga.rings.count
+        );
 
 
     }
@@ -416,14 +412,8 @@ window.addEventListener(
     ()=>{
 
 
-        if(
-            settings.amiga.rings.size > 20
-        )
-        {
-
+        if(settings.amiga.rings.size > 20)
             settings.amiga.rings.size -= 10;
-
-        }
 
 
     }
@@ -451,6 +441,13 @@ window.addEventListener(
             settings.amiga.ghost.count > 0;
 
 
+
+        console.log(
+            "Ghost count:",
+            settings.amiga.ghost.count
+        );
+
+
     }
 );
 
@@ -461,19 +458,20 @@ window.addEventListener(
     ()=>{
 
 
-        if(
-            settings.amiga.ghost.count > 0
-        )
-        {
-
+        if(settings.amiga.ghost.count > 0)
             settings.amiga.ghost.count--;
-
-        }
 
 
 
         settings.amiga.ghost.enabled =
             settings.amiga.ghost.count > 0;
+
+
+
+        console.log(
+            "Ghost count:",
+            settings.amiga.ghost.count
+        );
 
 
     }
@@ -508,7 +506,6 @@ window.addEventListener(
 
     }
 );
-
 
 
 

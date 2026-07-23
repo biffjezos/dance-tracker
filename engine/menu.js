@@ -9,86 +9,85 @@ export class MenuManager {
 
     constructor(){
 
+
         this.subMenu =
-        document.getElementById("sub-menu");
+        document.getElementById(
+            "sub-menu"
+        );
+
 
 
         this.menus = {
 
+
             project:[
-                "START CAMERA",
-                "STOP CAMERA",
-                "CAPTURE BACKGROUND",
+
+                "CAMERA START",
+
+                "CAMERA STOP",
+
+                "CAMERA CAPTURE BACKGROUND",
+
                 "RECORD",
-                "STOP RECORD",
+
+                "STOP",
+
                 "DOWNLOAD"
+
             ],
+
 
 
             video:[
+
                 "VIDEO ON/OFF",
-                "MIRROR",
-                "BRIGHTNESS",
-                "CONTRAST"
-            ],
 
+                "BODY ON/OFF",
 
-            body:[
-                "OFF",
-                "1990 VIDEO LAB",
-                "MODERN AI",
-                "HYBRID",
                 "THRESHOLD +",
+
                 "THRESHOLD -",
+
                 "MAGENTA",
+
                 "GREEN",
+
                 "BLUE"
+
             ],
+
 
 
             amiga:[
+
                 "RINGS ON",
+
                 "RINGS OFF",
+
                 "RING COUNT +",
+
                 "RING COUNT -",
+
                 "RING SIZE +",
+
                 "RING SIZE -",
+
+                "RING ALPHA +",
+
+                "RING ALPHA -",
+
                 "GHOST +",
-                "GHOST -",
-                "PLASMA",
-                "STARFIELD",
-                "VECTOR BALLS",
-                "TUNNEL",
-                "ROTOZOOM"
+
+                "GHOST -"
+
             ],
 
-
-            fx:[
-                "PIXELATE",
-                "SCANLINES",
-                "RGB SHIFT",
-                "CRT"
-            ],
-
-
-            audio:[
-                "MIC INPUT",
-                "BEAT DETECTION",
-                "BPM"
-            ],
-
-
-            presets:[
-                "1992 RAVE",
-                "PLASMA DREAM",
-                "CYBERPUNK",
-                "DEMO PARTY"
-            ],
 
 
             help:[
-                "ABOUT",
-                "CONTROLS"
+
+                "ABOUT"
+
             ]
 
         };
@@ -99,13 +98,13 @@ export class MenuManager {
 
     init(){
 
-        const buttons =
-        document.querySelectorAll(
+
+        document
+        .querySelectorAll(
             ".main-menu button"
-        );
+        )
+        .forEach(button=>{
 
-
-        buttons.forEach(button=>{
 
             button.addEventListener(
                 "click",
@@ -118,10 +117,14 @@ export class MenuManager {
                 }
             );
 
+
         });
 
 
-        this.show("project");
+
+        this.show(
+            "project"
+        );
 
     }
 
@@ -130,11 +133,14 @@ export class MenuManager {
 
     show(menuName){
 
+
         this.subMenu.innerHTML="";
+
 
 
         this.menus[menuName]
         .forEach(item=>{
+
 
             let button =
             document.createElement(
@@ -145,21 +151,22 @@ export class MenuManager {
             button.innerText=item;
 
 
-            button.addEventListener(
-                "click",
-                ()=>{
+            button.onclick=()=>{
 
-                    this.select(item);
+                this.select(
+                    item
+                );
 
-                }
-            );
+            };
 
 
             this.subMenu.appendChild(
                 button
             );
 
+
         });
+
 
     }
 
@@ -169,57 +176,64 @@ export class MenuManager {
 
     select(item){
 
+
         console.log(
             "MENU SELECTED:",
             item
         );
 
 
-        if(item === "START CAMERA"){
+
+        if(item==="CAMERA START")
             window.dispatchEvent(
                 new Event("startCamera")
             );
-        }
 
 
-        if(item === "STOP CAMERA"){
+
+        if(item==="CAMERA STOP")
             window.dispatchEvent(
                 new Event("stopCamera")
             );
-        }
 
 
-        if(item === "VIDEO ON/OFF"){
-            window.dispatchEvent(
-                new Event("toggleVideo")
-            );
-        }
 
-
-        if(item === "CAPTURE BACKGROUND"){
+        if(item==="CAMERA CAPTURE BACKGROUND")
             window.dispatchEvent(
                 new Event("captureBackground")
             );
-        }
 
 
 
-        if(item === "THRESHOLD +"){
+        if(item==="VIDEO ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleVideo")
+            );
+
+
+
+        if(item==="BODY ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleBody")
+            );
+
+
+
+        if(item==="THRESHOLD +")
             window.dispatchEvent(
                 new Event("thresholdUp")
             );
-        }
 
 
-        if(item === "THRESHOLD -"){
+
+        if(item==="THRESHOLD -")
             window.dispatchEvent(
                 new Event("thresholdDown")
             );
-        }
 
 
 
-        if(item === "MAGENTA"){
+        if(item==="MAGENTA")
             window.dispatchEvent(
                 new CustomEvent(
                     "bodyColour",
@@ -232,11 +246,10 @@ export class MenuManager {
                     }
                 )
             );
-        }
 
 
 
-        if(item === "GREEN"){
+        if(item==="GREEN")
             window.dispatchEvent(
                 new CustomEvent(
                     "bodyColour",
@@ -244,99 +257,99 @@ export class MenuManager {
                         detail:{
                             r:0,
                             g:255,
-                            b:0
+                            b:80
                         }
                     }
                 )
             );
-        }
 
 
 
-        if(item === "BLUE"){
+        if(item==="BLUE")
             window.dispatchEvent(
                 new CustomEvent(
                     "bodyColour",
                     {
                         detail:{
                             r:0,
-                            g:120,
+                            g:150,
                             b:255
                         }
                     }
                 )
             );
-        }
 
 
 
-        if(item === "RECORD"){
-            window.dispatchEvent(
-                new Event("startRecord")
-            );
-        }
-
-
-        if(item === "STOP RECORD"){
-            window.dispatchEvent(
-                new Event("stopRecord")
-            );
-        }
-
-
-
-        if(item === "RINGS ON"){
+        if(item==="RINGS ON")
             window.dispatchEvent(
                 new Event("ringsOn")
             );
-        }
 
 
-        if(item === "RINGS OFF"){
+
+        if(item==="RINGS OFF")
             window.dispatchEvent(
                 new Event("ringsOff")
             );
-        }
 
 
-        if(item === "RING COUNT +"){
+
+        if(item==="RING COUNT +")
             window.dispatchEvent(
                 new Event("ringCountUp")
             );
-        }
 
 
-        if(item === "RING COUNT -"){
+
+        if(item==="RING COUNT -")
             window.dispatchEvent(
                 new Event("ringCountDown")
             );
-        }
 
 
-        if(item === "RING SIZE +"){
+
+        if(item==="RING SIZE +")
             window.dispatchEvent(
                 new Event("ringSizeUp")
             );
-        }
 
 
-        if(item === "RING SIZE -"){
+
+        if(item==="RING SIZE -")
             window.dispatchEvent(
                 new Event("ringSizeDown")
             );
-        }
-        if(item === "GHOST +"){
+
+
+
+        if(item==="RING ALPHA +")
+            window.dispatchEvent(
+                new Event("ringAlphaUp")
+            );
+
+
+
+        if(item==="RING ALPHA -")
+            window.dispatchEvent(
+                new Event("ringAlphaDown")
+            );
+
+
+
+        if(item==="GHOST +")
             window.dispatchEvent(
                 new Event("ghostUp")
             );
-        }
-        
-        
-        if(item === "GHOST -"){
+
+
+
+        if(item==="GHOST -")
             window.dispatchEvent(
                 new Event("ghostDown")
             );
-        }
+
+
     }
 
 }
