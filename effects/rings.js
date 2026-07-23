@@ -5,120 +5,162 @@ AMIGA CONCENTRIC RING GENERATOR
 ==================================================
 */
 
+
 export class Rings {
 
+
     constructor(settings, palette){
+
 
         this.settings = settings;
 
         this.palette = palette;
-        this.palette.get().rings;
+
+
         this.canvas =
             document.getElementById(
                 "overlay-layer"
             );
 
+
         this.ctx =
-            this.canvas.getContext("2d");
+            this.canvas.getContext(
+                "2d"
+            );
+
 
         this.time = 0;
 
+
         this.centres = [];
 
-    }
-    paletteColour(index) {
-        let colours =  this.palette.get().rings;
-        return colours[  index % colours.length ];
-    }
-
-    hexToRGB(hex){
-
-        hex =
-            hex.replace("#","");
-
-
-        return {
-
-            r:parseInt(
-                hex.substring(0,2),
-                16
-            ),
-
-            g:parseInt(
-                hex.substring(2,4),
-                16
-            ),
-
-            b:parseInt(
-                hex.substring(4,6),
-                16
-            )
-
-        };
 
     }
+
+
+
+
+
+    paletteColour(index){
+
+
+        let colours =
+            this.palette.get().rings;
+
+
+
+        return colours[
+            index %
+            colours.length
+        ];
+
+
+    }
+
+
+
+
 
     update(){
 
+
         this.time += 0.03;
+
 
 
         let count =
             this.settings.amiga.rings.count;
 
 
-        while(this.centres.length < count){
+
+        while(
+            this.centres.length < count
+        ){
+
 
             this.centres.push({
 
-                x: Math.random() * this.canvas.width,
 
-                y: Math.random() * this.canvas.height,
+                x:
+                Math.random()
+                *
+                this.canvas.width,
 
-                phase: Math.random() * Math.PI * 2,
+
+                y:
+                Math.random()
+                *
+                this.canvas.height,
+
+
+                phase:
+                Math.random()
+                *
+                Math.PI
+                *
+                2,
+
 
                 speed:
-                    0.5 +
-                    Math.random()
+                0.5 +
+                Math.random()
+
 
             });
 
-        }
-
-
-        if(this.centres.length > count){
-
-            this.centres.length = count;
 
         }
+
+
+
+
+        if(
+            this.centres.length > count
+        ){
+
+            this.centres.length =
+                count;
+
+        }
+
 
     }
 
 
 
 
+
     draw(){
+
 
         const rings =
             this.settings.amiga.rings;
+
 
 
         if(!rings.enabled)
             return;
 
 
-        let ctx = this.ctx;
+
+        let ctx =
+            this.ctx;
+
 
 
         ctx.save();
 
 
+
         ctx.globalCompositeOperation =
-            rings.blend || "screen";
+            rings.blend ||
+            "screen";
+
 
 
         let count =
             rings.count;
+
 
 
         for(
@@ -128,12 +170,15 @@ export class Rings {
         ){
 
 
+
             let centre =
                 this.centres[group];
 
 
+
             if(!centre)
                 continue;
+
 
 
 
@@ -143,7 +188,9 @@ export class Rings {
                     this.time *
                     centre.speed +
                     centre.phase
-                ) * 50;
+                )
+                *
+                50;
 
 
 
@@ -151,13 +198,21 @@ export class Rings {
                 centre.y +
                 Math.cos(
                     this.time *
-                    centre.speed * 0.8 +
+                    centre.speed *
+                    0.8 +
                     centre.phase
-                ) * 40;
+                )
+                *
+                40;
 
 
 
-            let colour = this.paletteColour(group);
+
+            let colour =
+                this.paletteColour(
+                    group
+                );
+
 
 
 
@@ -174,14 +229,19 @@ export class Rings {
             ){
 
 
+
                 let radius =
                     rings.size +
                     r *
-                    (rings.spacing || 14);
+                    (
+                        rings.spacing ||
+                        14
+                    );
 
 
 
                 ctx.beginPath();
+
 
 
                 ctx.arc(
@@ -193,27 +253,38 @@ export class Rings {
                 );
 
 
+
                 ctx.strokeStyle =
                     colour;
+
 
 
                 ctx.lineWidth =
                     rings.width;
 
 
+
                 ctx.globalAlpha =
                     0.8;
 
 
+
                 ctx.stroke();
 
+
+
             }
+
 
         }
 
 
+
         ctx.restore();
 
+
+
     }
+
 
 }
