@@ -14,6 +14,7 @@ import { Renderer } from "./engine/renderer.js";
 import { Segmentation } from "./body/segmentation.js";
 import { Ghost } from "./effects/ghost.js";
 import { Rings } from "./effects/rings.js";
+import { Recorder } from "./engine/recorder.js";
 
 
 /*
@@ -53,7 +54,12 @@ const ghost =
         palette
     );
 
-
+const recorder =
+    new Recorder(
+        document.getElementById(
+            "master-layer"
+        )
+    );
 
 /*
 ==================================================
@@ -382,6 +388,20 @@ window.addEventListener(
     }
 );
 
+window.addEventListener(
+    "startRecord",
+    ()=>{
+        recorder.start();
+    }
+);
+
+
+window.addEventListener(
+    "stopRecord",
+    ()=>{
+        recorder.stop();
+    }
+);
 /*
 ==================================================
 STATUS
