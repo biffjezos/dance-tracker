@@ -82,13 +82,71 @@ window.addEventListener("thresholdDown", ()=>{
 
 });
 
-
 window.addEventListener("bodyColour", (event)=>{
-
     segmentation.setColour(
         event.detail.r,
         event.detail.g,
         event.detail.b
+    );
+});
+
+window.addEventListener("ringsOn", ()=>{
+    settings.amiga.rings.enabled = true;
+    console.log("Rings ON");
+});
+
+
+window.addEventListener("ringsOff", ()=>{
+    settings.amiga.rings.enabled = false;
+    console.log("Rings OFF");
+});
+
+
+window.addEventListener("ringCountUp", ()=>{
+    settings.amiga.rings.count++;
+
+    console.log(
+        "Ring count:",
+        settings.amiga.rings.count
+    );
+});
+
+
+window.addEventListener("ringCountDown", ()=>{
+
+    if(settings.amiga.rings.count > 1){
+        settings.amiga.rings.count--;
+    }
+
+    console.log(
+        "Ring count:",
+        settings.amiga.rings.count
+    );
+
+});
+
+
+window.addEventListener("ringSizeUp", ()=>{
+
+    settings.amiga.rings.size += 10;
+
+    console.log(
+        "Ring size:",
+        settings.amiga.rings.size
+    );
+
+});
+
+
+window.addEventListener("ringSizeDown", ()=>{
+
+    if(settings.amiga.rings.size > 20){
+        settings.amiga.rings.size -= 10;
+    }
+
+    console.log(
+        "Ring size:",
+        settings.amiga.rings.size
     );
 
 });
