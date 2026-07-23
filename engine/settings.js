@@ -61,11 +61,13 @@ export class Settings {
             rings:{
                 enabled:false,
                 count:2,
+                ringsPerGroup:8,
+                spacing:14,
                 speed:2,
-                size:80,
+                size:30,
                 width:6,
                 blend:"screen"
-            },
+            }
 
 
             plasma:{
