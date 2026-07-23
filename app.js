@@ -46,7 +46,10 @@ const renderer =
     });
 
 const rings =
-    new Rings(settings);
+    new Rings(
+        settings,
+        palette
+    );
 
 const ghost =
     new Ghost(

@@ -10,7 +10,9 @@ export class Rings {
     constructor(settings, palette){
 
         this.settings = settings;
+
         this.palette = palette;
+        this.palette.get().rings;
         this.canvas =
             document.getElementById(
                 "overlay-layer"
