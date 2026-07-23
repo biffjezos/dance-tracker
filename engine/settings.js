@@ -12,19 +12,12 @@ export class Settings {
     constructor(){
 
 
-        this.video = {
-
-
+       this.video = {
             mirror:false,
-
-
             width:320,
-
-            height:240
-
-
+            height:240,
+            displayMode:"video"
         };
-
         this.body = {
             mode:"1990",
             colourMode:"magenta",
