@@ -118,60 +118,23 @@ export class Renderer {
 
     drawCamera(){
 
-        if(this.video.readyState < 2)
-            return;
+    if(this.video.readyState < 2)
+        return;
 
 
-        const mode =
-            this.settings.video.displayMode;
+    if(this.settings.video.enabled){
 
-
-        const ctx =
-            this.contexts.effects;
-
-
-
-        if(
-            mode === "video" ||
-            mode === "combined"
-        ){
-
-            ctx.drawImage(
-                this.video,
-                0,
-                0,
-                this.layers.effects.width,
-                this.layers.effects.height
-            );
-
-        }
-
-
-        if(
-            mode === "body"
-        ){
-
-            // camera hidden
-            // body canvas remains visible
-
-            return;
-
-        }
-
-
-        if(
-            mode === "fx"
-        ){
-
-            // camera hidden
-            // effects remain visible
-
-            return;
-
-        }
+        this.contexts.effects.drawImage(
+            this.video,
+            0,
+            0,
+            this.layers.effects.width,
+            this.layers.effects.height
+        );
 
     }
 
+}
 
 
 
