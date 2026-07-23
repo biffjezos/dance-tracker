@@ -94,11 +94,9 @@ export class Segmentation {
 
 
     setColour(r, g, b) {
-
         this.colour.r = r;
         this.colour.g = g;
         this.colour.b = b;
-
+        console.log( "Body colour:", r, g, b);
     }
-
 }
