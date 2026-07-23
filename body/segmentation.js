@@ -29,7 +29,8 @@ export class Segmentation {
 
 
     process(video) {
-
+        if(!this.settings.layers.body)
+            return;
         if (!this.background.hasBackground)
             return;
 
