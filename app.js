@@ -10,6 +10,7 @@ import { Camera } from "./engine/camera.js";
 import { MenuManager } from "./engine/menu.js";
 import { Settings } from "./engine/settings.js";
 import { Renderer } from "./engine/renderer.js";
+import { Segmentation } from "./body/segmentation.js";
 
 /*
 ==================================================
@@ -19,6 +20,7 @@ INITIALIZE APPLICATION
 
 const camera = new Camera();
 const background = new BackgroundCapture();
+const segmentation = new Segmentation(background);
 const settings = new Settings();
 const menu = new MenuManager();
 const renderer = new Renderer({
@@ -38,9 +40,12 @@ menu.init();
 START RENDER LOOP
 ==================================================
 */
-
-
 renderer.start();
+function processBody(){
+    segmentation.process( camera.getVideo() );
+    requestAnimationFrame(processBody);
+}
+processBody();
 
 window.addEventListener( "startCamera", ()=>{ camera.start(); } );
 window.addEventListener( "stopCamera", ()=>{ camera.stop(); } );
