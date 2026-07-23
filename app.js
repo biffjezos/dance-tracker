@@ -44,8 +44,8 @@ const renderer =
 const rings =
     new Rings(settings);
 
-const rings =
-    new Rings(settings);
+const ghost =
+    new Ghost(settings);
 
 
 
