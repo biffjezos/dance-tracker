@@ -27,7 +27,7 @@ export class Settings {
             mode:"1990",
             colourMode:"magenta",
             blendMode:"normal",
-            threshold:40
+            threshold:100
         };
 
 

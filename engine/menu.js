@@ -28,11 +28,9 @@ export class MenuManager {
 
                 "CAMERA CAPTURE BACKGROUND",
 
-                "RECORD",
+                "RECORD START",
 
-                "STOP",
-
-                "DOWNLOAD"
+                "RECORD STOP"
 
             ],
 
@@ -40,7 +38,13 @@ export class MenuManager {
 
             video:[
 
-                "VIDEO ON/OFF",
+                "VIDEO ON/OFF"
+
+            ],
+
+
+
+            body:[
 
                 "BODY ON/OFF",
 
@@ -72,10 +76,6 @@ export class MenuManager {
 
                 "RING SIZE -",
 
-                "RING ALPHA +",
-
-                "RING ALPHA -",
-
                 "GHOST +",
 
                 "GHOST -"
@@ -84,9 +84,13 @@ export class MenuManager {
 
 
 
-            help:[
+            presets:[
 
-                "ABOUT"
+                "CLASSIC AMIGA",
+
+                "CYBER GREEN",
+
+                "ICE BLUE"
 
             ]
 
@@ -323,20 +327,6 @@ export class MenuManager {
 
 
 
-        if(item==="RING ALPHA +")
-            window.dispatchEvent(
-                new Event("ringAlphaUp")
-            );
-
-
-
-        if(item==="RING ALPHA -")
-            window.dispatchEvent(
-                new Event("ringAlphaDown")
-            );
-
-
-
         if(item==="GHOST +")
             window.dispatchEvent(
                 new Event("ghostUp")
@@ -347,6 +337,62 @@ export class MenuManager {
         if(item==="GHOST -")
             window.dispatchEvent(
                 new Event("ghostDown")
+            );
+
+
+
+        if(item==="RECORD START")
+            window.dispatchEvent(
+                new Event("startRecord")
+            );
+
+
+
+        if(item==="RECORD STOP")
+            window.dispatchEvent(
+                new Event("stopRecord")
+            );
+
+
+
+        if(item==="CLASSIC AMIGA")
+            window.dispatchEvent(
+                new CustomEvent(
+                    "setPalette",
+                    {
+                        detail:{
+                            name:"classicAmiga"
+                        }
+                    }
+                )
+            );
+
+
+
+        if(item==="CYBER GREEN")
+            window.dispatchEvent(
+                new CustomEvent(
+                    "setPalette",
+                    {
+                        detail:{
+                            name:"cyberGreen"
+                        }
+                    }
+                )
+            );
+
+
+
+        if(item==="ICE BLUE")
+            window.dispatchEvent(
+                new CustomEvent(
+                    "setPalette",
+                    {
+                        detail:{
+                            name:"iceBlue"
+                        }
+                    }
+                )
             );
 
 
