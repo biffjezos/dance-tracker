@@ -334,7 +334,48 @@ window.addEventListener(
     }
 );
 
+window.addEventListener(
+    "ghostUp",
+    ()=>{
 
+        settings.amiga.ghost.count++;
+
+        settings.amiga.ghost.enabled =
+            settings.amiga.ghost.count > 0;
+
+
+        console.log(
+            "Ghosts:",
+            settings.amiga.ghost.count
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "ghostDown",
+    ()=>{
+
+        if(settings.amiga.ghost.count > 0){
+
+            settings.amiga.ghost.count--;
+
+        }
+
+
+        settings.amiga.ghost.enabled =
+            settings.amiga.ghost.count > 0;
+
+
+        console.log(
+            "Ghosts:",
+            settings.amiga.ghost.count
+        );
+
+    }
+);
 
 /*
 ==================================================
