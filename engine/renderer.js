@@ -101,9 +101,9 @@ export class Renderer {
 
 
         this.clear();
-
         this.drawCamera();
-
+        this.drawBody();
+        this.drawEffects();
         this.drawStatus();
 
 
@@ -165,7 +165,30 @@ export class Renderer {
 
     }
 
+drawBody(){
 
+    if(!this.settings.layers.body)
+        return;
+
+
+    const ctx = this.contexts.body;
+
+
+    ctx.globalCompositeOperation =
+        "source-over";
+
+}
+
+    drawEffects(){
+
+    const ctx =
+        this.contexts.effects;
+
+
+    ctx.globalCompositeOperation =
+        "screen";
+
+}
 
     drawStatus(){
 
