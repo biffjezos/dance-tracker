@@ -21,113 +21,45 @@ export class Camera {
     }
 
 
+    getVideo(){ return this.video; }
 
-
-    async start(){
-
-
-        console.log(
-            "CAMERA START REQUESTED"
-        );
-
-
-        try {
-
-
-            this.stream =
-
-            await navigator.mediaDevices.getUserMedia({
-
+    async start() {
+        console.log( "CAMERA START REQUESTED" );
+         try {
+            this.stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-
                     width: 320,
-
                     height: 240
-
                 },
-
                 audio:false
-
             });
 
 
 
-            console.log(
-                "STREAM RECEIVED"
-            );
-
-
+            console.log( "STREAM RECEIVED" );
 
             this.video.srcObject = this.stream;
-
-
-
             this.video.onloadedmetadata = ()=>{
-
-
-                console.log(
-
-                    "VIDEO SIZE:",
-
-                    this.video.videoWidth,
-
-                    this.video.videoHeight
-
-                );
-
-
+                console.log( "VIDEO SIZE:", this.video.videoWidth, this.video.videoHeight );
                 this.video.play();
-
-
             };
-
-
-
         }
 
 
         catch(error){
-
-
-            console.error(
-
-                "CAMERA FAILED:",
-
-                error.name,
-
-                error.message
-
-            );
-
-
+            console.error(  "CAMERA FAILED:", error.name, error.message );
         }
-
-
     }
 
-
-
-    stop(){
-
-
+    stop() {
         if(this.stream){
-
-
             this.stream
             .getTracks()
-            .forEach(track=>{
-
-
+            .forEach(track=> {
                 track.stop();
-
-
             });
-
-
         }
-
-
     }
 
-
+    
 }

@@ -5,14 +5,11 @@ APPLICATION CORE
 ==================================================
 */
 
+import { BackgroundCapture } from "./body/background.js";
 import { Camera } from "./engine/camera.js";
 import { MenuManager } from "./engine/menu.js";
 import { Settings } from "./engine/settings.js";
 import { Renderer } from "./engine/renderer.js";
-
-
-
-
 
 /*
 ==================================================
@@ -21,15 +18,12 @@ INITIALIZE APPLICATION
 */
 
 const camera = new Camera();
+const background = new BackgroundCapture();
 const settings = new Settings();
 const menu = new MenuManager();
 const renderer = new Renderer({
     settings: settings
 });
-
-
-
-
 
 /*
 ==================================================
@@ -37,12 +31,7 @@ MENU SETUP
 ==================================================
 */
 
-
 menu.init();
-
-
-
-
 
 /*
 ==================================================
@@ -55,12 +44,12 @@ renderer.start();
 
 window.addEventListener( "startCamera", ()=>{ camera.start(); } );
 window.addEventListener( "stopCamera", ()=>{ camera.stop(); } );
+window.addEventListener( "captureBackground", ()=>{ background.capture( camera.getVideo() ); }
 
+);
 /*
 ==================================================
 STATUS
 ==================================================
 */
-
-
 console.log("Dance Tracker 5000 initialized");
