@@ -23,9 +23,7 @@ const background = new BackgroundCapture();
 const settings = new Settings();
 const segmentation = new Segmentation( background, settings );
 const menu = new MenuManager();
-const renderer = new Renderer({
-    settings: settings
-});
+const renderer = new Renderer({ settings: settings });
 
 /*
 ==================================================
@@ -41,17 +39,17 @@ START RENDER LOOP
 ==================================================
 */
 renderer.start();
+
 function processBody(){
     segmentation.process( camera.getVideo() );
     requestAnimationFrame(processBody);
 }
+
 processBody();
 
 window.addEventListener( "startCamera", ()=>{ camera.start(); } );
 window.addEventListener( "stopCamera", ()=>{ camera.stop(); } );
-window.addEventListener( "captureBackground", ()=>{ background.capture( camera.getVideo() ); }
-
-);
+window.addEventListener( "captureBackground", ()=>{ background.capture( camera.getVideo()); } );
 /*
 ==================================================
 STATUS
