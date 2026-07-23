@@ -5,52 +5,63 @@ PALETTE ENGINE
 ==================================================
 */
 
+
 export class Palette {
+
 
     constructor(){
 
+
         this.palettes = {
-            classicAmiga:{
-                background:"rgb(0,0,0)",
-                    body:"rgb(255,0,255)",
-                    ghost:"rgb(255,0,255)",
-            rings:[
-                "rgb(255,0,255)",
-                "rgb(0,255,80)"
-            ]
-        }
 
 
-            cyberGreen:{
+            classicAmiga: {
 
-                background:"#001000",
+                background: "rgb(0,0,0)",
 
-                body:"#00ff66",
+                body: "rgb(255,0,255)",
 
-                ghost:"#00ff66",
+                ghost: "rgb(255,0,255)",
 
-                rings:[
-                    "#00ff66",
-                    "#ffffff"
+                rings: [
+                    "rgb(255,0,255)",
+                    "rgb(0,255,80)"
                 ]
 
             },
 
 
-            iceBlue:{
+            cyberGreen: {
 
-                background:"#001020",
+                background: "rgb(0,20,0)",
 
-                body:"#00ccff",
+                body: "rgb(0,255,80)",
 
-                ghost:"#00ccff",
+                ghost: "rgb(0,255,80)",
 
-                rings:[
-                    "#00ccff",
-                    "#ffffff"
+                rings: [
+                    "rgb(0,255,80)",
+                    "rgb(255,255,255)"
+                ]
+
+            },
+
+
+            iceBlue: {
+
+                background: "rgb(0,10,30)",
+
+                body: "rgb(0,200,255)",
+
+                ghost: "rgb(0,200,255)",
+
+                rings: [
+                    "rgb(0,200,255)",
+                    "rgb(255,255,255)"
                 ]
 
             }
+
 
         };
 
@@ -63,17 +74,23 @@ export class Palette {
 
 
 
+
     get(){
+
 
         return this.palettes[
             this.current
         ];
 
+
     }
 
 
 
+
+
     next(){
+
 
         let keys =
             Object.keys(
@@ -85,30 +102,34 @@ export class Palette {
             keys.indexOf(
                 this.current
             );
-
-
         index++;
-
-
-        if(index >= keys.length)
+        if(index >= keys.length){
             index = 0;
-
+        }
 
         this.current =
             keys[index];
 
+        console.log(
+            "Palette:",
+            this.current
+        );
+
+
     }
-
-
 
     set(name){
+        if(
+            this.palettes[name]
+        ){
 
-        if(this.palettes[name]){
+            this.current =
+                name;
 
-            this.current=name;
-
+            console.log(
+                "Palette:",
+                this.current
+            );
         }
-
     }
-
 }
