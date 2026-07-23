@@ -11,6 +11,7 @@ import { MenuManager } from "./engine/menu.js";
 import { Settings } from "./engine/settings.js";
 import { Renderer } from "./engine/renderer.js";
 import { Segmentation } from "./body/segmentation.js";
+import { Rings } from "./effects/rings.js";
 
 /*
 ==================================================
@@ -24,6 +25,7 @@ const settings = new Settings();
 const segmentation = new Segmentation( background, settings );
 const menu = new MenuManager();
 const renderer = new Renderer({ settings: settings });
+const rings = new Rings(settings);
 
 /*
 ==================================================
@@ -42,7 +44,10 @@ renderer.start();
 
 function processBody(){
     segmentation.process( camera.getVideo() );
-    requestAnimationFrame(processBody);
+    rings.update();
+    rings.draw();
+
+    requestAnimationFrame( processBody );
 }
 
 processBody();
