@@ -57,21 +57,17 @@ export class MenuManager {
 
 
             amiga:[
-
-                "RINGS",
-
+                "RINGS ON",
+                "RINGS OFF",
+                "RING COUNT +",
+                "RING COUNT -",
+                "RING SIZE +",
+                "RING SIZE -",
                 "PLASMA",
-
-                "COPPER",
-
                 "STARFIELD",
-
                 "VECTOR BALLS",
-
                 "TUNNEL",
-
                 "ROTOZOOM"
-
             ],
 
 
@@ -335,6 +331,39 @@ export class MenuManager {
         if(item === "STOP RECORD"){
             window.dispatchEvent(
                 new Event("stopRecord")
+            );
+        }
+        if(item === "RINGS ON"){
+            window.dispatchEvent(new Event("ringsOn") );
+        }
+
+        if(item === "RINGS OFF"){
+            window.dispatchEvent(
+                new Event("ringsOff")
+            );
+        }
+        
+        if(item === "RING COUNT +"){
+            window.dispatchEvent(
+                new Event("ringCountUp")
+            );
+        }
+        
+        if(item === "RING COUNT -"){
+            window.dispatchEvent(
+                new Event("ringCountDown")
+            );
+        }
+        
+        if(item === "RING SIZE +"){
+            window.dispatchEvent(
+                new Event("ringSizeUp")
+            );
+        }
+        
+        if(item === "RING SIZE -"){
+            window.dispatchEvent(
+                new Event("ringSizeDown")
             );
         }
     }
