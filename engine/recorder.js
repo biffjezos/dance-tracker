@@ -128,6 +128,9 @@ export class Recorder {
             return;
 
 
+        let mimeType =
+            this.recorder.mimeType;
+
 
         this.recorder.onstop =
             ()=>{
@@ -137,11 +140,9 @@ export class Recorder {
                     new Blob(
                         this.chunks,
                         {
-                            type:
-                            this.recorder.mimeType
+                            type:mimeType
                         }
                     );
-
 
 
                 let url =
@@ -150,27 +151,21 @@ export class Recorder {
                     );
 
 
-
                 let link =
                     document.createElement(
                         "a"
                     );
 
 
-
                 link.href = url;
 
 
-
                 let extension =
-                    this.recorder.mimeType.includes(
-                        "mp4"
-                    )
+                    mimeType.includes("mp4")
                     ?
                     "mp4"
                     :
                     "webm";
-
 
 
                 link.download =
@@ -179,15 +174,12 @@ export class Recorder {
                     extension;
 
 
-
                 link.click();
-
 
 
                 URL.revokeObjectURL(
                     url
                 );
-
 
 
                 console.log(
@@ -197,21 +189,18 @@ export class Recorder {
             };
 
 
-
         this.recorder.stop();
-
 
 
         this.recording = false;
 
 
+        this.recorder = null;
+
 
         console.log(
             "Recording stopped"
         );
-
-
-        this.recorder = null;
 
     }
 
