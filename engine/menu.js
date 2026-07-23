@@ -29,13 +29,13 @@ export class MenuManager {
 
 
             video:[
-
+                "VIDEO ON",
+                "BODY ONLY",
+                "FX ONLY",
+                "BODY + FX",
                 "MIRROR",
-
                 "BRIGHTNESS",
-
                 "CONTRAST"
-
             ],
 
 
@@ -273,7 +273,41 @@ export class MenuManager {
                 new Event("stopCamera")
             );
         }
-
+        if(item === "VIDEO ON"){
+            window.dispatchEvent(
+                new CustomEvent(
+                    "displayMode",
+                    {detail:"video"}
+                )
+            );
+        }
+        
+        if(item === "BODY ONLY"){
+            window.dispatchEvent(
+                new CustomEvent(
+                    "displayMode",
+                    {detail:"body"}
+                )
+            );
+        }
+        
+        if(item === "FX ONLY"){
+            window.dispatchEvent(
+                new CustomEvent(
+                    "displayMode",
+                    {detail:"fx"}
+                )
+            );
+        }
+        
+        if(item === "BODY + FX"){
+            window.dispatchEvent(
+                new CustomEvent(
+                    "displayMode",
+                    {detail:"combined"}
+                )
+            );
+        }
         if(item === "CAPTURE BACKGROUND"){
             window.dispatchEvent(
                 new Event("captureBackground")
