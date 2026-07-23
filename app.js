@@ -150,6 +150,19 @@ window.addEventListener("ringSizeDown", ()=>{
     );
 
 });
+
+window.addEventListener(
+    "displayMode",
+    e=>{
+        settings.video.displayMode =
+            e.detail;
+
+        console.log(
+            "Display:",
+            e.detail
+        );
+    }
+);
 /*
 ==================================================
 STATUS
