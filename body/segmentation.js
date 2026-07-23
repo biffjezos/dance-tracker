@@ -183,5 +183,6 @@ export class Segmentation {
                 255;
         }
     }
-    this.outputCtx.putImageData(result, 0, 0);
+        this.outputCtx.putImageData(result, 0, 0);
+    }
 }

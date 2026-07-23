@@ -25,10 +25,6 @@ export class Settings {
 
         };
 
-
-
-
-
         this.body = {
             mode:"1990",
             colourMode:"magenta",
@@ -43,141 +39,49 @@ export class Settings {
             },
 
             scanlines:{
-
-
                 enabled:false,
-
                 height:4
-
-
             },
-
-
 
             rgbShift:{
-
-
                 enabled:false,
-
                 amount:5
-
-
             },
-
-
 
             ghost:{
-
-
                 enabled:false,
-
                 amount:0.2
-
-
             }
-
-
-
         };
-
-
-
-
-
-
 
         this.amiga = {
-
-
             rings:{
-
-
                 enabled:false,
-
-
                 count:2,
-
-
                 speed:2,
-
-
                 size:80,
-
-
                 width:6,
-
-
                 blend:"screen"
-
-
             },
-
-
-
-
-
             plasma:{
-
-
                 enabled:false,
-
-
                 speed:1
-
-
             },
-
-
-
-
 
             copper:{
-
-
                 enabled:false
-
-
             },
-
-
-
-
 
             stars:{
-
-
                 enabled:false,
-
-
                 count:100
-
-
             },
 
-
-
-
-
             vectorBalls:{
-
-
                 enabled:false,
-
-
                 count:40
-
-
             }
-
-
-
         };
-
-
-
-
-
-
 
         this.audio = {
 
