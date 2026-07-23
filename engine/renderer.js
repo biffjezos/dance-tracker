@@ -49,7 +49,7 @@ export class Renderer {
             body:
             this.layers.body.getContext("2d"),
             overlay:
-            this.layers.overlay.getContext("2d")
+            this.layers.overlay.getContext("2d"),
             master:
             this.layers.master.getContext("2d"),
         };
