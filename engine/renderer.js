@@ -16,6 +16,10 @@ export class Renderer {
             options.settings;
 
 
+        this.palette =
+            options.palette;
+
+
         this.video =
             document.getElementById(
                 "camera"
@@ -170,6 +174,8 @@ export class Renderer {
 
         this.clearMaster();
 
+        this.drawBackground();
+
         this.drawCamera();
 
         this.compose();
@@ -222,6 +228,31 @@ export class Renderer {
     }
 
 
+
+
+
+
+    drawBackground(){
+
+
+        this.contexts.background.fillStyle =
+            this.palette.get().background;
+
+
+        this.contexts.background.fillRect(
+
+            0,
+
+            0,
+
+            320,
+
+            240
+
+        );
+
+
+    }
 
 
 

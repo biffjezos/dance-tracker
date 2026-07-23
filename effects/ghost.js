@@ -30,37 +30,6 @@ export class Ghost {
 
     }
 
-    getColour(){
-
-        let colour =
-            this.palette.get().ghost;
-
-
-        let hex =
-            colour.replace("#","");
-
-
-        return {
-
-            r:parseInt(
-                hex.substring(0,2),
-                16
-            ),
-
-            g:parseInt(
-                hex.substring(2,4),
-                16
-            ),
-
-            b:parseInt(
-                hex.substring(4,6),
-                16
-            )
-
-        };
-
-    }
-
     update(){
 
         const ghost =
@@ -138,7 +107,6 @@ export class Ghost {
         ctx.globalCompositeOperation =
             "screen";
 
-        let colour = this.getColour();
         for(
             let i=0;
             i<this.history.length;

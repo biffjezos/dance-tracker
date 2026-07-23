@@ -51,7 +51,8 @@ const menu =
 
 const renderer =
     new Renderer({
-        settings:settings
+        settings:settings,
+        palette:palette
     });
 
 
@@ -86,6 +87,20 @@ menu.init();
 
 
 renderer.start();
+
+
+document
+.querySelector(".statusbar")
+.children[2]
+.innerText =
+    "BODY: " +
+    (
+        settings.layers.body
+        ?
+        "ON"
+        :
+        "OFF"
+    );
 
 
 
@@ -225,6 +240,20 @@ window.addEventListener(
             "Body:",
             settings.layers.body
         );
+
+
+        document
+        .querySelector(".statusbar")
+        .children[2]
+        .innerText =
+            "BODY: " +
+            (
+                settings.layers.body
+                ?
+                "ON"
+                :
+                "OFF"
+            );
 
 
     }
@@ -493,6 +522,12 @@ window.addEventListener(
 
         recorder.start();
 
+        document
+        .querySelector(".statusbar")
+        .children[4]
+        .innerText =
+            "REC: ON";
+
     }
 );
 
@@ -503,6 +538,33 @@ window.addEventListener(
     ()=>{
 
         recorder.stop();
+
+        document
+        .querySelector(".statusbar")
+        .children[4]
+        .innerText =
+            "REC: OFF";
+
+    }
+);
+
+
+
+
+/*
+==================================================
+PALETTE
+==================================================
+*/
+
+
+window.addEventListener(
+    "setPalette",
+    e=>{
+
+        palette.set(
+            e.detail.name
+        );
 
     }
 );
