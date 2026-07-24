@@ -85,9 +85,7 @@ export class MenuManager {
 
                     "CAMERA ON/OFF":null,
 
-                    "CAPTURE BACKGROUND":null,
-
-                    "RECORD ON/OFF":null
+                    "CAPTURE BACKGROUND":null
 
                 }
 
@@ -208,6 +206,18 @@ export class MenuManager {
                     COLOUR:colourMenu(
                         "setTextColour"
                     )
+
+                }
+
+            },
+
+
+
+            output:{
+
+                RECORDER:{
+
+                    "RECORD ON/OFF":null
 
                 }
 
