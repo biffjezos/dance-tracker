@@ -18,16 +18,20 @@ import { Recorder } from "./engine/recorder.js";
 
 
 
+const settings =
+    new Settings();
+
+
 const camera =
-    new Camera();
+    new Camera(
+        settings
+    );
 
 
 const background =
-    new BackgroundCapture();
-
-
-const settings =
-    new Settings();
+    new BackgroundCapture(
+        settings
+    );
 
 
 
@@ -201,6 +205,86 @@ window.addEventListener(
             "Camera:",
             cameraOn
         );
+
+    }
+);
+
+
+
+
+/*
+==================================================
+RESOLUTION
+==================================================
+*/
+
+
+const RESOLUTIONS = [
+    {width:320, height:240},
+    {width:640, height:480},
+    {width:1280, height:960}
+];
+
+
+let resolutionIndex = 0;
+
+
+function applyResolution(){
+
+
+    const res =
+        RESOLUTIONS[resolutionIndex];
+
+
+    settings.video.width = res.width;
+
+    settings.video.height = res.height;
+
+
+    renderer.resize();
+
+    segmentation.resize();
+
+    background.resize();
+
+
+    document
+    .querySelector(".statusbar")
+    .children[5]
+    .innerText =
+        res.width + "x" + res.height;
+
+
+    console.log(
+        "Resolution:",
+        res.width,
+        res.height
+    );
+
+
+    if(cameraOn){
+
+        camera.stop();
+
+        camera.start();
+
+    }
+
+
+}
+
+
+document
+.querySelector(".statusbar")
+.children[5]
+.addEventListener(
+    "click",
+    ()=>{
+
+        resolutionIndex =
+            (resolutionIndex + 1) % RESOLUTIONS.length;
+
+        applyResolution();
 
     }
 );

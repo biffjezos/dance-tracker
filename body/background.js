@@ -7,19 +7,27 @@ DANCE TRACKER 5000
 
 
 export class BackgroundCapture {
-    constructor(){
+    constructor(settings){
+        this.settings = settings;
         this.canvas = document.createElement( "canvas" );
-        this.canvas.width=320;
-        this.canvas.height=240;
+        this.canvas.width = settings.video.width;
+        this.canvas.height = settings.video.height;
         this.ctx = this.canvas.getContext( "2d" );
         this.hasBackground=false;
     }
 
     capture(video) {
-        this.ctx.drawImage( video, 0, 0, 320, 240 );
+        this.ctx.drawImage( video, 0, 0, this.canvas.width, this.canvas.height );
         this.hasBackground=true;
         console.log( "Background captured"  );
     }
+
+    resize(){
+        this.canvas.width = this.settings.video.width;
+        this.canvas.height = this.settings.video.height;
+        this.hasBackground = false;
+    }
+
     getFrame(){
         if(!this.hasBackground)
             return null;

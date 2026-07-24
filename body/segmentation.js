@@ -23,9 +23,9 @@ export class Segmentation {
             );
 
 
-        this.canvas.width = 320;
+        this.canvas.width = settings.video.width;
 
-        this.canvas.height = 240;
+        this.canvas.height = settings.video.height;
 
 
         this.ctx =
@@ -75,6 +75,22 @@ export class Segmentation {
 
 
 
+    resize(){
+
+
+        this.canvas.width =
+            this.settings.video.width;
+
+
+        this.canvas.height =
+            this.settings.video.height;
+
+
+    }
+
+
+
+
 
     process(video){
 
@@ -89,12 +105,21 @@ export class Segmentation {
 
 
 
+        const width =
+            this.settings.video.width;
+
+
+        const height =
+            this.settings.video.height;
+
+
+
         this.ctx.drawImage(
             video,
             0,
             0,
-            320,
-            240
+            width,
+            height
         );
 
 
@@ -103,8 +128,8 @@ export class Segmentation {
             this.ctx.getImageData(
                 0,
                 0,
-                320,
-                240
+                width,
+                height
             );
 
 
@@ -115,8 +140,8 @@ export class Segmentation {
             .getImageData(
                 0,
                 0,
-                320,
-                240
+                width,
+                height
             );
 
 
@@ -133,8 +158,8 @@ export class Segmentation {
 
         const result =
             this.outputCtx.createImageData(
-                320,
-                240
+                width,
+                height
             );
 
 

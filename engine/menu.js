@@ -22,7 +22,11 @@ const SWATCHES = [
 
     {label:"CYAN", r:0, g:255, b:255},
 
-    {label:"YELLOW", r:255, g:255, b:0}
+    {label:"YELLOW", r:255, g:255, b:0},
+
+    {label:"DARK GREEN", r:0, g:20, b:0},
+
+    {label:"DARK BLUE", r:0, g:10, b:30}
 
 ];
 
