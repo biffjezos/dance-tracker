@@ -6,6 +6,9 @@ RENDER ENGINE
 */
 
 
+import { containFit } from "./fit.js";
+
+
 export class Renderer {
 
 
@@ -306,17 +309,27 @@ export class Renderer {
 
 
 
+        const rect =
+            containFit(
+                this.video.videoWidth,
+                this.video.videoHeight,
+                this.settings.video.width,
+                this.settings.video.height
+            );
+
+
+
         this.contexts.effects.drawImage(
 
             this.video,
 
-            0,
+            rect.x,
 
-            0,
+            rect.y,
 
-            this.settings.video.width,
+            rect.width,
 
-            this.settings.video.height
+            rect.height
 
         );
 
