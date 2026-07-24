@@ -25,10 +25,11 @@ export class Settings {
 
 
         this.body = {
-            mode:"1990",
+            mode:"difference",
             colourMode:"magenta",
             blendMode:"normal",
-            threshold:100
+            threshold:100,
+            keyColour:{r:0, g:255, b:0}
         };
 
 

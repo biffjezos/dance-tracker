@@ -103,7 +103,12 @@ export class Segmentation {
 
 
 
-        if(!this.background.hasBackground)
+        const keying =
+            this.settings.body.mode === "keying";
+
+
+
+        if(!keying && !this.background.hasBackground)
             return;
 
 
@@ -156,7 +161,16 @@ export class Segmentation {
 
 
 
-        const bg =
+        const pixels =
+            current.data;
+
+
+
+        const bgPixels =
+            keying
+            ?
+            null
+            :
             this.background.canvas
             .getContext("2d")
             .getImageData(
@@ -164,17 +178,13 @@ export class Segmentation {
                 0,
                 width,
                 height
-            );
+            )
+            .data;
 
 
 
-        const pixels =
-            current.data;
-
-
-
-        const bgPixels =
-            bg.data;
+        const keyColour =
+            this.settings.body.keyColour;
 
 
 
@@ -198,20 +208,31 @@ export class Segmentation {
         ){
 
 
+            const refR =
+                keying ? keyColour.r : bgPixels[i];
+
+            const refG =
+                keying ? keyColour.g : bgPixels[i+1];
+
+            const refB =
+                keying ? keyColour.b : bgPixels[i+2];
+
+
+
             let difference =
                 Math.abs(
                     pixels[i] -
-                    bgPixels[i]
+                    refR
                 )
                 +
                 Math.abs(
                     pixels[i+1] -
-                    bgPixels[i+1]
+                    refG
                 )
                 +
                 Math.abs(
                     pixels[i+2] -
-                    bgPixels[i+2]
+                    refB
                 );
 
 

@@ -547,6 +547,28 @@ window.addEventListener(
 
 
 
+window.addEventListener(
+    "toggleMatteMode",
+    ()=>{
+
+        settings.body.mode =
+            settings.body.mode === "difference"
+            ?
+            "keying"
+            :
+            "difference";
+
+
+        console.log(
+            "Body matte mode:",
+            settings.body.mode
+        );
+
+    }
+);
+
+
+
 
 /*
 ==================================================
@@ -566,6 +588,31 @@ window.addEventListener(
             e.detail.b
         );
 
+
+    }
+);
+
+
+
+window.addEventListener(
+    "bodyKeyColour",
+    e=>{
+
+        settings.body.keyColour = {
+
+            r:e.detail.r,
+
+            g:e.detail.g,
+
+            b:e.detail.b
+
+        };
+
+
+        console.log(
+            "Body key colour:",
+            settings.body.keyColour
+        );
 
     }
 );
