@@ -50,6 +50,12 @@ export class Renderer {
             ),
 
 
+            text:
+            document.getElementById(
+                "text-layer"
+            ),
+
+
             master:
             document.getElementById(
                 "master-layer"
@@ -96,6 +102,12 @@ export class Renderer {
 
             overlay:
             this.layers.overlay
+            .getContext("2d"),
+
+
+
+            text:
+            this.layers.text
             .getContext("2d"),
 
 
@@ -367,6 +379,23 @@ export class Renderer {
         ctx.drawImage(
 
             this.layers.overlay,
+
+            0,
+
+            0
+
+        );
+
+
+
+        ctx.globalCompositeOperation =
+            "source-over";
+
+
+
+        ctx.drawImage(
+
+            this.layers.text,
 
             0,
 
