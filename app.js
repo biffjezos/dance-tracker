@@ -214,6 +214,78 @@ window.addEventListener(
 
 /*
 ==================================================
+LOAD VIDEO
+==================================================
+*/
+
+
+let loadedVideoUrl = null;
+
+
+window.addEventListener(
+    "loadVideoFile",
+    e=>{
+
+        if(cameraOn){
+
+            camera.stop();
+
+            cameraOn = false;
+
+        }
+
+
+        const video =
+            camera.getVideo();
+
+
+        if(loadedVideoUrl){
+
+            URL.revokeObjectURL(
+                loadedVideoUrl
+            );
+
+        }
+
+
+        loadedVideoUrl =
+            URL.createObjectURL(
+                e.detail.file
+            );
+
+
+        video.onerror = ()=>{
+
+            console.error(
+                "VIDEO FILE FAILED TO LOAD:",
+                e.detail.file.name
+            );
+
+        };
+
+
+        video.srcObject = null;
+
+        video.loop = true;
+
+        video.src = loadedVideoUrl;
+
+        video.play();
+
+
+        console.log(
+            "Loaded video file:",
+            e.detail.file.name
+        );
+
+    }
+);
+
+
+
+
+/*
+==================================================
 RESOLUTION
 ==================================================
 */

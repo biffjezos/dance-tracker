@@ -87,6 +87,16 @@ export class MenuManager {
 
                     "CAPTURE BACKGROUND":null
 
+                },
+
+                "LOAD VIDEO":{
+
+                    type:"fileInput",
+
+                    accept:"video/*",
+
+                    event:"loadVideoFile"
+
                 }
 
             },
@@ -531,6 +541,73 @@ export class MenuManager {
 
                     this.subMenu.appendChild(
                         input
+                    );
+
+
+                }
+                else if(
+                    value &&
+                    value.type==="fileInput"
+                ){
+
+
+                    let button =
+                    document.createElement(
+                        "button"
+                    );
+
+
+                    button.innerText=key;
+
+
+                    button.onclick=()=>{
+
+                        let fileInput =
+                        document.createElement(
+                            "input"
+                        );
+
+                        fileInput.type=
+                            "file";
+
+                        fileInput.accept=
+                            value.accept ||
+                            "";
+
+                        fileInput.addEventListener(
+                            "change",
+                            ()=>{
+
+                                if(fileInput.files.length === 0)
+                                    return;
+
+                                console.log(
+                                    "MENU SELECTED:",
+                                    key
+                                );
+
+                                window.dispatchEvent(
+                                    new CustomEvent(
+                                        value.event,
+                                        {
+                                            detail:{
+                                                file:
+                                                fileInput.files[0]
+                                            }
+                                        }
+                                    )
+                                );
+
+                            }
+                        );
+
+                        fileInput.click();
+
+                    };
+
+
+                    this.subMenu.appendChild(
+                        button
                     );
 
 
