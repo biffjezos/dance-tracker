@@ -35,6 +35,44 @@ export class Rings {
         this.centres = [];
 
 
+        this.hubPhase =
+            Math.random() *
+            Math.PI *
+            2;
+
+
+    }
+
+
+
+
+    hub(){
+
+
+        return {
+
+            x:
+            this.canvas.width / 2 +
+            Math.sin(
+                this.time * 0.4 +
+                this.hubPhase
+            )
+            *
+            40,
+
+
+            y:
+            this.canvas.height / 2 +
+            Math.cos(
+                this.time * 0.32 +
+                this.hubPhase
+            )
+            *
+            30
+
+        };
+
+
     }
 
 
@@ -163,6 +201,25 @@ export class Rings {
 
 
 
+        const constellation =
+            rings.constellation &&
+            rings.constellation.enabled;
+
+
+        const CONSTELLATION_RADIUS =
+            45 +
+            count * 10;
+
+
+        const hub =
+            constellation
+            ?
+            this.hub()
+            :
+            null;
+
+
+
         for(
             let group = 0;
             group < count;
@@ -171,39 +228,76 @@ export class Rings {
 
 
 
-            let centre =
-                this.centres[group];
+            let cx, cy;
 
 
 
-            if(!centre)
-                continue;
+            if(constellation){
+
+
+                let angle =
+                    (
+                        Math.PI * 2 /
+                        count
+                    )
+                    *
+                    group
+                    +
+                    this.time * 0.15;
+
+
+                cx =
+                    hub.x +
+                    Math.cos(angle) *
+                    CONSTELLATION_RADIUS;
+
+
+                cy =
+                    hub.y +
+                    Math.sin(angle) *
+                    CONSTELLATION_RADIUS;
+
+
+            }
+            else {
+
+
+                let centre =
+                    this.centres[group];
+
+
+
+                if(!centre)
+                    continue;
 
 
 
 
-            let cx =
-                centre.x +
-                Math.sin(
-                    this.time *
-                    centre.speed +
-                    centre.phase
-                )
-                *
-                50;
+                cx =
+                    centre.x +
+                    Math.sin(
+                        this.time *
+                        centre.speed +
+                        centre.phase
+                    )
+                    *
+                    50;
 
 
 
-            let cy =
-                centre.y +
-                Math.cos(
-                    this.time *
-                    centre.speed *
-                    0.8 +
-                    centre.phase
-                )
-                *
-                40;
+                cy =
+                    centre.y +
+                    Math.cos(
+                        this.time *
+                        centre.speed *
+                        0.8 +
+                        centre.phase
+                    )
+                    *
+                    40;
+
+
+            }
 
 
 

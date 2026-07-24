@@ -70,7 +70,10 @@ export class Settings {
                 speed:2,
                 size:30,
                 width:6,
-                blend:"screen"
+                blend:"screen",
+                constellation:{
+                    enabled:false
+                }
             },
 
             ghost:{
