@@ -6,6 +6,9 @@ DANCE TRACKER 5000
 */
 
 
+import { containFit } from "../engine/fit.js";
+
+
 export class BackgroundCapture {
     constructor(settings){
         this.settings = settings;
@@ -17,7 +20,17 @@ export class BackgroundCapture {
     }
 
     capture(video) {
-        this.ctx.drawImage( video, 0, 0, this.canvas.width, this.canvas.height );
+        this.ctx.clearRect( 0, 0, this.canvas.width, this.canvas.height );
+
+        const rect =
+            containFit(
+                video.videoWidth,
+                video.videoHeight,
+                this.canvas.width,
+                this.canvas.height
+            );
+
+        this.ctx.drawImage( video, rect.x, rect.y, rect.width, rect.height );
         this.hasBackground=true;
         console.log( "Background captured"  );
     }

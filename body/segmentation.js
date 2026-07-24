@@ -6,6 +6,9 @@ DANCE TRACKER 5000
 */
 
 
+import { containFit } from "../engine/fit.js";
+
+
 export class Segmentation {
 
 
@@ -114,12 +117,31 @@ export class Segmentation {
 
 
 
-        this.ctx.drawImage(
-            video,
+        this.ctx.clearRect(
             0,
             0,
             width,
             height
+        );
+
+
+
+        const rect =
+            containFit(
+                video.videoWidth,
+                video.videoHeight,
+                width,
+                height
+            );
+
+
+
+        this.ctx.drawImage(
+            video,
+            rect.x,
+            rect.y,
+            rect.width,
+            rect.height
         );
 
 

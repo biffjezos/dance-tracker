@@ -85,9 +85,27 @@ export class MenuManager {
 
                     "CAMERA ON/OFF":null,
 
-                    "CAPTURE BACKGROUND":null,
+                    "CAPTURE BACKGROUND":null
 
-                    "RECORD ON/OFF":null
+                },
+
+                "LOAD VIDEO":{
+
+                    type:"fileInput",
+
+                    accept:"video/*",
+
+                    event:"loadVideoFile"
+
+                },
+
+                "LOAD AUDIO":{
+
+                    type:"fileInput",
+
+                    accept:"audio/*",
+
+                    event:"loadAudioFile"
 
                 }
 
@@ -208,6 +226,22 @@ export class MenuManager {
                     COLOUR:colourMenu(
                         "setTextColour"
                     )
+
+                }
+
+            },
+
+
+
+            output:{
+
+                RECORDER:{
+
+                    "RECORD ON/OFF":null,
+
+                    "OUTPUT SIZE +":null,
+
+                    "OUTPUT SIZE -":null
 
                 }
 
@@ -517,6 +551,73 @@ export class MenuManager {
 
                     this.subMenu.appendChild(
                         input
+                    );
+
+
+                }
+                else if(
+                    value &&
+                    value.type==="fileInput"
+                ){
+
+
+                    let button =
+                    document.createElement(
+                        "button"
+                    );
+
+
+                    button.innerText=key;
+
+
+                    button.onclick=()=>{
+
+                        let fileInput =
+                        document.createElement(
+                            "input"
+                        );
+
+                        fileInput.type=
+                            "file";
+
+                        fileInput.accept=
+                            value.accept ||
+                            "";
+
+                        fileInput.addEventListener(
+                            "change",
+                            ()=>{
+
+                                if(fileInput.files.length === 0)
+                                    return;
+
+                                console.log(
+                                    "MENU SELECTED:",
+                                    key
+                                );
+
+                                window.dispatchEvent(
+                                    new CustomEvent(
+                                        value.event,
+                                        {
+                                            detail:{
+                                                file:
+                                                fileInput.files[0]
+                                            }
+                                        }
+                                    )
+                                );
+
+                            }
+                        );
+
+                        fileInput.click();
+
+                    };
+
+
+                    this.subMenu.appendChild(
+                        button
                     );
 
 
@@ -938,6 +1039,20 @@ export class MenuManager {
         if(item==="SIZE -")
             window.dispatchEvent(
                 new Event("textSizeDown")
+            );
+
+
+
+        if(item==="OUTPUT SIZE +")
+            window.dispatchEvent(
+                new Event("outputSizeUp")
+            );
+
+
+
+        if(item==="OUTPUT SIZE -")
+            window.dispatchEvent(
+                new Event("outputSizeDown")
             );
 
 

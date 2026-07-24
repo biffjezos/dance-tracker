@@ -214,6 +214,78 @@ window.addEventListener(
 
 /*
 ==================================================
+LOAD VIDEO
+==================================================
+*/
+
+
+let loadedVideoUrl = null;
+
+
+window.addEventListener(
+    "loadVideoFile",
+    e=>{
+
+        if(cameraOn){
+
+            camera.stop();
+
+            cameraOn = false;
+
+        }
+
+
+        const video =
+            camera.getVideo();
+
+
+        if(loadedVideoUrl){
+
+            URL.revokeObjectURL(
+                loadedVideoUrl
+            );
+
+        }
+
+
+        loadedVideoUrl =
+            URL.createObjectURL(
+                e.detail.file
+            );
+
+
+        video.onerror = ()=>{
+
+            console.error(
+                "VIDEO FILE FAILED TO LOAD:",
+                e.detail.file.name
+            );
+
+        };
+
+
+        video.srcObject = null;
+
+        video.loop = true;
+
+        video.src = loadedVideoUrl;
+
+        video.play();
+
+
+        console.log(
+            "Loaded video file:",
+            e.detail.file.name
+        );
+
+    }
+);
+
+
+
+
+/*
+==================================================
 RESOLUTION
 ==================================================
 */
@@ -222,7 +294,10 @@ RESOLUTION
 const RESOLUTIONS = [
     {width:320, height:240},
     {width:640, height:480},
-    {width:1280, height:960}
+    {width:1280, height:960},
+    {width:640, height:360},
+    {width:1280, height:720},
+    {width:1920, height:1080}
 ];
 
 
@@ -274,17 +349,33 @@ function applyResolution(){
 }
 
 
-document
-.querySelector(".statusbar")
-.children[5]
-.addEventListener(
-    "click",
+window.addEventListener(
+    "outputSizeUp",
     ()=>{
 
-        resolutionIndex =
-            (resolutionIndex + 1) % RESOLUTIONS.length;
+        if(resolutionIndex < RESOLUTIONS.length - 1){
 
-        applyResolution();
+            resolutionIndex++;
+
+            applyResolution();
+
+        }
+
+    }
+);
+
+
+window.addEventListener(
+    "outputSizeDown",
+    ()=>{
+
+        if(resolutionIndex > 0){
+
+            resolutionIndex--;
+
+            applyResolution();
+
+        }
 
     }
 );
@@ -884,6 +975,103 @@ window.addEventListener(
 
 /*
 ==================================================
+LOAD AUDIO
+==================================================
+*/
+
+
+let audioContext = null;
+
+let currentAudioSource = null;
+
+let currentAudioTrack = null;
+
+
+window.addEventListener(
+    "loadAudioFile",
+    async e=>{
+
+        try {
+
+            if(!audioContext)
+                audioContext = new AudioContext();
+
+            if(audioContext.state === "suspended")
+                await audioContext.resume();
+
+
+            const arrayBuffer =
+                await e.detail.file.arrayBuffer();
+
+            const audioBuffer =
+                await audioContext.decodeAudioData(
+                    arrayBuffer
+                );
+
+
+            if(currentAudioSource){
+
+                try {
+                    currentAudioSource.stop();
+                }
+                catch(error){}
+
+            }
+
+
+            const source =
+                audioContext.createBufferSource();
+
+            source.buffer = audioBuffer;
+
+            source.loop = true;
+
+
+            const destination =
+                audioContext.createMediaStreamDestination();
+
+            source.connect(
+                audioContext.destination
+            );
+
+            source.connect(
+                destination
+            );
+
+            source.start();
+
+
+            currentAudioSource = source;
+
+            currentAudioTrack =
+                destination.stream
+                .getAudioTracks()[0];
+
+
+            console.log(
+                "Loaded audio file:",
+                e.detail.file.name
+            );
+
+        }
+        catch(error){
+
+            console.error(
+                "AUDIO FILE FAILED TO LOAD:",
+                error.name,
+                error.message
+            );
+
+        }
+
+    }
+);
+
+
+
+
+/*
+==================================================
 RECORDING
 ==================================================
 */
@@ -912,7 +1100,7 @@ window.addEventListener(
         else {
 
             let started =
-                recorder.start();
+                recorder.start(currentAudioTrack);
 
             document
             .querySelector(".statusbar")
