@@ -5,6 +5,51 @@ AMIGA TWO ROW MENU SYSTEM
 ==================================================
 */
 
+
+const SWATCHES = [
+
+    {label:"BLACK", r:0, g:0, b:0},
+
+    {label:"WHITE", r:255, g:255, b:255},
+
+    {label:"RED", r:255, g:0, b:0},
+
+    {label:"GREEN", r:0, g:255, b:0},
+
+    {label:"BLUE", r:0, g:150, b:255},
+
+    {label:"MAGENTA", r:255, g:0, b:255},
+
+    {label:"CYAN", r:0, g:255, b:255},
+
+    {label:"YELLOW", r:255, g:255, b:0}
+
+];
+
+
+
+function colourMenu(event){
+
+
+    return SWATCHES.map(swatch=>({
+
+        label:swatch.label,
+
+        event:event,
+
+        r:swatch.r,
+
+        g:swatch.g,
+
+        b:swatch.b
+
+    }));
+
+
+}
+
+
+
 export class MenuManager {
 
     constructor(){
@@ -49,37 +94,33 @@ export class MenuManager {
 
 
 
-                BACKGROUND:[
+                BACKGROUND:{
 
-                    "BG BLACK",
+                    COLOUR:colourMenu(
+                        "videoBackgroundColour"
+                    )
 
-                    "BG WHITE",
-
-                    "BG GREEN",
-
-                    "BG BLUE"
-
-                ]
+                }
 
             },
 
 
 
-            body:[
+            body:{
 
-                "BODY ON/OFF",
+                "BODY ON/OFF":null,
 
-                "THRESHOLD +",
+                "THRESHOLD +":null,
 
-                "THRESHOLD -",
+                "THRESHOLD -":null,
 
-                "MAGENTA",
 
-                "GREEN",
 
-                "BLUE"
+                COLOUR:colourMenu(
+                    "bodyColour"
+                )
 
-            ],
+            },
 
 
 
@@ -145,19 +186,9 @@ export class MenuManager {
 
 
 
-                    "FONT COLOUR":[
-
-                        "FONT WHITE",
-
-                        "FONT BLACK",
-
-                        "FONT MAGENTA",
-
-                        "FONT CYAN",
-
-                        "FONT YELLOW"
-
-                    ]
+                    COLOUR:colourMenu(
+                        "setTextColour"
+                    )
 
                 }
 
@@ -325,16 +356,89 @@ export class MenuManager {
                 );
 
 
-                button.innerText=item;
+                if(typeof item === "object"){
 
 
-                button.onclick=()=>{
+                    button.innerText=
+                        item.label;
 
-                    this.select(
-                        item
-                    );
 
-                };
+                    button.style.backgroundColor=
+                        "rgb("
+                        +
+                        item.r
+                        +
+                        ","
+                        +
+                        item.g
+                        +
+                        ","
+                        +
+                        item.b
+                        +
+                        ")";
+
+
+                    const brightness=
+                        (
+                            item.r * 299
+                            +
+                            item.g * 587
+                            +
+                            item.b * 114
+                        )
+                        /
+                        1000;
+
+
+                    button.style.color=
+                        brightness > 150
+                        ?
+                        "#000"
+                        :
+                        "#fff";
+
+
+                    button.onclick=()=>{
+
+                        console.log(
+                            "MENU SELECTED:",
+                            item.label
+                        );
+
+                        window.dispatchEvent(
+                            new CustomEvent(
+                                item.event,
+                                {
+                                    detail:{
+                                        r:item.r,
+                                        g:item.g,
+                                        b:item.b
+                                    }
+                                }
+                            )
+                        );
+
+                    };
+
+
+                }
+                else {
+
+
+                    button.innerText=item;
+
+
+                    button.onclick=()=>{
+
+                        this.select(
+                            item
+                        );
+
+                    };
+
+
+                }
 
 
                 this.subMenu.appendChild(
@@ -543,54 +647,6 @@ export class MenuManager {
 
 
 
-        if(item==="MAGENTA")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "bodyColour",
-                    {
-                        detail:{
-                            r:255,
-                            g:0,
-                            b:255
-                        }
-                    }
-                )
-            );
-
-
-
-        if(item==="GREEN")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "bodyColour",
-                    {
-                        detail:{
-                            r:0,
-                            g:255,
-                            b:80
-                        }
-                    }
-                )
-            );
-
-
-
-        if(item==="BLUE")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "bodyColour",
-                    {
-                        detail:{
-                            r:0,
-                            g:150,
-                            b:255
-                        }
-                    }
-                )
-            );
-
-
-
         if(item==="RINGS ON/OFF")
             window.dispatchEvent(
                 new Event("toggleRings")
@@ -661,70 +717,6 @@ export class MenuManager {
 
 
 
-        if(item==="BG BLACK")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "videoBackgroundColour",
-                    {
-                        detail:{
-                            r:0,
-                            g:0,
-                            b:0
-                        }
-                    }
-                )
-            );
-
-
-
-        if(item==="BG GREEN")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "videoBackgroundColour",
-                    {
-                        detail:{
-                            r:0,
-                            g:20,
-                            b:0
-                        }
-                    }
-                )
-            );
-
-
-
-        if(item==="BG BLUE")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "videoBackgroundColour",
-                    {
-                        detail:{
-                            r:0,
-                            g:10,
-                            b:30
-                        }
-                    }
-                )
-            );
-
-
-
-        if(item==="BG WHITE")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "videoBackgroundColour",
-                    {
-                        detail:{
-                            r:255,
-                            g:255,
-                            b:255
-                        }
-                    }
-                )
-            );
-
-
-
         if(item==="DISTANCE +")
             window.dispatchEvent(
                 new Event("constellationDistanceUp")
@@ -765,85 +757,6 @@ export class MenuManager {
                 new Event("textSizeDown")
             );
 
-
-
-        if(item==="FONT WHITE")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "setTextColour",
-                    {
-                        detail:{
-                            r:255,
-                            g:255,
-                            b:255
-                        }
-                    }
-                )
-            );
-
-
-
-        if(item==="FONT BLACK")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "setTextColour",
-                    {
-                        detail:{
-                            r:0,
-                            g:0,
-                            b:0
-                        }
-                    }
-                )
-            );
-
-
-
-        if(item==="FONT MAGENTA")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "setTextColour",
-                    {
-                        detail:{
-                            r:255,
-                            g:0,
-                            b:255
-                        }
-                    }
-                )
-            );
-
-
-
-        if(item==="FONT CYAN")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "setTextColour",
-                    {
-                        detail:{
-                            r:0,
-                            g:255,
-                            b:255
-                        }
-                    }
-                )
-            );
-
-
-
-        if(item==="FONT YELLOW")
-            window.dispatchEvent(
-                new CustomEvent(
-                    "setTextColour",
-                    {
-                        detail:{
-                            r:255,
-                            g:255,
-                            b:0
-                        }
-                    }
-                )
-            );
 
 
     }
