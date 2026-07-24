@@ -141,10 +141,17 @@ export class MenuManager {
 
                     "THRESHOLD -":null,
 
+                    "DIFFERENCE/KEYING":null,
+
 
 
                     COLOUR:colourMenu(
                         "bodyColour"
+                    ),
+
+
+                    "KEY COLOUR":colourMenu(
+                        "bodyKeyColour"
                     ),
 
 
@@ -927,6 +934,13 @@ export class MenuManager {
         if(item==="THRESHOLD -")
             window.dispatchEvent(
                 new Event("thresholdDown")
+            );
+
+
+
+        if(item==="DIFFERENCE/KEYING")
+            window.dispatchEvent(
+                new Event("toggleMatteMode")
             );
 
 
