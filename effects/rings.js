@@ -9,12 +9,10 @@ AMIGA CONCENTRIC RING GENERATOR
 export class Rings {
 
 
-    constructor(settings, palette){
+    constructor(settings){
 
 
         this.settings = settings;
-
-        this.palette = palette;
 
 
         this.canvas =
@@ -196,11 +194,11 @@ export class Rings {
 
 
 
-    paletteColour(index){
+    ringColour(index){
 
 
         let colours =
-            this.palette.get().rings;
+            this.settings.amiga.rings.colours;
 
 
 
@@ -396,7 +394,7 @@ export class Rings {
 
 
             let colour =
-                this.paletteColour(
+                this.ringColour(
                     group
                 );
 

@@ -7,10 +7,9 @@ BODY GHOST TRAIL EFFECT
 
 export class Ghost {
 
-    constructor(settings, palette){
+    constructor(settings){
 
         this.settings = settings;
-        this.palette = palette;
         this.canvas =
             document.getElementById(
                 "overlay-layer"

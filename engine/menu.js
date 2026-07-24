@@ -68,23 +68,26 @@ export class MenuManager {
         this.textValue = "";
 
 
+        this.ringId = 1;
+
+
 
         this.menus = {
 
 
-            project:[
+            input:{
 
-                "CAMERA START",
+                CAMERA:{
 
-                "CAMERA STOP",
+                    "CAMERA ON/OFF":null,
 
-                "CAMERA CAPTURE BACKGROUND",
+                    "CAPTURE BACKGROUND":null,
 
-                "RECORD START",
+                    "RECORD ON/OFF":null
 
-                "RECORD STOP"
+                }
 
-            ],
+            },
 
 
 
@@ -106,25 +109,39 @@ export class MenuManager {
 
 
 
-            body:{
-
-                "BODY ON/OFF":null,
-
-                "THRESHOLD +":null,
-
-                "THRESHOLD -":null,
-
-
-
-                COLOUR:colourMenu(
-                    "bodyColour"
-                )
-
-            },
-
-
-
             amiga:{
+
+                BODY:{
+
+                    "BODY ON/OFF":null,
+
+                    "THRESHOLD +":null,
+
+                    "THRESHOLD -":null,
+
+
+
+                    COLOUR:colourMenu(
+                        "bodyColour"
+                    ),
+
+
+
+                    GHOST:[
+
+                        "GHOST +",
+
+                        "GHOST -",
+
+                        "GHOST DELAY +",
+
+                        "GHOST DELAY -"
+
+                    ]
+
+                },
+
+
 
                 RINGS:{
 
@@ -138,6 +155,10 @@ export class MenuManager {
 
                     "RING SIZE -":null,
 
+                    "RING THICKNESS +":null,
+
+                    "RING THICKNESS -":null,
+
 
 
                     CONSTELLATION:[
@@ -148,23 +169,17 @@ export class MenuManager {
 
                         "DISTANCE -"
 
-                    ]
+                    ],
+
+
+
+                    COLOUR:{
+
+                        type:"ringColourPicker"
+
+                    }
 
                 },
-
-
-
-                GHOST:[
-
-                    "GHOST +",
-
-                    "GHOST -",
-
-                    "GHOST DELAY +",
-
-                    "GHOST DELAY -"
-
-                ],
 
 
 
@@ -227,7 +242,7 @@ export class MenuManager {
 
 
         this.show(
-            "project"
+            "input"
         );
 
     }
@@ -344,6 +359,19 @@ export class MenuManager {
 
 
 
+        if(
+            node &&
+            node.type==="ringColourPicker"
+        ){
+
+            this.renderRingColourPicker();
+
+            return;
+
+        }
+
+
+
         if(Array.isArray(node)){
 
 
@@ -363,40 +391,12 @@ export class MenuManager {
                         item.label;
 
 
-                    button.style.backgroundColor=
-                        "rgb("
-                        +
-                        item.r
-                        +
-                        ","
-                        +
-                        item.g
-                        +
-                        ","
-                        +
+                    this.styleSwatch(
+                        button,
+                        item.r,
+                        item.g,
                         item.b
-                        +
-                        ")";
-
-
-                    const brightness=
-                        (
-                            item.r * 299
-                            +
-                            item.g * 587
-                            +
-                            item.b * 114
-                        )
-                        /
-                        1000;
-
-
-                    button.style.color=
-                        brightness > 150
-                        ?
-                        "#000"
-                        :
-                        "#fff";
+                    );
 
 
                     button.onclick=()=>{
@@ -587,6 +587,185 @@ export class MenuManager {
 
 
 
+    styleSwatch(button, r, g, b){
+
+
+        button.style.backgroundColor=
+            "rgb("
+            +
+            r
+            +
+            ","
+            +
+            g
+            +
+            ","
+            +
+            b
+            +
+            ")";
+
+
+        const brightness=
+            (
+                r * 299
+                +
+                g * 587
+                +
+                b * 114
+            )
+            /
+            1000;
+
+
+        button.style.color=
+            brightness > 150
+            ?
+            "#000"
+            :
+            "#fff";
+
+
+    }
+
+
+
+
+    renderRingColourPicker(){
+
+
+        let minus =
+        document.createElement(
+            "button"
+        );
+
+
+        minus.innerText=
+            "RING ID -";
+
+
+        minus.onclick=()=>{
+
+            if(this.ringId > 1)
+                this.ringId--;
+
+            this.render();
+
+        };
+
+
+        this.subMenu.appendChild(
+            minus
+        );
+
+
+
+        let display =
+        document.createElement(
+            "span"
+        );
+
+
+        display.innerText=
+            "RING " +
+            this.ringId;
+
+
+        display.className=
+            "ring-id-display";
+
+
+        this.subMenu.appendChild(
+            display
+        );
+
+
+
+        let plus =
+        document.createElement(
+            "button"
+        );
+
+
+        plus.innerText=
+            "RING ID +";
+
+
+        plus.onclick=()=>{
+
+            if(this.ringId < 8)
+                this.ringId++;
+
+            this.render();
+
+        };
+
+
+        this.subMenu.appendChild(
+            plus
+        );
+
+
+
+        SWATCHES.forEach(swatch=>{
+
+
+            let button =
+            document.createElement(
+                "button"
+            );
+
+
+            button.innerText=
+                swatch.label;
+
+
+            this.styleSwatch(
+                button,
+                swatch.r,
+                swatch.g,
+                swatch.b
+            );
+
+
+            button.onclick=()=>{
+
+                console.log(
+                    "MENU SELECTED:",
+                    "RING",
+                    this.ringId,
+                    swatch.label
+                );
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "ringColour",
+                        {
+                            detail:{
+                                ringId:this.ringId,
+                                r:swatch.r,
+                                g:swatch.g,
+                                b:swatch.b
+                            }
+                        }
+                    )
+                );
+
+            };
+
+
+            this.subMenu.appendChild(
+                button
+            );
+
+
+        });
+
+
+    }
+
+
+
 
     select(item){
 
@@ -598,23 +777,23 @@ export class MenuManager {
 
 
 
-        if(item==="CAMERA START")
+        if(item==="CAMERA ON/OFF")
             window.dispatchEvent(
-                new Event("startCamera")
+                new Event("toggleCamera")
             );
 
 
 
-        if(item==="CAMERA STOP")
-            window.dispatchEvent(
-                new Event("stopCamera")
-            );
-
-
-
-        if(item==="CAMERA CAPTURE BACKGROUND")
+        if(item==="CAPTURE BACKGROUND")
             window.dispatchEvent(
                 new Event("captureBackground")
+            );
+
+
+
+        if(item==="RECORD ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleRecord")
             );
 
 
@@ -682,6 +861,20 @@ export class MenuManager {
 
 
 
+        if(item==="RING THICKNESS +")
+            window.dispatchEvent(
+                new Event("ringThicknessUp")
+            );
+
+
+
+        if(item==="RING THICKNESS -")
+            window.dispatchEvent(
+                new Event("ringThicknessDown")
+            );
+
+
+
         if(item==="ON/OFF")
             window.dispatchEvent(
                 new Event("toggleConstellation")
@@ -699,20 +892,6 @@ export class MenuManager {
         if(item==="GHOST -")
             window.dispatchEvent(
                 new Event("ghostDown")
-            );
-
-
-
-        if(item==="RECORD START")
-            window.dispatchEvent(
-                new Event("startRecord")
-            );
-
-
-
-        if(item==="RECORD STOP")
-            window.dispatchEvent(
-                new Event("stopRecord")
             );
 
 
