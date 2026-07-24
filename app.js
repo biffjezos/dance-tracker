@@ -610,6 +610,28 @@ window.addEventListener(
 
 
 
+window.addEventListener(
+    "toggleBodyFill",
+    ()=>{
+
+        settings.body.fill =
+            settings.body.fill === "solid"
+            ?
+            "video"
+            :
+            "solid";
+
+
+        console.log(
+            "Body fill:",
+            settings.body.fill
+        );
+
+    }
+);
+
+
+
 
 /*
 ==================================================

@@ -29,7 +29,8 @@ export class Settings {
             colourMode:"magenta",
             blendMode:"normal",
             threshold:100,
-            keyColour:{r:0, g:255, b:0}
+            keyColour:{r:0, g:255, b:0},
+            fill:"solid"
         };
 
 

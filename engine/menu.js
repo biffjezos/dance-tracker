@@ -199,6 +199,8 @@ export class MenuManager {
 
                     "DIFFERENCE/CHROMA":null,
 
+                    "SOLID/VIDEO":null,
+
 
 
                     COLOUR:colourMenu(
@@ -1146,6 +1148,13 @@ export class MenuManager {
         if(item==="DIFFERENCE/CHROMA")
             window.dispatchEvent(
                 new Event("toggleMatteMode")
+            );
+
+
+
+        if(item==="SOLID/VIDEO")
+            window.dispatchEvent(
+                new Event("toggleBodyFill")
             );
 
 
