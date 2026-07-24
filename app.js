@@ -174,6 +174,9 @@ function processBody(){
     text.draw();
 
 
+    updateTransportDisplay();
+
+
 
     requestAnimationFrame(
         processBody
@@ -205,6 +208,10 @@ window.addEventListener(
 
 
         if(cameraOn){
+
+            fileSourceActive = false;
+
+            transportPlaying = true;
 
             camera.start();
 
@@ -286,6 +293,11 @@ window.addEventListener(
         video.src = loadedVideoUrl;
 
         video.play();
+
+
+        fileSourceActive = true;
+
+        transportPlaying = true;
 
 
         console.log(
@@ -1183,9 +1195,75 @@ LOAD AUDIO
 
 let audioContext = null;
 
+let currentAudioBuffer = null;
+
 let currentAudioSource = null;
 
 let currentAudioTrack = null;
+
+let audioDestinationNode = null;
+
+let audioOffset = 0;
+
+let audioStartedAt = 0;
+
+
+function stopAudioSource(){
+
+    if(currentAudioSource){
+
+        try {
+            currentAudioSource.stop();
+        }
+        catch(error){}
+
+        currentAudioSource = null;
+
+    }
+
+}
+
+
+function startAudioSource(fromTime){
+
+    if(!currentAudioBuffer || !audioDestinationNode)
+        return;
+
+    stopAudioSource();
+
+
+    const source =
+        audioContext.createBufferSource();
+
+    source.buffer = currentAudioBuffer;
+
+    source.loop = true;
+
+    source.connect(
+        audioContext.destination
+    );
+
+    source.connect(
+        audioDestinationNode
+    );
+
+
+    const offset =
+        Math.max(
+            0,
+            fromTime % currentAudioBuffer.duration
+        );
+
+    source.start(0, offset);
+
+
+    currentAudioSource = source;
+
+    audioStartedAt = audioContext.currentTime;
+
+    audioOffset = fromTime;
+
+}
 
 
 window.addEventListener(
@@ -1204,49 +1282,40 @@ window.addEventListener(
             const arrayBuffer =
                 await e.detail.file.arrayBuffer();
 
-            const audioBuffer =
+            currentAudioBuffer =
                 await audioContext.decodeAudioData(
                     arrayBuffer
                 );
 
 
-            if(currentAudioSource){
+            audioDestinationNode =
+                audioContext.createMediaStreamDestination();
 
-                try {
-                    currentAudioSource.stop();
-                }
-                catch(error){}
+            currentAudioTrack =
+                audioDestinationNode.stream
+                .getAudioTracks()[0];
+
+
+            if(!hasVideoFile()){
+
+                transportPlaying = true;
 
             }
 
 
-            const source =
-                audioContext.createBufferSource();
+            if(transportPlaying){
 
-            source.buffer = audioBuffer;
+                startAudioSource(
+                    getPlayheadTime()
+                );
 
-            source.loop = true;
+            }
+            else {
 
+                audioOffset =
+                    getPlayheadTime();
 
-            const destination =
-                audioContext.createMediaStreamDestination();
-
-            source.connect(
-                audioContext.destination
-            );
-
-            source.connect(
-                destination
-            );
-
-            source.start();
-
-
-            currentAudioSource = source;
-
-            currentAudioTrack =
-                destination.stream
-                .getAudioTracks()[0];
+            }
 
 
             console.log(
@@ -1266,6 +1335,228 @@ window.addEventListener(
         }
 
     }
+);
+
+
+
+
+/*
+==================================================
+TRANSPORT
+==================================================
+*/
+
+
+let fileSourceActive = false;
+
+let transportPlaying = false;
+
+
+function hasVideoFile(){
+
+    return fileSourceActive;
+
+}
+
+
+function getPlayheadTime(){
+
+    if(hasVideoFile()){
+
+        return camera.getVideo().currentTime;
+
+    }
+
+
+    if(transportPlaying && currentAudioBuffer){
+
+        return (
+            audioOffset +
+            (audioContext.currentTime - audioStartedAt)
+        );
+
+    }
+
+
+    return audioOffset;
+
+}
+
+
+function formatTimestamp(totalSeconds){
+
+    const pad =
+        n=>String(Math.floor(n)).padStart(2, "0");
+
+
+    const minutes =
+        Math.floor(totalSeconds / 60);
+
+    const seconds =
+        Math.floor(totalSeconds % 60);
+
+    const frames =
+        Math.floor((totalSeconds % 1) * 30);
+
+
+    return (
+        pad(minutes) +
+        ":" +
+        pad(seconds) +
+        ":" +
+        pad(frames)
+    );
+
+}
+
+
+function updateTransportDisplay(){
+
+    const display =
+        document.getElementById(
+            "transport-display"
+        );
+
+    if(display){
+
+        display.innerText =
+            formatTimestamp(
+                getPlayheadTime()
+            );
+
+    }
+
+}
+
+
+function seekBy(deltaSeconds){
+
+    const video =
+        camera.getVideo();
+
+
+    if(
+        hasVideoFile() &&
+        isFinite(video.duration)
+    ){
+
+        video.currentTime =
+            Math.min(
+                Math.max(
+                    video.currentTime + deltaSeconds,
+                    0
+                ),
+                video.duration
+            );
+
+    }
+    else {
+
+        audioOffset =
+            Math.max(
+                0,
+                getPlayheadTime() + deltaSeconds
+            );
+
+    }
+
+
+    if(transportPlaying && currentAudioBuffer){
+
+        startAudioSource(
+            getPlayheadTime()
+        );
+
+    }
+
+
+    updateTransportDisplay();
+
+}
+
+
+window.addEventListener(
+    "transportPlayStop",
+    ()=>{
+
+        const video =
+            camera.getVideo();
+
+
+        transportPlaying =
+            !transportPlaying;
+
+
+        if(transportPlaying){
+
+            if(hasVideoFile())
+                video.play();
+
+            if(currentAudioBuffer)
+                startAudioSource(
+                    getPlayheadTime()
+                );
+
+        }
+        else {
+
+            if(hasVideoFile())
+                video.pause();
+
+            if(currentAudioBuffer){
+
+                audioOffset =
+                    getPlayheadTime();
+
+                stopAudioSource();
+
+            }
+
+        }
+
+
+        console.log(
+            "Transport:",
+            transportPlaying ? "PLAY" : "STOP"
+        );
+
+    }
+);
+
+
+window.addEventListener(
+    "transportMinuteUp",
+    ()=>seekBy(60)
+);
+
+
+window.addEventListener(
+    "transportMinuteDown",
+    ()=>seekBy(-60)
+);
+
+
+window.addEventListener(
+    "transportSecondUp",
+    ()=>seekBy(1)
+);
+
+
+window.addEventListener(
+    "transportSecondDown",
+    ()=>seekBy(-1)
+);
+
+
+window.addEventListener(
+    "transportFrameUp",
+    ()=>seekBy(1/30)
+);
+
+
+window.addEventListener(
+    "transportFrameDown",
+    ()=>seekBy(-1/30)
 );
 
 
