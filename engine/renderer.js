@@ -16,10 +16,6 @@ export class Renderer {
             options.settings;
 
 
-        this.palette =
-            options.palette;
-
-
         this.video =
             document.getElementById(
                 "camera"
@@ -236,7 +232,7 @@ export class Renderer {
 
 
         this.contexts.background.fillStyle =
-            this.palette.get().background;
+            this.settings.video.backgroundColour;
 
 
         this.contexts.background.fillRect(

@@ -51,8 +51,7 @@ const menu =
 
 const renderer =
     new Renderer({
-        settings:settings,
-        palette:palette
+        settings:settings
     });
 
 
@@ -212,6 +211,37 @@ window.addEventListener(
         console.log(
             "Video:",
             settings.video.enabled
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "videoBackgroundColour",
+    e=>{
+
+
+        settings.video.backgroundColour =
+            "rgb("
+            +
+            e.detail.r
+            +
+            ","
+            +
+            e.detail.g
+            +
+            ","
+            +
+            e.detail.b
+            +
+            ")";
+
+
+        console.log(
+            "Background colour:",
+            settings.video.backgroundColour
         );
 
     }
@@ -426,10 +456,47 @@ window.addEventListener(
     "constellationOff",
     ()=>{
 
+        rings.exitConstellation();
+
         settings.amiga.rings.constellation.enabled=false;
 
         console.log(
             "CONSTELLATION OFF"
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "constellationDistanceUp",
+    ()=>{
+
+        settings.amiga.rings.constellation.distance += 10;
+
+        console.log(
+            "Constellation distance:",
+            settings.amiga.rings.constellation.distance
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "constellationDistanceDown",
+    ()=>{
+
+        settings.amiga.rings.constellation.distance -= 10;
+
+        if(settings.amiga.rings.constellation.distance < 10)
+            settings.amiga.rings.constellation.distance = 10;
+
+        console.log(
+            "Constellation distance:",
+            settings.amiga.rings.constellation.distance
         );
 
     }
@@ -540,6 +607,41 @@ window.addEventListener(
 
 
 
+window.addEventListener(
+    "ghostDelayUp",
+    ()=>{
+
+        settings.amiga.ghost.delay += 50;
+
+        console.log(
+            "Ghost delay:",
+            settings.amiga.ghost.delay
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "ghostDelayDown",
+    ()=>{
+
+        settings.amiga.ghost.delay -= 50;
+
+        if(settings.amiga.ghost.delay < 0)
+            settings.amiga.ghost.delay = 0;
+
+        console.log(
+            "Ghost delay:",
+            settings.amiga.ghost.delay
+        );
+
+    }
+);
+
+
+
 
 /*
 ==================================================
@@ -590,26 +692,6 @@ window.addEventListener(
     }
 );
 
-
-
-
-/*
-==================================================
-PALETTE
-==================================================
-*/
-
-
-window.addEventListener(
-    "setPalette",
-    e=>{
-
-        palette.set(
-            e.detail.name
-        );
-
-    }
-);
 
 
 

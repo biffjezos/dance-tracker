@@ -13,7 +13,8 @@ export class Settings {
             mirror:false,
             width:320,
             height:240,
-            enabled:true
+            enabled:true,
+            backgroundColour:"rgb(0,0,0)"
         };
 
 
@@ -72,14 +73,16 @@ export class Settings {
                 width:6,
                 blend:"screen",
                 constellation:{
-                    enabled:false
+                    enabled:false,
+                    distance:70
                 }
             },
 
             ghost:{
                 enabled:false,
                 count:0,
-                alpha:0.45
+                alpha:0.45,
+                delay:150
             },
             plasma:{
                 enabled:false,
