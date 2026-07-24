@@ -92,7 +92,7 @@ export class Settings {
                 enabled:false,
                 count:0,
                 alpha:0.45,
-                delay:150
+                delay:50
             },
 
             text:{

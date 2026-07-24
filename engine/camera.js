@@ -8,7 +8,10 @@ CAMERA ENGINE
 export class Camera {
 
 
-    constructor(){
+    constructor(settings){
+
+
+        this.settings = settings;
 
 
         this.video =
@@ -28,8 +31,8 @@ export class Camera {
          try {
             this.stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    width: 320,
-                    height: 240
+                    width: this.settings.video.width,
+                    height: this.settings.video.height
                 },
                 audio:false
             });

@@ -70,9 +70,11 @@ export class Renderer {
         .forEach(canvas=>{
 
 
-            canvas.width = 320;
+            canvas.width =
+                this.settings.video.width;
 
-            canvas.height = 240;
+            canvas.height =
+                this.settings.video.height;
 
 
         });
@@ -150,6 +152,28 @@ export class Renderer {
 
 
 
+    resize(){
+
+
+        Object.values(this.layers)
+        .forEach(canvas=>{
+
+
+            canvas.width =
+                this.settings.video.width;
+
+            canvas.height =
+                this.settings.video.height;
+
+
+        });
+
+
+    }
+
+
+
+
 
 
     loop(time){
@@ -212,9 +236,9 @@ export class Renderer {
 
             0,
 
-            320,
+            this.settings.video.width,
 
-            240
+            this.settings.video.height
 
         );
 
@@ -226,9 +250,9 @@ export class Renderer {
 
             0,
 
-            320,
+            this.settings.video.width,
 
-            240
+            this.settings.video.height
 
         );
 
@@ -253,9 +277,9 @@ export class Renderer {
 
             0,
 
-            320,
+            this.settings.video.width,
 
-            240
+            this.settings.video.height
 
         );
 
@@ -290,9 +314,9 @@ export class Renderer {
 
             0,
 
-            320,
+            this.settings.video.width,
 
-            240
+            this.settings.video.height
 
         );
 
