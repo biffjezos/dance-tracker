@@ -393,11 +393,43 @@ window.addEventListener(
     "ringCountUp",
     ()=>{
 
-        settings.amiga.rings.count++;
+        if(settings.amiga.rings.count < 8)
+            settings.amiga.rings.count++;
 
         console.log(
             "Ring groups:",
             settings.amiga.rings.count
+        );
+
+    }
+);
+
+
+
+
+window.addEventListener(
+    "constellationOn",
+    ()=>{
+
+        settings.amiga.rings.constellation.enabled=true;
+
+        console.log(
+            "CONSTELLATION ON"
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "constellationOff",
+    ()=>{
+
+        settings.amiga.rings.constellation.enabled=false;
+
+        console.log(
+            "CONSTELLATION OFF"
         );
 
     }
@@ -520,13 +552,18 @@ window.addEventListener(
     "startRecord",
     ()=>{
 
-        recorder.start();
+        let started =
+            recorder.start();
 
         document
         .querySelector(".statusbar")
         .children[4]
         .innerText =
-            "REC: ON";
+            started
+            ?
+            "REC: ON"
+            :
+            "REC: ERROR";
 
     }
 );
@@ -537,13 +574,18 @@ window.addEventListener(
     "stopRecord",
     ()=>{
 
-        recorder.stop();
+        let stopped =
+            recorder.stop();
 
         document
         .querySelector(".statusbar")
         .children[4]
         .innerText =
-            "REC: OFF";
+            stopped
+            ?
+            "REC: OFF"
+            :
+            "REC: ERROR";
 
     }
 );

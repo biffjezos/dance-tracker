@@ -27,91 +27,115 @@ export class Recorder {
     start(){
 
         if(this.recording)
-            return;
+            return true;
 
 
-        let stream =
-            this.canvas.captureStream(60);
+        try {
 
-
-
-        this.chunks = [];
-
-
-
-        let options = {};
+            let stream =
+                this.canvas.captureStream(60);
 
 
 
-        if(
-            MediaRecorder.isTypeSupported(
-                "video/mp4"
-            )
-        ){
-
-            options.mimeType =
-                "video/mp4";
-
-        }
-        else if(
-            MediaRecorder.isTypeSupported(
-                "video/webm;codecs=vp9"
-            )
-        ){
-
-            options.mimeType =
-                "video/webm;codecs=vp9";
-
-        }
-        else if(
-            MediaRecorder.isTypeSupported(
-                "video/webm"
-            )
-        ){
-
-            options.mimeType =
-                "video/webm";
-
-        }
+            this.chunks = [];
 
 
 
-        this.recorder =
-            new MediaRecorder(
-                stream,
-                options
+            let options = {};
+
+
+
+            if(
+                MediaRecorder.isTypeSupported(
+                    "video/mp4"
+                )
+            ){
+
+                options.mimeType =
+                    "video/mp4";
+
+            }
+            else if(
+                MediaRecorder.isTypeSupported(
+                    "video/webm;codecs=vp9"
+                )
+            ){
+
+                options.mimeType =
+                    "video/webm;codecs=vp9";
+
+            }
+            else if(
+                MediaRecorder.isTypeSupported(
+                    "video/webm"
+                )
+            ){
+
+                options.mimeType =
+                    "video/webm";
+
+            }
+
+
+
+            this.recorder =
+                new MediaRecorder(
+                    stream,
+                    options
+                );
+
+
+
+            this.recorder.ondataavailable =
+                event=>{
+
+
+                    if(event.data.size > 0){
+
+                        this.chunks.push(
+                            event.data
+                        );
+
+                    }
+
+                };
+
+
+
+            this.recorder.start();
+
+
+
+            this.recording = true;
+
+
+
+            console.log(
+                "Recording started",
+                this.recorder.mimeType
             );
 
 
+            return true;
 
-        this.recorder.ondataavailable =
-            event=>{
+        }
+        catch(error){
 
-
-                if(event.data.size > 0){
-
-                    this.chunks.push(
-                        event.data
-                    );
-
-                }
-
-            };
+            console.error(
+                "RECORDING FAILED TO START:",
+                error.name,
+                error.message
+            );
 
 
+            this.recording = false;
 
-        this.recorder.start();
-
-
-
-        this.recording = true;
+            this.recorder = null;
 
 
+            return false;
 
-        console.log(
-            "Recording started",
-            this.recorder.mimeType
-        );
+        }
 
     }
 
@@ -125,7 +149,7 @@ export class Recorder {
             !this.recorder ||
             !this.recording
         )
-            return;
+            return true;
 
 
         let mimeType =
@@ -136,60 +160,102 @@ export class Recorder {
             ()=>{
 
 
-                let blob =
-                    new Blob(
-                        this.chunks,
-                        {
-                            type:mimeType
-                        }
+                try {
+
+                    let blob =
+                        new Blob(
+                            this.chunks,
+                            {
+                                type:mimeType
+                            }
+                        );
+
+
+                    let url =
+                        URL.createObjectURL(
+                            blob
+                        );
+
+
+                    let link =
+                        document.createElement(
+                            "a"
+                        );
+
+
+                    link.href = url;
+
+
+                    let extension =
+                        mimeType.includes("mp4")
+                        ?
+                        "mp4"
+                        :
+                        "webm";
+
+
+                    link.download =
+                        "dance-tracker-recording."
+                        +
+                        extension;
+
+
+                    document.body.appendChild(
+                        link
+                    );
+
+                    link.click();
+
+                    document.body.removeChild(
+                        link
                     );
 
 
-                let url =
-                    URL.createObjectURL(
-                        blob
+                    URL.revokeObjectURL(
+                        url
                     );
 
 
-                let link =
-                    document.createElement(
-                        "a"
+                    console.log(
+                        "Recording saved"
                     );
 
+                }
+                catch(error){
 
-                link.href = url;
+                    console.error(
+                        "RECORDING FAILED TO SAVE:",
+                        error.name,
+                        error.message
+                    );
 
-
-                let extension =
-                    mimeType.includes("mp4")
-                    ?
-                    "mp4"
-                    :
-                    "webm";
-
-
-                link.download =
-                    "dance-tracker-recording."
-                    +
-                    extension;
-
-
-                link.click();
-
-
-                URL.revokeObjectURL(
-                    url
-                );
-
-
-                console.log(
-                    "Recording saved"
-                );
+                }
 
             };
 
 
-        this.recorder.stop();
+        try {
+
+            this.recorder.stop();
+
+        }
+        catch(error){
+
+            console.error(
+                "RECORDING FAILED TO STOP:",
+                error.name,
+                error.message
+            );
+
+
+            this.recording = false;
+
+            this.recorder = null;
+
+
+            return false;
+
+        }
 
 
         this.recording = false;
@@ -201,6 +267,9 @@ export class Recorder {
         console.log(
             "Recording stopped"
         );
+
+
+        return true;
 
     }
 

@@ -17,6 +17,10 @@ export class MenuManager {
 
 
 
+        this.path = [];
+
+
+
         this.menus = {
 
 
@@ -62,25 +66,39 @@ export class MenuManager {
 
 
 
-            amiga:[
+            amiga:{
 
-                "RINGS ON",
+                RINGS:[
 
-                "RINGS OFF",
+                    "RINGS ON",
 
-                "RING COUNT +",
+                    "RINGS OFF",
 
-                "RING COUNT -",
+                    "RING COUNT +",
 
-                "RING SIZE +",
+                    "RING COUNT -",
 
-                "RING SIZE -",
+                    "RING SIZE +",
 
-                "GHOST +",
+                    "RING SIZE -",
 
-                "GHOST -"
+                    "CONSTELLATION ON",
 
-            ],
+                    "CONSTELLATION OFF"
+
+                ],
+
+
+
+                GHOST:[
+
+                    "GHOST +",
+
+                    "GHOST -"
+
+                ]
+
+            },
 
 
 
@@ -138,38 +156,179 @@ export class MenuManager {
     show(menuName){
 
 
+        this.path = [menuName];
+
+
+        this.render();
+
+
+    }
+
+
+
+
+    enter(category){
+
+
+        this.path.push(
+            category
+        );
+
+
+        this.render();
+
+
+    }
+
+
+
+
+    up(){
+
+
+        if(this.path.length > 1){
+
+            this.path.pop();
+
+            this.render();
+
+        }
+
+
+    }
+
+
+
+
+    node(){
+
+
+        let node = this.menus;
+
+
+        this.path.forEach(key=>{
+
+            node = node[key];
+
+        });
+
+
+        return node;
+
+
+    }
+
+
+
+
+    render(){
+
+
         this.subMenu.innerHTML="";
 
 
+        let node =
+            this.node();
 
-        this.menus[menuName]
-        .forEach(item=>{
 
 
-            let button =
+        if(this.path.length > 1){
+
+
+            let up =
             document.createElement(
                 "button"
             );
 
 
-            button.innerText=item;
+            up.innerText="UP";
+
+            up.className="up-button";
 
 
-            button.onclick=()=>{
+            up.onclick=()=>{
 
-                this.select(
-                    item
-                );
+                this.up();
 
             };
 
 
             this.subMenu.appendChild(
-                button
+                up
             );
 
 
-        });
+        }
+
+
+
+        if(Array.isArray(node)){
+
+
+            node.forEach(item=>{
+
+
+                let button =
+                document.createElement(
+                    "button"
+                );
+
+
+                button.innerText=item;
+
+
+                button.onclick=()=>{
+
+                    this.select(
+                        item
+                    );
+
+                };
+
+
+                this.subMenu.appendChild(
+                    button
+                );
+
+
+            });
+
+
+        }
+        else {
+
+
+            Object.keys(node)
+            .forEach(category=>{
+
+
+                let button =
+                document.createElement(
+                    "button"
+                );
+
+
+                button.innerText=category;
+
+
+                button.onclick=()=>{
+
+                    this.enter(
+                        category
+                    );
+
+                };
+
+
+                this.subMenu.appendChild(
+                    button
+                );
+
+
+            });
+
+
+        }
 
 
     }
@@ -323,6 +482,20 @@ export class MenuManager {
         if(item==="RING SIZE -")
             window.dispatchEvent(
                 new Event("ringSizeDown")
+            );
+
+
+
+        if(item==="CONSTELLATION ON")
+            window.dispatchEvent(
+                new Event("constellationOn")
+            );
+
+
+
+        if(item==="CONSTELLATION OFF")
+            window.dispatchEvent(
+                new Event("constellationOff")
             );
 
 
