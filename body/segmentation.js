@@ -201,6 +201,11 @@ export class Segmentation {
 
 
 
+        const videoFill =
+            this.settings.body.fill === "video";
+
+
+
         for(
             let i=0;
             i<pixels.length;
@@ -242,16 +247,34 @@ export class Segmentation {
             ){
 
 
-                result.data[i] =
-                    this.colour.r;
+                if(videoFill){
+
+                    result.data[i] =
+                        pixels[i];
 
 
-                result.data[i+1] =
-                    this.colour.g;
+                    result.data[i+1] =
+                        pixels[i+1];
 
 
-                result.data[i+2] =
-                    this.colour.b;
+                    result.data[i+2] =
+                        pixels[i+2];
+
+                }
+                else {
+
+                    result.data[i] =
+                        this.colour.r;
+
+
+                    result.data[i+1] =
+                        this.colour.g;
+
+
+                    result.data[i+2] =
+                        this.colour.b;
+
+                }
 
 
                 result.data[i+3] =
