@@ -78,6 +78,123 @@ export class Rings {
 
 
 
+    constellationPosition(group, count){
+
+
+        const hub =
+            this.hub();
+
+
+        let angle =
+            (
+                Math.PI * 2 /
+                count
+            )
+            *
+            group
+            +
+            this.time * 0.15;
+
+
+        const distance =
+            this.settings.amiga.rings
+            .constellation.distance;
+
+
+        return {
+
+            x:
+            hub.x +
+            Math.cos(angle) *
+            distance,
+
+
+            y:
+            hub.y +
+            Math.sin(angle) *
+            distance
+
+        };
+
+
+    }
+
+
+
+
+    exitConstellation(){
+
+
+        const count =
+            this.settings.amiga.rings.count;
+
+
+        for(
+            let group = 0;
+            group < count;
+            group++
+        ){
+
+
+            let position =
+                this.constellationPosition(
+                    group,
+                    count
+                );
+
+
+            if(!this.centres[group]){
+
+                this.centres[group] = {
+
+                    phase:
+                    Math.random() *
+                    Math.PI * 2,
+
+                    speed:
+                    0.5 +
+                    Math.random()
+
+                };
+
+            }
+
+
+            let centre =
+                this.centres[group];
+
+
+            centre.x =
+                position.x -
+                Math.sin(
+                    this.time *
+                    centre.speed +
+                    centre.phase
+                )
+                *
+                50;
+
+
+            centre.y =
+                position.y -
+                Math.cos(
+                    this.time *
+                    centre.speed *
+                    0.8 +
+                    centre.phase
+                )
+                *
+                40;
+
+
+        }
+
+
+    }
+
+
+
+
 
     paletteColour(index){
 
@@ -206,19 +323,6 @@ export class Rings {
             rings.constellation.enabled;
 
 
-        const CONSTELLATION_RADIUS =
-            45 +
-            count * 10;
-
-
-        const hub =
-            constellation
-            ?
-            this.hub()
-            :
-            null;
-
-
 
         for(
             let group = 0;
@@ -235,27 +339,16 @@ export class Rings {
             if(constellation){
 
 
-                let angle =
-                    (
-                        Math.PI * 2 /
+                let position =
+                    this.constellationPosition(
+                        group,
                         count
-                    )
-                    *
-                    group
-                    +
-                    this.time * 0.15;
+                    );
 
 
-                cx =
-                    hub.x +
-                    Math.cos(angle) *
-                    CONSTELLATION_RADIUS;
+                cx = position.x;
 
-
-                cy =
-                    hub.y +
-                    Math.sin(angle) *
-                    CONSTELLATION_RADIUS;
+                cy = position.y;
 
 
             }

@@ -28,6 +28,10 @@ export class Ghost {
 
         this.history = [];
 
+        this.lastCapture = 0;
+
+        this.elapsed = 0;
+
     }
 
     update(){
@@ -40,9 +44,35 @@ export class Ghost {
 
             this.history = [];
 
+            this.lastCapture = 0;
+
+            this.elapsed = 0;
+
             return;
 
         }
+
+
+        let now =
+            performance.now();
+
+
+        if(!this.lastCapture)
+            this.lastCapture = now;
+
+
+        this.elapsed +=
+            now - this.lastCapture;
+
+
+        this.lastCapture = now;
+
+
+        if(this.elapsed < ghost.delay)
+            return;
+
+
+        this.elapsed = 0;
 
 
         let copy =

@@ -40,11 +40,23 @@ export class MenuManager {
 
 
 
-            video:[
+            video:{
 
-                "VIDEO ON/OFF"
+                "VIDEO ON/OFF":null,
 
-            ],
+
+
+                BACKGROUND:[
+
+                    "BG BLACK",
+
+                    "BG GREEN",
+
+                    "BG BLUE"
+
+                ]
+
+            },
 
 
 
@@ -84,7 +96,11 @@ export class MenuManager {
 
                     "CONSTELLATION ON",
 
-                    "CONSTELLATION OFF"
+                    "CONSTELLATION OFF",
+
+                    "CONSTELLATION DISTANCE +",
+
+                    "CONSTELLATION DISTANCE -"
 
                 ],
 
@@ -94,23 +110,15 @@ export class MenuManager {
 
                     "GHOST +",
 
-                    "GHOST -"
+                    "GHOST -",
+
+                    "GHOST DELAY +",
+
+                    "GHOST DELAY -"
 
                 ]
 
-            },
-
-
-
-            presets:[
-
-                "CLASSIC AMIGA",
-
-                "CYBER GREEN",
-
-                "ICE BLUE"
-
-            ]
+            }
 
         };
 
@@ -299,7 +307,7 @@ export class MenuManager {
 
 
             Object.keys(node)
-            .forEach(category=>{
+            .forEach(key=>{
 
 
                 let button =
@@ -308,16 +316,31 @@ export class MenuManager {
                 );
 
 
-                button.innerText=category;
+                button.innerText=key;
 
 
-                button.onclick=()=>{
+                if(Array.isArray(node[key])){
 
-                    this.enter(
-                        category
-                    );
+                    button.onclick=()=>{
 
-                };
+                        this.enter(
+                            key
+                        );
+
+                    };
+
+                }
+                else {
+
+                    button.onclick=()=>{
+
+                        this.select(
+                            key
+                        );
+
+                    };
+
+                }
 
 
                 this.subMenu.appendChild(
@@ -528,13 +551,15 @@ export class MenuManager {
 
 
 
-        if(item==="CLASSIC AMIGA")
+        if(item==="BG BLACK")
             window.dispatchEvent(
                 new CustomEvent(
-                    "setPalette",
+                    "videoBackgroundColour",
                     {
                         detail:{
-                            name:"classicAmiga"
+                            r:0,
+                            g:0,
+                            b:0
                         }
                     }
                 )
@@ -542,13 +567,15 @@ export class MenuManager {
 
 
 
-        if(item==="CYBER GREEN")
+        if(item==="BG GREEN")
             window.dispatchEvent(
                 new CustomEvent(
-                    "setPalette",
+                    "videoBackgroundColour",
                     {
                         detail:{
-                            name:"cyberGreen"
+                            r:0,
+                            g:20,
+                            b:0
                         }
                     }
                 )
@@ -556,16 +583,46 @@ export class MenuManager {
 
 
 
-        if(item==="ICE BLUE")
+        if(item==="BG BLUE")
             window.dispatchEvent(
                 new CustomEvent(
-                    "setPalette",
+                    "videoBackgroundColour",
                     {
                         detail:{
-                            name:"iceBlue"
+                            r:0,
+                            g:10,
+                            b:30
                         }
                     }
                 )
+            );
+
+
+
+        if(item==="CONSTELLATION DISTANCE +")
+            window.dispatchEvent(
+                new Event("constellationDistanceUp")
+            );
+
+
+
+        if(item==="CONSTELLATION DISTANCE -")
+            window.dispatchEvent(
+                new Event("constellationDistanceDown")
+            );
+
+
+
+        if(item==="GHOST DELAY +")
+            window.dispatchEvent(
+                new Event("ghostDelayUp")
+            );
+
+
+
+        if(item==="GHOST DELAY -")
+            window.dispatchEvent(
+                new Event("ghostDelayDown")
             );
 
 
