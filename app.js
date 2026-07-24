@@ -14,6 +14,7 @@ import { Renderer } from "./engine/renderer.js";
 import { Segmentation } from "./body/segmentation.js";
 import { Ghost } from "./effects/ghost.js";
 import { Rings } from "./effects/rings.js";
+import { Text } from "./effects/text.js";
 import { Recorder } from "./engine/recorder.js";
 
 
@@ -68,6 +69,13 @@ const ghost =
     new Ghost(
         settings,
         palette
+    );
+
+
+
+const text =
+    new Text(
+        settings
     );
 
 
@@ -151,6 +159,8 @@ function processBody(){
     ghost.draw();
 
     rings.draw();
+
+    text.draw();
 
 
 
@@ -390,28 +400,15 @@ RINGS
 
 
 window.addEventListener(
-    "ringsOn",
+    "toggleRings",
     ()=>{
 
-        settings.amiga.rings.enabled=true;
+        settings.amiga.rings.enabled =
+        !settings.amiga.rings.enabled;
 
         console.log(
-            "RINGS ON"
-        );
-
-    }
-);
-
-
-
-window.addEventListener(
-    "ringsOff",
-    ()=>{
-
-        settings.amiga.rings.enabled=false;
-
-        console.log(
-            "RINGS OFF"
+            "Rings:",
+            settings.amiga.rings.enabled
         );
 
     }
@@ -438,30 +435,27 @@ window.addEventListener(
 
 
 window.addEventListener(
-    "constellationOn",
+    "toggleConstellation",
     ()=>{
 
-        settings.amiga.rings.constellation.enabled=true;
+        const constellation =
+            settings.amiga.rings.constellation;
+
+
+        if(constellation.enabled){
+
+            rings.exitConstellation();
+
+        }
+
+
+        constellation.enabled =
+        !constellation.enabled;
+
 
         console.log(
-            "CONSTELLATION ON"
-        );
-
-    }
-);
-
-
-
-window.addEventListener(
-    "constellationOff",
-    ()=>{
-
-        rings.exitConstellation();
-
-        settings.amiga.rings.constellation.enabled=false;
-
-        console.log(
-            "CONSTELLATION OFF"
+            "Constellation:",
+            constellation.enabled
         );
 
     }
@@ -635,6 +629,90 @@ window.addEventListener(
         console.log(
             "Ghost delay:",
             settings.amiga.ghost.delay
+        );
+
+    }
+);
+
+
+
+
+/*
+==================================================
+TEXT
+==================================================
+*/
+
+
+window.addEventListener(
+    "setText",
+    e=>{
+
+        settings.amiga.text.content =
+            e.detail.value;
+
+    }
+);
+
+
+
+window.addEventListener(
+    "setTextColour",
+    e=>{
+
+        settings.amiga.text.colour =
+            "rgb("
+            +
+            e.detail.r
+            +
+            ","
+            +
+            e.detail.g
+            +
+            ","
+            +
+            e.detail.b
+            +
+            ")";
+
+        console.log(
+            "Text colour:",
+            settings.amiga.text.colour
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "textSizeUp",
+    ()=>{
+
+        settings.amiga.text.size += 4;
+
+        console.log(
+            "Text size:",
+            settings.amiga.text.size
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "textSizeDown",
+    ()=>{
+
+        settings.amiga.text.size -= 4;
+
+        if(settings.amiga.text.size < 8)
+            settings.amiga.text.size = 8;
+
+        console.log(
+            "Text size:",
+            settings.amiga.text.size
         );
 
     }

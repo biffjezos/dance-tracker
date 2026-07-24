@@ -20,6 +20,9 @@ export class MenuManager {
         this.path = [];
 
 
+        this.textValue = "";
+
+
 
         this.menus = {
 
@@ -49,6 +52,8 @@ export class MenuManager {
                 BACKGROUND:[
 
                     "BG BLACK",
+
+                    "BG WHITE",
 
                     "BG GREEN",
 
@@ -80,29 +85,31 @@ export class MenuManager {
 
             amiga:{
 
-                RINGS:[
+                RINGS:{
 
-                    "RINGS ON",
+                    "RINGS ON/OFF":null,
 
-                    "RINGS OFF",
+                    "RING COUNT +":null,
 
-                    "RING COUNT +",
+                    "RING COUNT -":null,
 
-                    "RING COUNT -",
+                    "RING SIZE +":null,
 
-                    "RING SIZE +",
+                    "RING SIZE -":null,
 
-                    "RING SIZE -",
 
-                    "CONSTELLATION ON",
 
-                    "CONSTELLATION OFF",
+                    CONSTELLATION:[
 
-                    "CONSTELLATION DISTANCE +",
+                        "ON/OFF",
 
-                    "CONSTELLATION DISTANCE -"
+                        "DISTANCE +",
 
-                ],
+                        "DISTANCE -"
+
+                    ]
+
+                },
 
 
 
@@ -116,7 +123,43 @@ export class MenuManager {
 
                     "GHOST DELAY -"
 
-                ]
+                ],
+
+
+
+                TEXT:{
+
+                    "ENTER TEXT":{
+
+                        type:"input",
+
+                        placeholder:"ENTER YOUR TEXT HERE",
+
+                        event:"setText"
+
+                    },
+
+                    "SIZE +":null,
+
+                    "SIZE -":null,
+
+
+
+                    "FONT COLOUR":[
+
+                        "FONT WHITE",
+
+                        "FONT BLACK",
+
+                        "FONT MAGENTA",
+
+                        "FONT CYAN",
+
+                        "FONT YELLOW"
+
+                    ]
+
+                }
 
             }
 
@@ -310,16 +353,80 @@ export class MenuManager {
             .forEach(key=>{
 
 
-                let button =
-                document.createElement(
-                    "button"
-                );
+                let value =
+                    node[key];
 
 
-                button.innerText=key;
+                if(
+                    value &&
+                    value.type==="input"
+                ){
 
 
-                if(Array.isArray(node[key])){
+                    let input =
+                    document.createElement(
+                        "input"
+                    );
+
+
+                    input.type="text";
+
+                    input.placeholder=
+                        value.placeholder ||
+                        "";
+
+                    input.maxLength=200;
+
+                    input.className=
+                        "menu-input";
+
+                    input.value=
+                        this.textValue;
+
+
+                    input.addEventListener(
+                        "input",
+                        ()=>{
+
+                            this.textValue=
+                                input.value;
+
+                            window.dispatchEvent(
+                                new CustomEvent(
+                                    value.event,
+                                    {
+                                        detail:{
+                                            value:
+                                            input.value
+                                        }
+                                    }
+                                )
+                            );
+
+                        }
+                    );
+
+
+                    this.subMenu.appendChild(
+                        input
+                    );
+
+
+                }
+                else if(
+                    value &&
+                    typeof value === "object"
+                ){
+
+
+                    let button =
+                    document.createElement(
+                        "button"
+                    );
+
+
+                    button.innerText=key;
+
 
                     button.onclick=()=>{
 
@@ -329,8 +436,24 @@ export class MenuManager {
 
                     };
 
+
+                    this.subMenu.appendChild(
+                        button
+                    );
+
+
                 }
                 else {
+
+
+                    let button =
+                    document.createElement(
+                        "button"
+                    );
+
+
+                    button.innerText=key;
+
 
                     button.onclick=()=>{
 
@@ -340,12 +463,13 @@ export class MenuManager {
 
                     };
 
+
+                    this.subMenu.appendChild(
+                        button
+                    );
+
+
                 }
-
-
-                this.subMenu.appendChild(
-                    button
-                );
 
 
             });
@@ -467,16 +591,9 @@ export class MenuManager {
 
 
 
-        if(item==="RINGS ON")
+        if(item==="RINGS ON/OFF")
             window.dispatchEvent(
-                new Event("ringsOn")
-            );
-
-
-
-        if(item==="RINGS OFF")
-            window.dispatchEvent(
-                new Event("ringsOff")
+                new Event("toggleRings")
             );
 
 
@@ -509,16 +626,9 @@ export class MenuManager {
 
 
 
-        if(item==="CONSTELLATION ON")
+        if(item==="ON/OFF")
             window.dispatchEvent(
-                new Event("constellationOn")
-            );
-
-
-
-        if(item==="CONSTELLATION OFF")
-            window.dispatchEvent(
-                new Event("constellationOff")
+                new Event("toggleConstellation")
             );
 
 
@@ -599,14 +709,30 @@ export class MenuManager {
 
 
 
-        if(item==="CONSTELLATION DISTANCE +")
+        if(item==="BG WHITE")
+            window.dispatchEvent(
+                new CustomEvent(
+                    "videoBackgroundColour",
+                    {
+                        detail:{
+                            r:255,
+                            g:255,
+                            b:255
+                        }
+                    }
+                )
+            );
+
+
+
+        if(item==="DISTANCE +")
             window.dispatchEvent(
                 new Event("constellationDistanceUp")
             );
 
 
 
-        if(item==="CONSTELLATION DISTANCE -")
+        if(item==="DISTANCE -")
             window.dispatchEvent(
                 new Event("constellationDistanceDown")
             );
@@ -623,6 +749,100 @@ export class MenuManager {
         if(item==="GHOST DELAY -")
             window.dispatchEvent(
                 new Event("ghostDelayDown")
+            );
+
+
+
+        if(item==="SIZE +")
+            window.dispatchEvent(
+                new Event("textSizeUp")
+            );
+
+
+
+        if(item==="SIZE -")
+            window.dispatchEvent(
+                new Event("textSizeDown")
+            );
+
+
+
+        if(item==="FONT WHITE")
+            window.dispatchEvent(
+                new CustomEvent(
+                    "setTextColour",
+                    {
+                        detail:{
+                            r:255,
+                            g:255,
+                            b:255
+                        }
+                    }
+                )
+            );
+
+
+
+        if(item==="FONT BLACK")
+            window.dispatchEvent(
+                new CustomEvent(
+                    "setTextColour",
+                    {
+                        detail:{
+                            r:0,
+                            g:0,
+                            b:0
+                        }
+                    }
+                )
+            );
+
+
+
+        if(item==="FONT MAGENTA")
+            window.dispatchEvent(
+                new CustomEvent(
+                    "setTextColour",
+                    {
+                        detail:{
+                            r:255,
+                            g:0,
+                            b:255
+                        }
+                    }
+                )
+            );
+
+
+
+        if(item==="FONT CYAN")
+            window.dispatchEvent(
+                new CustomEvent(
+                    "setTextColour",
+                    {
+                        detail:{
+                            r:0,
+                            g:255,
+                            b:255
+                        }
+                    }
+                )
+            );
+
+
+
+        if(item==="FONT YELLOW")
+            window.dispatchEvent(
+                new CustomEvent(
+                    "setTextColour",
+                    {
+                        detail:{
+                            r:255,
+                            g:255,
+                            b:0
+                        }
+                    }
+                )
             );
 
 

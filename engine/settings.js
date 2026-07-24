@@ -84,6 +84,12 @@ export class Settings {
                 alpha:0.45,
                 delay:150
             },
+
+            text:{
+                content:"",
+                colour:"rgb(255,255,255)",
+                size:24
+            },
             plasma:{
                 enabled:false,
                 speed:1

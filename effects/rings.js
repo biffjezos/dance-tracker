@@ -409,21 +409,35 @@ export class Rings {
 
 
 
+            const zoom =
+                rings.size / 30;
+
+
+            const unit =
+                (
+                    rings.spacing ||
+                    14
+                )
+                *
+                zoom;
+
+
+            const innerRadius =
+                unit * 0.3;
+
+
+
             for(
-                let r = 0;
-                r < ringsPerGroup;
-                r++
+                let n = 0;
+                n <= ringsPerGroup;
+                n++
             ){
 
 
 
                 let radius =
-                    rings.size +
-                    r *
-                    (
-                        rings.spacing ||
-                        14
-                    );
+                    innerRadius +
+                    n * unit;
 
 
 
