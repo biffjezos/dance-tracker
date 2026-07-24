@@ -7,7 +7,6 @@ APPLICATION CORE
 
 import { BackgroundCapture } from "./body/background.js";
 import { Camera } from "./engine/camera.js";
-import { Palette } from "./engine/palette.js";
 import { MenuManager } from "./engine/menu.js";
 import { Settings } from "./engine/settings.js";
 import { Renderer } from "./engine/renderer.js";
@@ -27,10 +26,6 @@ const background =
     new BackgroundCapture();
 
 
-const palette =
-    new Palette();
-
-
 const settings =
     new Settings();
 
@@ -39,8 +34,7 @@ const settings =
 const segmentation =
     new Segmentation(
         background,
-        settings,
-        palette
+        settings
     );
 
 
@@ -59,16 +53,14 @@ const renderer =
 
 const rings =
     new Rings(
-        settings,
-        palette
+        settings
     );
 
 
 
 const ghost =
     new Ghost(
-        settings,
-        palette
+        settings
     );
 
 
@@ -183,19 +175,33 @@ CAMERA
 */
 
 
-window.addEventListener(
-    "startCamera",
-    ()=>{
-        camera.start();
-    }
-);
-
+let cameraOn = false;
 
 
 window.addEventListener(
-    "stopCamera",
+    "toggleCamera",
     ()=>{
-        camera.stop();
+
+        cameraOn = !cameraOn;
+
+
+        if(cameraOn){
+
+            camera.start();
+
+        }
+        else {
+
+            camera.stop();
+
+        }
+
+
+        console.log(
+            "Camera:",
+            cameraOn
+        );
+
     }
 );
 
@@ -543,6 +549,77 @@ window.addEventListener(
 
 
 
+window.addEventListener(
+    "ringThicknessUp",
+    ()=>{
+
+        settings.amiga.rings.width += 2;
+
+        console.log(
+            "Ring thickness:",
+            settings.amiga.rings.width
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "ringThicknessDown",
+    ()=>{
+
+        settings.amiga.rings.width -= 2;
+
+        if(settings.amiga.rings.width < 1)
+            settings.amiga.rings.width = 1;
+
+        console.log(
+            "Ring thickness:",
+            settings.amiga.rings.width
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "ringColour",
+    e=>{
+
+        let index =
+            e.detail.ringId - 1;
+
+
+        settings.amiga.rings.colours[index] =
+            "rgb("
+            +
+            e.detail.r
+            +
+            ","
+            +
+            e.detail.g
+            +
+            ","
+            +
+            e.detail.b
+            +
+            ")";
+
+
+        console.log(
+            "Ring",
+            e.detail.ringId,
+            "colour:",
+            settings.amiga.rings.colours[index]
+        );
+
+    }
+);
+
+
+
 
 /*
 ==================================================
@@ -729,43 +806,41 @@ RECORDING
 
 
 window.addEventListener(
-    "startRecord",
+    "toggleRecord",
     ()=>{
 
-        let started =
-            recorder.start();
+        if(recorder.recording){
 
-        document
-        .querySelector(".statusbar")
-        .children[4]
-        .innerText =
-            started
-            ?
-            "REC: ON"
-            :
-            "REC: ERROR";
+            let stopped =
+                recorder.stop();
 
-    }
-);
+            document
+            .querySelector(".statusbar")
+            .children[4]
+            .innerText =
+                stopped
+                ?
+                "REC: OFF"
+                :
+                "REC: ERROR";
 
+        }
+        else {
 
+            let started =
+                recorder.start();
 
-window.addEventListener(
-    "stopRecord",
-    ()=>{
+            document
+            .querySelector(".statusbar")
+            .children[4]
+            .innerText =
+                started
+                ?
+                "REC: ON"
+                :
+                "REC: ERROR";
 
-        let stopped =
-            recorder.stop();
-
-        document
-        .querySelector(".statusbar")
-        .children[4]
-        .innerText =
-            stopped
-            ?
-            "REC: OFF"
-            :
-            "REC: ERROR";
+        }
 
     }
 );

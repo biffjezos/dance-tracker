@@ -9,14 +9,12 @@ DANCE TRACKER 5000
 export class Segmentation {
 
 
-    constructor(background, settings, palette){
+    constructor(background, settings){
 
 
         this.background = background;
 
         this.settings = settings;
-
-        this.palette = palette;
 
 
         this.canvas =

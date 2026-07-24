@@ -69,9 +69,19 @@ export class Settings {
                 ringsPerGroup:8,
                 spacing:14,
                 speed:2,
-                size:30,
+                size:20,
                 width:6,
                 blend:"screen",
+                colours:[
+                    "rgb(255,0,255)",
+                    "rgb(0,255,80)",
+                    "rgb(255,0,255)",
+                    "rgb(0,255,80)",
+                    "rgb(255,0,255)",
+                    "rgb(0,255,80)",
+                    "rgb(255,0,255)",
+                    "rgb(0,255,80)"
+                ],
                 constellation:{
                     enabled:false,
                     distance:70
