@@ -24,7 +24,7 @@ export class Recorder {
 
 
 
-    start(){
+    start(audioTrack){
 
         if(this.recording)
             return true;
@@ -32,8 +32,25 @@ export class Recorder {
 
         try {
 
+            let tracks =
+                this.canvas.captureStream(60)
+                .getVideoTracks();
+
+
+            if(audioTrack){
+
+                tracks =
+                    tracks.concat(
+                        [audioTrack]
+                    );
+
+            }
+
+
             let stream =
-                this.canvas.captureStream(60);
+                new MediaStream(
+                    tracks
+                );
 
 
 

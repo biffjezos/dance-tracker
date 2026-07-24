@@ -975,6 +975,103 @@ window.addEventListener(
 
 /*
 ==================================================
+LOAD AUDIO
+==================================================
+*/
+
+
+let audioContext = null;
+
+let currentAudioSource = null;
+
+let currentAudioTrack = null;
+
+
+window.addEventListener(
+    "loadAudioFile",
+    async e=>{
+
+        try {
+
+            if(!audioContext)
+                audioContext = new AudioContext();
+
+            if(audioContext.state === "suspended")
+                await audioContext.resume();
+
+
+            const arrayBuffer =
+                await e.detail.file.arrayBuffer();
+
+            const audioBuffer =
+                await audioContext.decodeAudioData(
+                    arrayBuffer
+                );
+
+
+            if(currentAudioSource){
+
+                try {
+                    currentAudioSource.stop();
+                }
+                catch(error){}
+
+            }
+
+
+            const source =
+                audioContext.createBufferSource();
+
+            source.buffer = audioBuffer;
+
+            source.loop = true;
+
+
+            const destination =
+                audioContext.createMediaStreamDestination();
+
+            source.connect(
+                audioContext.destination
+            );
+
+            source.connect(
+                destination
+            );
+
+            source.start();
+
+
+            currentAudioSource = source;
+
+            currentAudioTrack =
+                destination.stream
+                .getAudioTracks()[0];
+
+
+            console.log(
+                "Loaded audio file:",
+                e.detail.file.name
+            );
+
+        }
+        catch(error){
+
+            console.error(
+                "AUDIO FILE FAILED TO LOAD:",
+                error.name,
+                error.message
+            );
+
+        }
+
+    }
+);
+
+
+
+
+/*
+==================================================
 RECORDING
 ==================================================
 */
@@ -1003,7 +1100,7 @@ window.addEventListener(
         else {
 
             let started =
-                recorder.start();
+                recorder.start(currentAudioTrack);
 
             document
             .querySelector(".statusbar")

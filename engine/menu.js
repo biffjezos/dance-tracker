@@ -97,6 +97,16 @@ export class MenuManager {
 
                     event:"loadVideoFile"
 
+                },
+
+                "LOAD AUDIO":{
+
+                    type:"fileInput",
+
+                    accept:"audio/*",
+
+                    event:"loadAudioFile"
+
                 }
 
             },
