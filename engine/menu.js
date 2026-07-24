@@ -75,6 +75,36 @@ export class MenuManager {
         this.ringId = 1;
 
 
+        this.keyColour = {r:0, g:255, b:0};
+
+
+        window.addEventListener(
+            "bodyKeyColour",
+            e=>{
+
+                this.keyColour = {
+                    r:e.detail.r,
+                    g:e.detail.g,
+                    b:e.detail.b
+                };
+
+
+                let node =
+                    this.node();
+
+                if(
+                    node &&
+                    node.type==="keyColourPicker"
+                ){
+
+                    this.render();
+
+                }
+
+            }
+        );
+
+
 
         this.menus = {
 
@@ -141,7 +171,7 @@ export class MenuManager {
 
                     "THRESHOLD -":null,
 
-                    "DIFFERENCE/KEYING":null,
+                    "DIFFERENCE/CHROMA":null,
 
 
 
@@ -150,9 +180,11 @@ export class MenuManager {
                     ),
 
 
-                    "KEY COLOUR":colourMenu(
-                        "bodyKeyColour"
-                    ),
+                    "KEY COLOUR":{
+
+                        type:"keyColourPicker"
+
+                    },
 
 
 
@@ -410,6 +442,19 @@ export class MenuManager {
         ){
 
             this.renderRingColourPicker();
+
+            return;
+
+        }
+
+
+
+        if(
+            node &&
+            node.type==="keyColourPicker"
+        ){
+
+            this.renderKeyColourPicker();
 
             return;
 
@@ -879,6 +924,114 @@ export class MenuManager {
 
 
 
+    renderKeyColourPicker(){
+
+
+        let current =
+        document.createElement(
+            "span"
+        );
+
+
+        current.innerText=
+            "CURRENT";
+
+
+        current.className=
+            "ring-id-display";
+
+
+        this.styleSwatch(
+            current,
+            this.keyColour.r,
+            this.keyColour.g,
+            this.keyColour.b
+        );
+
+
+        this.subMenu.appendChild(
+            current
+        );
+
+
+
+        let pick =
+        document.createElement(
+            "button"
+        );
+
+
+        pick.innerText=
+            "PICK FROM VIDEO";
+
+
+        pick.onclick=()=>{
+
+            window.dispatchEvent(
+                new Event("armKeyColourPicker")
+            );
+
+        };
+
+
+        this.subMenu.appendChild(
+            pick
+        );
+
+
+
+        SWATCHES.forEach(swatch=>{
+
+
+            let button =
+            document.createElement(
+                "button"
+            );
+
+
+            button.innerText=
+                swatch.label;
+
+
+            this.styleSwatch(
+                button,
+                swatch.r,
+                swatch.g,
+                swatch.b
+            );
+
+
+            button.onclick=()=>{
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "bodyKeyColour",
+                        {
+                            detail:{
+                                r:swatch.r,
+                                g:swatch.g,
+                                b:swatch.b
+                            }
+                        }
+                    )
+                );
+
+            };
+
+
+            this.subMenu.appendChild(
+                button
+            );
+
+
+        });
+
+
+    }
+
+
+
+
     select(item){
 
 
@@ -938,7 +1091,7 @@ export class MenuManager {
 
 
 
-        if(item==="DIFFERENCE/KEYING")
+        if(item==="DIFFERENCE/CHROMA")
             window.dispatchEvent(
                 new Event("toggleMatteMode")
             );

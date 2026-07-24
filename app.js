@@ -15,6 +15,7 @@ import { Ghost } from "./effects/ghost.js";
 import { Rings } from "./effects/rings.js";
 import { Text } from "./effects/text.js";
 import { Recorder } from "./engine/recorder.js";
+import { containFit } from "./engine/fit.js";
 
 
 
@@ -103,6 +104,20 @@ document
         "ON"
         :
         "OFF"
+    );
+
+
+document
+.querySelector(".statusbar")
+.children[3]
+.innerText =
+    "MATTE: " +
+    (
+        settings.body.mode === "keying"
+        ?
+        "CHROMA"
+        :
+        "DIFFERENCE"
     );
 
 
@@ -564,6 +579,20 @@ window.addEventListener(
             settings.body.mode
         );
 
+
+        document
+        .querySelector(".statusbar")
+        .children[3]
+        .innerText =
+            "MATTE: " +
+            (
+                settings.body.mode === "keying"
+                ?
+                "CHROMA"
+                :
+                "DIFFERENCE"
+            );
+
     }
 );
 
@@ -612,6 +641,131 @@ window.addEventListener(
         console.log(
             "Body key colour:",
             settings.body.keyColour
+        );
+
+    }
+);
+
+
+
+let armedKeyColourPick = false;
+
+
+window.addEventListener(
+    "armKeyColourPicker",
+    ()=>{
+
+        armedKeyColourPick = true;
+
+        camera.getVideo()
+        .classList.add(
+            "sampling"
+        );
+
+        console.log(
+            "Click the CAMERA INPUT video to pick a key colour"
+        );
+
+    }
+);
+
+
+
+camera.getVideo().addEventListener(
+    "click",
+    e=>{
+
+        if(!armedKeyColourPick)
+            return;
+
+        armedKeyColourPick = false;
+
+        const video = e.target;
+
+        video.classList.remove(
+            "sampling"
+        );
+
+
+        const rect =
+            video.getBoundingClientRect();
+
+
+        const fit =
+            containFit(
+                video.videoWidth,
+                video.videoHeight,
+                rect.width,
+                rect.height
+            );
+
+
+        const x =
+            Math.floor(
+                (e.clientX - rect.left - fit.x) / fit.width * video.videoWidth
+            );
+
+        const y =
+            Math.floor(
+                (e.clientY - rect.top - fit.y) / fit.height * video.videoHeight
+            );
+
+
+        if(
+            x < 0 ||
+            y < 0 ||
+            x >= video.videoWidth ||
+            y >= video.videoHeight
+        ){
+
+            console.warn(
+                "Clicked outside the video content area"
+            );
+
+            return;
+
+        }
+
+
+        const temp =
+            document.createElement(
+                "canvas"
+            );
+
+        temp.width = video.videoWidth;
+
+        temp.height = video.videoHeight;
+
+        const tempCtx =
+            temp.getContext("2d");
+
+        tempCtx.drawImage(
+            video,
+            0,
+            0
+        );
+
+
+        const pixel =
+            tempCtx.getImageData(
+                x,
+                y,
+                1,
+                1
+            ).data;
+
+
+        window.dispatchEvent(
+            new CustomEvent(
+                "bodyKeyColour",
+                {
+                    detail:{
+                        r:pixel[0],
+                        g:pixel[1],
+                        b:pixel[2]
+                    }
+                }
+            )
         );
 
     }
