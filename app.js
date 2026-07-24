@@ -222,7 +222,10 @@ RESOLUTION
 const RESOLUTIONS = [
     {width:320, height:240},
     {width:640, height:480},
-    {width:1280, height:960}
+    {width:1280, height:960},
+    {width:640, height:360},
+    {width:1280, height:720},
+    {width:1920, height:1080}
 ];
 
 
@@ -274,17 +277,33 @@ function applyResolution(){
 }
 
 
-document
-.querySelector(".statusbar")
-.children[5]
-.addEventListener(
-    "click",
+window.addEventListener(
+    "outputSizeUp",
     ()=>{
 
-        resolutionIndex =
-            (resolutionIndex + 1) % RESOLUTIONS.length;
+        if(resolutionIndex < RESOLUTIONS.length - 1){
 
-        applyResolution();
+            resolutionIndex++;
+
+            applyResolution();
+
+        }
+
+    }
+);
+
+
+window.addEventListener(
+    "outputSizeDown",
+    ()=>{
+
+        if(resolutionIndex > 0){
+
+            resolutionIndex--;
+
+            applyResolution();
+
+        }
 
     }
 );

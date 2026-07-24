@@ -217,7 +217,11 @@ export class MenuManager {
 
                 RECORDER:{
 
-                    "RECORD ON/OFF":null
+                    "RECORD ON/OFF":null,
+
+                    "OUTPUT SIZE +":null,
+
+                    "OUTPUT SIZE -":null
 
                 }
 
@@ -948,6 +952,20 @@ export class MenuManager {
         if(item==="SIZE -")
             window.dispatchEvent(
                 new Event("textSizeDown")
+            );
+
+
+
+        if(item==="OUTPUT SIZE +")
+            window.dispatchEvent(
+                new Event("outputSizeUp")
+            );
+
+
+
+        if(item==="OUTPUT SIZE -")
+            window.dispatchEvent(
+                new Event("outputSizeDown")
             );
 
 
