@@ -137,6 +137,32 @@ export class MenuManager {
 
                     event:"loadAudioFile"
 
+                },
+
+                TRANSPORT:{
+
+                    "PLAY/STOP":null,
+
+                    TIME:{
+
+                        type:"display",
+
+                        id:"transport-display"
+
+                    },
+
+                    "MINUTE +":null,
+
+                    "MINUTE -":null,
+
+                    "SECOND +":null,
+
+                    "SECOND -":null,
+
+                    "FRAME +":null,
+
+                    "FRAME -":null
+
                 }
 
             },
@@ -670,6 +696,32 @@ export class MenuManager {
 
                     this.subMenu.appendChild(
                         button
+                    );
+
+
+                }
+                else if(
+                    value &&
+                    value.type==="display"
+                ){
+
+
+                    let display =
+                    document.createElement(
+                        "span"
+                    );
+
+
+                    display.id=
+                        value.id ||
+                        "";
+
+                    display.className=
+                        "ring-id-display";
+
+
+                    this.subMenu.appendChild(
+                        display
                     );
 
 
@@ -1220,6 +1272,55 @@ export class MenuManager {
         if(item==="OUTPUT SIZE -")
             window.dispatchEvent(
                 new Event("outputSizeDown")
+            );
+
+
+
+        if(item==="PLAY/STOP")
+            window.dispatchEvent(
+                new Event("transportPlayStop")
+            );
+
+
+
+        if(item==="MINUTE +")
+            window.dispatchEvent(
+                new Event("transportMinuteUp")
+            );
+
+
+
+        if(item==="MINUTE -")
+            window.dispatchEvent(
+                new Event("transportMinuteDown")
+            );
+
+
+
+        if(item==="SECOND +")
+            window.dispatchEvent(
+                new Event("transportSecondUp")
+            );
+
+
+
+        if(item==="SECOND -")
+            window.dispatchEvent(
+                new Event("transportSecondDown")
+            );
+
+
+
+        if(item==="FRAME +")
+            window.dispatchEvent(
+                new Event("transportFrameUp")
+            );
+
+
+
+        if(item==="FRAME -")
+            window.dispatchEvent(
+                new Event("transportFrameDown")
             );
 
 
