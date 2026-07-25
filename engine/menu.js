@@ -360,6 +360,8 @@ export class MenuManager {
 
             generate:{
 
+                "ADD RINGS LAYER":null,
+
                 GHOST:[
 
                     "GHOST +",
@@ -440,6 +442,8 @@ export class MenuManager {
                     "SIZE +":null,
 
                     "SIZE -":null,
+
+                    "TEXT VISIBLE ON/OFF":null,
 
 
 
@@ -1637,6 +1641,13 @@ export class MenuManager {
 
 
 
+        if(item==="ADD RINGS LAYER")
+            window.dispatchEvent(
+                new Event("addRingsLayer")
+            );
+
+
+
         if(item==="RINGS ON/OFF")
             window.dispatchEvent(
                 new Event("toggleRings")
@@ -1752,6 +1763,13 @@ export class MenuManager {
         if(item==="SIZE -")
             window.dispatchEvent(
                 new Event("textSizeDown")
+            );
+
+
+
+        if(item==="TEXT VISIBLE ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleTextVisible")
             );
 
 

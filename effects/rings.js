@@ -6,16 +6,52 @@ AMIGA CONCENTRIC RING GENERATOR
 */
 
 
+let nextRingsNumber = 2;
+
+
 export class Rings {
 
 
-    constructor(settings){
+    constructor(settings, options){
+
+
+        options = options || {};
 
 
         this.settings = settings;
 
 
+        const isAdded =
+            !!options.ringsSettings;
+
+
+        this.ringsSettings =
+            options.ringsSettings ||
+            settings.amiga.rings;
+
+
+        this.number =
+            isAdded
+            ?
+            nextRingsNumber++
+            :
+            1;
+
+
+        this.id =
+            isAdded
+            ?
+            ("rings-layer-" + this.number)
+            :
+            "rings";
+
+
+        this.name =
+            "RINGS " + this.number;
+
+
         this.canvas =
+            options.outputCanvas ||
             document.getElementById(
                 "rings-layer"
             );
@@ -37,6 +73,22 @@ export class Rings {
             Math.random() *
             Math.PI *
             2;
+
+
+    }
+
+
+
+
+    resize(){
+
+
+        this.canvas.width =
+            this.settings.video.width;
+
+
+        this.canvas.height =
+            this.settings.video.height;
 
 
     }
@@ -95,7 +147,7 @@ export class Rings {
 
 
         const distance =
-            this.settings.amiga.rings
+            this.ringsSettings
             .constellation.distance;
 
 
@@ -124,7 +176,7 @@ export class Rings {
 
 
         const count =
-            this.settings.amiga.rings.count;
+            this.ringsSettings.count;
 
 
         for(
@@ -198,7 +250,7 @@ export class Rings {
 
 
         let colours =
-            this.settings.amiga.rings.colours;
+            this.ringsSettings.colours;
 
 
 
@@ -222,7 +274,7 @@ export class Rings {
 
 
         let count =
-            this.settings.amiga.rings.count;
+            this.ringsSettings.count;
 
 
 
@@ -287,7 +339,7 @@ export class Rings {
 
 
         const rings =
-            this.settings.amiga.rings;
+            this.ringsSettings;
 
 
 
