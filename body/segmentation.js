@@ -12,12 +12,24 @@ import { containFit } from "../engine/fit.js";
 export class Segmentation {
 
 
-    constructor(background, settings){
+    constructor(background, settings, options){
+
+
+        options = options || {};
 
 
         this.background = background;
 
         this.settings = settings;
+
+
+        this.bodySettings =
+            options.bodySettings ||
+            settings.body;
+
+
+        this.useGlobalEnabled =
+            !options.bodySettings;
 
 
         this.canvas =
@@ -39,6 +51,7 @@ export class Segmentation {
 
 
         this.output =
+            options.outputCanvas ||
             document.getElementById(
                 "body-layer"
             );
@@ -89,6 +102,14 @@ export class Segmentation {
             this.settings.video.height;
 
 
+        this.output.width =
+            this.settings.video.width;
+
+
+        this.output.height =
+            this.settings.video.height;
+
+
     }
 
 
@@ -98,13 +119,21 @@ export class Segmentation {
     process(video){
 
 
-        if(!this.settings.layers.body)
+        const enabled =
+            this.useGlobalEnabled
+            ?
+            this.settings.layers.body
+            :
+            this.bodySettings.enabled;
+
+
+        if(!enabled)
             return;
 
 
 
         const keying =
-            this.settings.body.mode === "keying";
+            this.bodySettings.mode === "keying";
 
 
 
@@ -184,7 +213,7 @@ export class Segmentation {
 
 
         const keyColour =
-            this.settings.body.keyColour;
+            this.bodySettings.keyColour;
 
 
 
@@ -197,12 +226,12 @@ export class Segmentation {
 
 
         const threshold =
-            this.settings.body.threshold;
+            this.bodySettings.threshold;
 
 
 
         const videoFill =
-            this.settings.body.fill === "video";
+            this.bodySettings.fill === "video";
 
 
 

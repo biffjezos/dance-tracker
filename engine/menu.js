@@ -179,6 +179,16 @@ export class MenuManager {
 
                 },
 
+                "ADD VIDEO LAYER":{
+
+                    type:"fileInput",
+
+                    accept:"video/*",
+
+                    event:"addVideoLayer"
+
+                },
+
                 TRANSPORT:{
 
                     "PLAY/STOP":null,
