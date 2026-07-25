@@ -74,12 +74,13 @@ Its mask-source id intentionally stays "video"/"body" (not derived
 from .id) to match the existing MASKED BY entries from phase 1.
 */
 /*
-settings.body has no "enabled" field - the original's body segmentation
+settings.body has no "enabled" field - the original mask's segmentation
 is (and always was) gated by the separate settings.layers.body flag,
 read directly by both Segmentation.process() and Renderer.compose().
 This proxy makes bodySettings.enabled transparently read/write that
-same flag so generalized BODY ON/OFF code can treat every layer
-uniformly, without actually restructuring that pre-existing gate.
+same flag so the visibility-mode sync (see cycleVisibilityMode) can
+treat every layer uniformly, without actually restructuring that
+pre-existing gate.
 */
 const originalBodySettings = new Proxy(settings.body, {
 
@@ -138,50 +139,100 @@ const originalLayerAdapter = {
 };
 
 
-function allVideoLayers(){
+/*
+Every addressable thing in the app - a video feed, its derived mask,
+a rings/text/ghost generator - gets one number from this single
+counter, assigned once at creation and never recomputed, so numbers
+stay stable as more layers are added regardless of type. 1-4 are
+reserved for what exists from page load (video+mask share 1, rings
+original is 2, text is 3, ghost is 4); anything added by the user
+starts at 5.
+*/
+let nextGlobalLayerNumber = 1;
 
-    return [originalLayerAdapter, ...videoLayers];
+
+function assignGlobalLayerNumber(target){
+
+    target.globalLayerNumber =
+        nextGlobalLayerNumber++;
+
+    return target.globalLayerNumber;
 
 }
+
+
+assignGlobalLayerNumber(
+    originalLayerAdapter
+);
 
 
 let selectedLayerIndex = 0;
 
 
-function selectedLayer(){
+function selectedEntry(){
 
-    const layers =
-        allVideoLayers();
+    const registry =
+        getLayerRegistry();
 
     return (
-        layers[selectedLayerIndex] ||
-        layers[0]
+        registry[selectedLayerIndex] ||
+        registry[0]
     );
+
+}
+
+
+function updateLayerStatusDisplay(entry){
+
+    const nodeDisplay =
+        document.getElementById(
+            "node-display"
+        );
+
+    if(nodeDisplay){
+
+        nodeDisplay.innerText =
+            "NODE: " +
+            entry.label;
+
+    }
+
+
+    document
+    .querySelector(".statusbar")
+    .children[2]
+    .innerText =
+        "LAYER: " +
+        (
+            entry.settings.enabled
+            ?
+            "ON"
+            :
+            "OFF"
+        );
+
+
+    document
+    .querySelector(".statusbar")
+    .children[3]
+    .innerText =
+        "TYPE: " +
+        entry.kind.toUpperCase();
 
 }
 
 
 function reportLayerSelection(){
 
-    const layer =
-        selectedLayer();
+    const entry =
+        selectedEntry();
 
-    updateMatteStatusDisplay(
-        layer.bodySettings.mode
-    );
-
-    updateBodyStatusDisplay(
-        layer.bodySettings.enabled
+    updateLayerStatusDisplay(
+        entry
     );
 
     reportMaskSettingsChanged(
-        "video",
-        layer.videoSettings.maskedBy
-    );
-
-    reportMaskSettingsChanged(
-        "body",
-        layer.bodySettings.maskedBy
+        entry.settings.maskedBy
     );
 
     window.dispatchEvent(
@@ -190,8 +241,15 @@ function reportLayerSelection(){
             {
                 detail:{
                     index:selectedLayerIndex,
-                    name:layer.name,
-                    keyColour:layer.bodySettings.keyColour
+                    label:entry.label,
+                    kind:entry.kind,
+                    visibilityMode:entry.settings.visibilityMode,
+                    keyColour:
+                        entry.kind === "mask"
+                        ?
+                        entry.settings.keyColour
+                        :
+                        null
                 }
             }
         )
@@ -205,7 +263,7 @@ window.addEventListener(
     e=>{
 
         const count =
-            allVideoLayers().length;
+            getLayerRegistry().length;
 
         selectedLayerIndex =
             Math.min(
@@ -228,6 +286,10 @@ const rings =
         settings
     );
 
+assignGlobalLayerNumber(
+    rings
+);
+
 
 const ringsLayers = [];
 
@@ -240,7 +302,7 @@ function addRingsLayer(){
 
         enabled:true,
 
-        visible:true,
+        visibilityMode:"on",
 
         count:2,
 
@@ -299,13 +361,17 @@ function addRingsLayer(){
             }
         );
 
+    assignGlobalLayerNumber(
+        layer
+    );
+
     ringsLayers.push(layer);
 
 
     console.log(
-        "Added",
-        layer.name,
-        "- total rings layers:",
+        "Added LAYER",
+        layer.globalLayerNumber,
+        "(rings) - total rings layers:",
         ringsLayers.length
     );
 
@@ -328,15 +394,28 @@ window.addEventListener(
 
 const ghost =
     new Ghost(
-        settings
+        settings,
+        renderer
     );
-
 
 
 const text =
     new Text(
         settings
     );
+
+
+/*
+TEXT and GHOST stay singleton for now (no ADD action of their own
+yet), but still claim one global layer number each, at the same
+point in the sequence they'd occupy if they were regular registry
+entries - rings, then text, then ghost, matching creation order.
+*/
+const textLayerNumber =
+    nextGlobalLayerNumber++;
+
+const ghostLayerNumber =
+    nextGlobalLayerNumber++;
 
 
 
@@ -356,32 +435,9 @@ menu.init();
 renderer.start();
 
 
-document
-.querySelector(".statusbar")
-.children[2]
-.innerText =
-    "BODY: " +
-    (
-        settings.layers.body
-        ?
-        "ON"
-        :
-        "OFF"
-    );
-
-
-document
-.querySelector(".statusbar")
-.children[3]
-.innerText =
-    "MATTE: " +
-    (
-        settings.body.mode === "keying"
-        ?
-        "CHROMA"
-        :
-        "DIFFERENCE"
-    );
+updateLayerStatusDisplay(
+    selectedEntry()
+);
 
 
 
@@ -609,6 +665,10 @@ window.addEventListener(
                 settings
             );
 
+        assignGlobalLayerNumber(
+            layer
+        );
+
         videoLayers.push(
             layer
         );
@@ -618,9 +678,9 @@ window.addEventListener(
         );
 
         console.log(
-            "Added",
-            layer.name,
-            "- total video layers:",
+            "Added LAYER",
+            layer.globalLayerNumber,
+            "(video) - total video layers:",
             videoLayers.length
         );
 
@@ -745,26 +805,35 @@ window.addEventListener(
 
 /*
 ==================================================
-VIDEO
+LAYER
+
+Universal controls: every registry entry, whatever kind it is, has
+the same enabled/visible/maskedBy shape, so these two handlers work
+identically no matter what's selected - no per-kind branching.
 ==================================================
 */
 
 
 window.addEventListener(
-    "toggleVideo",
+    "toggleLayerEnabled",
     ()=>{
 
+        const entry =
+            selectedEntry();
 
-        const videoSettings =
-            selectedLayer().videoSettings;
-
-        videoSettings.enabled =
-        !videoSettings.enabled;
+        entry.settings.enabled =
+        !entry.settings.enabled;
 
 
         console.log(
-            "Video:",
-            videoSettings.enabled
+            entry.label,
+            "enabled:",
+            entry.settings.enabled
+        );
+
+
+        updateLayerStatusDisplay(
+            entry
         );
 
     }
@@ -772,20 +841,58 @@ window.addEventListener(
 
 
 
+/*
+Replaces the old plain visible boolean. One button, four states,
+cycled forward on each click. "off" also drops the .enabled
+computation gate (segmentation etc. stop running) since nothing
+manually re-enables it otherwise now that ON/OFF isn't its own
+control - every other mode implies "yes, compute this".
+*/
+const VISIBILITY_MODES = [
+    "on", "alpha", "maskWhite", "off"
+];
+
+
 window.addEventListener(
-    "toggleVideoVisible",
+    "cycleVisibilityMode",
     ()=>{
 
-        const videoSettings =
-            selectedLayer().videoSettings;
+        const entry =
+            selectedEntry();
 
-        videoSettings.visible =
-        !videoSettings.visible;
+        let index =
+            VISIBILITY_MODES.indexOf(
+                entry.settings.visibilityMode
+            );
+
+        if(index < 0)
+            index = 0;
+
+        index =
+            (index + 1) %
+            VISIBILITY_MODES.length;
+
+        entry.settings.visibilityMode =
+            VISIBILITY_MODES[index];
+
+        entry.settings.enabled =
+            entry.settings.visibilityMode !== "off";
 
         console.log(
-            "Video visible:",
-            videoSettings.visible
+            entry.label,
+            "visibility mode:",
+            entry.settings.visibilityMode
         );
+
+        reportLayerSelection();
+
+        /*
+        Any layer's visibility mode can change whether it's eligible
+        for Ghost's APPLY TO MASK list, so keep that reported too -
+        otherwise the GENERATE > GHOST screen would only learn about
+        it once you click SOURCE +/- there.
+        */
+        reportApplyToMaskChanged();
 
     }
 );
@@ -800,8 +907,7 @@ window.addEventListener(
         Scene-wide backdrop fill, not per-layer - there is only one
         background-layer canvas and Renderer.drawBackground() always
         reads settings.video.backgroundColour directly, regardless of
-        which layer is selected. Deliberately not routed through
-        selectedLayer().
+        which layer is selected.
         */
 
         settings.video.backgroundColour =
@@ -830,90 +936,18 @@ window.addEventListener(
 
 
 
-
-/*
-==================================================
-BODY
-==================================================
-*/
-
-
-function updateBodyStatusDisplay(enabled){
-
-    document
-    .querySelector(".statusbar")
-    .children[2]
-    .innerText =
-        "BODY: " +
-        (
-            enabled
-            ?
-            "ON"
-            :
-            "OFF"
-        );
-
-}
-
-
 window.addEventListener(
-    "toggleBody",
+    "captureLayerBackground",
     ()=>{
 
+        const entry =
+            selectedEntry();
 
-        const bodySettings =
-            selectedLayer().bodySettings;
+        if(!entry.background)
+            return;
 
-        bodySettings.enabled =
-        !bodySettings.enabled;
-
-
-        console.log(
-            "Body:",
-            bodySettings.enabled
-        );
-
-
-        updateBodyStatusDisplay(
-            bodySettings.enabled
-        );
-
-
-    }
-);
-
-
-
-window.addEventListener(
-    "toggleBodyVisible",
-    ()=>{
-
-        const bodySettings =
-            selectedLayer().bodySettings;
-
-        bodySettings.visible =
-        !bodySettings.visible;
-
-        console.log(
-            "Body visible:",
-            bodySettings.visible
-        );
-
-    }
-);
-
-
-
-
-window.addEventListener(
-    "captureBackground",
-    ()=>{
-
-        const layer =
-            selectedLayer();
-
-        layer.background.capture(
-            layer.video
+        entry.background.capture(
+            entry.video
         );
 
     }
@@ -934,15 +968,15 @@ window.addEventListener(
     ()=>{
 
 
-        const bodySettings =
-            selectedLayer().bodySettings;
+        const maskSettings =
+            selectedEntry().settings;
 
-        bodySettings.threshold += 5;
+        maskSettings.threshold += 5;
 
 
         console.log(
             "Threshold:",
-            bodySettings.threshold
+            maskSettings.threshold
         );
 
 
@@ -956,20 +990,20 @@ window.addEventListener(
     ()=>{
 
 
-        const bodySettings =
-            selectedLayer().bodySettings;
+        const maskSettings =
+            selectedEntry().settings;
 
-        bodySettings.threshold -= 5;
+        maskSettings.threshold -= 5;
 
 
-        if(bodySettings.threshold < 0)
-            bodySettings.threshold = 0;
+        if(maskSettings.threshold < 0)
+            maskSettings.threshold = 0;
 
 
 
         console.log(
             "Threshold:",
-            bodySettings.threshold
+            maskSettings.threshold
         );
 
 
@@ -978,33 +1012,15 @@ window.addEventListener(
 
 
 
-function updateMatteStatusDisplay(mode){
-
-    document
-    .querySelector(".statusbar")
-    .children[3]
-    .innerText =
-        "MATTE: " +
-        (
-            mode === "keying"
-            ?
-            "CHROMA"
-            :
-            "DIFFERENCE"
-        );
-
-}
-
-
 window.addEventListener(
     "toggleMatteMode",
     ()=>{
 
-        const bodySettings =
-            selectedLayer().bodySettings;
+        const maskSettings =
+            selectedEntry().settings;
 
-        bodySettings.mode =
-            bodySettings.mode === "difference"
+        maskSettings.mode =
+            maskSettings.mode === "difference"
             ?
             "keying"
             :
@@ -1012,13 +1028,8 @@ window.addEventListener(
 
 
         console.log(
-            "Body matte mode:",
-            bodySettings.mode
-        );
-
-
-        updateMatteStatusDisplay(
-            bodySettings.mode
+            "Matte mode:",
+            maskSettings.mode
         );
 
     }
@@ -1027,14 +1038,14 @@ window.addEventListener(
 
 
 window.addEventListener(
-    "toggleBodyFill",
+    "toggleLayerFill",
     ()=>{
 
-        const bodySettings =
-            selectedLayer().bodySettings;
+        const maskSettings =
+            selectedEntry().settings;
 
-        bodySettings.fill =
-            bodySettings.fill === "solid"
+        maskSettings.fill =
+            maskSettings.fill === "solid"
             ?
             "video"
             :
@@ -1042,8 +1053,8 @@ window.addEventListener(
 
 
         console.log(
-            "Body fill:",
-            bodySettings.fill
+            "Fill:",
+            maskSettings.fill
         );
 
     }
@@ -1060,16 +1071,22 @@ COLOUR
 
 
 window.addEventListener(
-    "bodyColour",
+    "layerColour",
     e=>{
 
+        const entry =
+            selectedEntry();
 
-        selectedLayer().segmentation.setColour(
+
+        if(entry.kind !== "mask")
+            return;
+
+
+        entry.segmentation.setColour(
             e.detail.r,
             e.detail.g,
             e.detail.b
         );
-
 
     }
 );
@@ -1080,10 +1097,10 @@ window.addEventListener(
     "bodyKeyColour",
     e=>{
 
-        const bodySettings =
-            selectedLayer().bodySettings;
+        const maskSettings =
+            selectedEntry().settings;
 
-        bodySettings.keyColour = {
+        maskSettings.keyColour = {
 
             r:e.detail.r,
 
@@ -1095,8 +1112,8 @@ window.addEventListener(
 
 
         console.log(
-            "Body key colour:",
-            bodySettings.keyColour
+            "Key colour:",
+            maskSettings.keyColour
         );
 
     }
@@ -1233,54 +1250,29 @@ camera.getVideo().addEventListener(
 /*
 ==================================================
 RINGS
+
+GENERATE > RINGS is a fixed, non-steppable screen (no multi-instance
+ADD for now), so these read/write the one rings singleton directly
+rather than going through selectedEntry(). Universal stuff
+(visibility mode/background/masked by) still goes through the
+registry via VIDEO - this is only the rings-specific deep settings.
 ==================================================
 */
-
-
-window.addEventListener(
-    "toggleRings",
-    ()=>{
-
-        settings.amiga.rings.enabled =
-        !settings.amiga.rings.enabled;
-
-        console.log(
-            "Rings:",
-            settings.amiga.rings.enabled
-        );
-
-    }
-);
-
-
-
-window.addEventListener(
-    "toggleRingsVisible",
-    ()=>{
-
-        settings.amiga.rings.visible =
-        !settings.amiga.rings.visible;
-
-        console.log(
-            "Rings visible:",
-            settings.amiga.rings.visible
-        );
-
-    }
-);
-
 
 
 window.addEventListener(
     "ringCountUp",
     ()=>{
 
-        if(settings.amiga.rings.count < 8)
-            settings.amiga.rings.count++;
+        const ringsSettings =
+            rings.ringsSettings;
+
+        if(ringsSettings.count < 8)
+            ringsSettings.count++;
 
         console.log(
             "Ring groups:",
-            settings.amiga.rings.count
+            ringsSettings.count
         );
 
     }
@@ -1294,7 +1286,7 @@ window.addEventListener(
     ()=>{
 
         const constellation =
-            settings.amiga.rings.constellation;
+            rings.ringsSettings.constellation;
 
 
         if(constellation.enabled){
@@ -1322,11 +1314,11 @@ window.addEventListener(
     "constellationDistanceUp",
     ()=>{
 
-        settings.amiga.rings.constellation.distance += 10;
+        rings.ringsSettings.constellation.distance += 10;
 
         console.log(
             "Constellation distance:",
-            settings.amiga.rings.constellation.distance
+            rings.ringsSettings.constellation.distance
         );
 
     }
@@ -1338,14 +1330,17 @@ window.addEventListener(
     "constellationDistanceDown",
     ()=>{
 
-        settings.amiga.rings.constellation.distance -= 10;
+        const constellation =
+            rings.ringsSettings.constellation;
 
-        if(settings.amiga.rings.constellation.distance < 10)
-            settings.amiga.rings.constellation.distance = 10;
+        constellation.distance -= 10;
+
+        if(constellation.distance < 10)
+            constellation.distance = 10;
 
         console.log(
             "Constellation distance:",
-            settings.amiga.rings.constellation.distance
+            constellation.distance
         );
 
     }
@@ -1357,14 +1352,17 @@ window.addEventListener(
     "ringCountDown",
     ()=>{
 
+        const ringsSettings =
+            rings.ringsSettings;
 
-        if(settings.amiga.rings.count > 1)
-            settings.amiga.rings.count--;
+
+        if(ringsSettings.count > 1)
+            ringsSettings.count--;
 
 
         console.log(
             "Ring groups:",
-            settings.amiga.rings.count
+            ringsSettings.count
         );
 
 
@@ -1377,7 +1375,7 @@ window.addEventListener(
     "ringSizeUp",
     ()=>{
 
-        settings.amiga.rings.size += 10;
+        rings.ringsSettings.size += 10;
 
     }
 );
@@ -1388,10 +1386,11 @@ window.addEventListener(
     "ringSizeDown",
     ()=>{
 
+        const ringsSettings =
+            rings.ringsSettings;
 
-        if(settings.amiga.rings.size > 20)
-            settings.amiga.rings.size -= 10;
-
+        if(ringsSettings.size > 20)
+            ringsSettings.size -= 10;
 
     }
 );
@@ -1402,11 +1401,11 @@ window.addEventListener(
     "ringThicknessUp",
     ()=>{
 
-        settings.amiga.rings.width += 2;
+        rings.ringsSettings.width += 2;
 
         console.log(
             "Ring thickness:",
-            settings.amiga.rings.width
+            rings.ringsSettings.width
         );
 
     }
@@ -1418,14 +1417,17 @@ window.addEventListener(
     "ringThicknessDown",
     ()=>{
 
-        settings.amiga.rings.width -= 2;
+        const ringsSettings =
+            rings.ringsSettings;
 
-        if(settings.amiga.rings.width < 1)
-            settings.amiga.rings.width = 1;
+        ringsSettings.width -= 2;
+
+        if(ringsSettings.width < 1)
+            ringsSettings.width = 1;
 
         console.log(
             "Ring thickness:",
-            settings.amiga.rings.width
+            ringsSettings.width
         );
 
     }
@@ -1441,7 +1443,10 @@ window.addEventListener(
             e.detail.ringId - 1;
 
 
-        settings.amiga.rings.colours[index] =
+        const colours =
+            rings.ringsSettings.colours;
+
+        colours[index] =
             "rgb("
             +
             e.detail.r
@@ -1461,7 +1466,7 @@ window.addEventListener(
             "Ring",
             e.detail.ringId,
             "colour:",
-            settings.amiga.rings.colours[index]
+            colours[index]
         );
 
     }
@@ -1473,6 +1478,12 @@ window.addEventListener(
 /*
 ==================================================
 GHOSTS
+
+GENERATE > GHOST is fixed/non-steppable too, so these read/write
+settings.amiga.ghost directly. APPLY TO MASK (which mask feeds the
+trail-history algorithm) is a different control from MASKED BY
+(which masks Ghost's own composited output, still reachable via
+VIDEO's universal row when Ghost's entry is selected).
 ==================================================
 */
 
@@ -1481,18 +1492,20 @@ window.addEventListener(
     "ghostUp",
     ()=>{
 
+        const ghostSettings =
+            settings.amiga.ghost;
 
-        settings.amiga.ghost.count++;
+        ghostSettings.count++;
 
 
-        settings.amiga.ghost.enabled =
-            settings.amiga.ghost.count > 0;
+        ghostSettings.enabled =
+            ghostSettings.count > 0;
 
 
 
         console.log(
             "Ghost count:",
-            settings.amiga.ghost.count
+            ghostSettings.count
         );
 
 
@@ -1505,20 +1518,22 @@ window.addEventListener(
     "ghostDown",
     ()=>{
 
+        const ghostSettings =
+            settings.amiga.ghost;
 
-        if(settings.amiga.ghost.count > 0)
-            settings.amiga.ghost.count--;
+        if(ghostSettings.count > 0)
+            ghostSettings.count--;
 
 
 
-        settings.amiga.ghost.enabled =
-            settings.amiga.ghost.count > 0;
+        ghostSettings.enabled =
+            ghostSettings.count > 0;
 
 
 
         console.log(
             "Ghost count:",
-            settings.amiga.ghost.count
+            ghostSettings.count
         );
 
 
@@ -1547,15 +1562,122 @@ window.addEventListener(
     "ghostDelayDown",
     ()=>{
 
-        settings.amiga.ghost.delay -= 50;
+        const ghostSettings =
+            settings.amiga.ghost;
 
-        if(settings.amiga.ghost.delay < 0)
-            settings.amiga.ghost.delay = 0;
+        ghostSettings.delay -= 50;
+
+        if(ghostSettings.delay < 0)
+            ghostSettings.delay = 0;
 
         console.log(
             "Ghost delay:",
-            settings.amiga.ghost.delay
+            ghostSettings.delay
         );
+
+    }
+);
+
+
+
+
+function eligibleMaskTargets(){
+
+    return getLayerRegistry().filter(
+        entry=>entry.settings.visibilityMode === "maskWhite"
+    );
+
+}
+
+
+function reportApplyToMaskChanged(){
+
+    const ghostSettings =
+        settings.amiga.ghost;
+
+    const eligible =
+        eligibleMaskTargets();
+
+    const match =
+        eligible.find(
+            e=>e.maskSourceId === ghostSettings.applyToMask
+        );
+
+
+    window.dispatchEvent(
+        new CustomEvent(
+            "applyToMaskChanged",
+            {
+                detail:{
+                    id:ghostSettings.applyToMask,
+                    label:
+                        match
+                        ?
+                        match.label
+                        :
+                        "NONE AVAILABLE",
+                    options:
+                        eligible.map(e=>e.label)
+                }
+            }
+        )
+    );
+
+}
+
+
+window.addEventListener(
+    "applyToMaskStep",
+    e=>{
+
+        const ghostSettings =
+            settings.amiga.ghost;
+
+        const eligible =
+            eligibleMaskTargets();
+
+
+        if(eligible.length === 0){
+
+            ghostSettings.applyToMask = null;
+
+            reportApplyToMaskChanged();
+
+            return;
+
+        }
+
+
+        let index =
+            eligible.findIndex(
+                entry=>entry.maskSourceId === ghostSettings.applyToMask
+            );
+
+        if(index < 0)
+            index = 0;
+
+
+        index =
+            Math.min(
+                Math.max(
+                    index + e.detail.direction,
+                    0
+                ),
+                eligible.length - 1
+            );
+
+
+        ghostSettings.applyToMask =
+            eligible[index].maskSourceId;
+
+
+        console.log(
+            "Ghost apply to mask:",
+            eligible[index].label
+        );
+
+
+        reportApplyToMaskChanged();
 
     }
 );
@@ -1566,6 +1688,9 @@ window.addEventListener(
 /*
 ==================================================
 TEXT
+
+GENERATE > TEXT is fixed/non-steppable too, so these read/write
+settings.amiga.text directly.
 ==================================================
 */
 
@@ -1576,52 +1701,6 @@ window.addEventListener(
 
         settings.amiga.text.content =
             e.detail.value;
-
-    }
-);
-
-
-
-window.addEventListener(
-    "toggleTextVisible",
-    ()=>{
-
-        settings.amiga.text.visible =
-        !settings.amiga.text.visible;
-
-        console.log(
-            "Text visible:",
-            settings.amiga.text.visible
-        );
-
-    }
-);
-
-
-
-window.addEventListener(
-    "setTextColour",
-    e=>{
-
-        settings.amiga.text.colour =
-            "rgb("
-            +
-            e.detail.r
-            +
-            ","
-            +
-            e.detail.g
-            +
-            ","
-            +
-            e.detail.b
-            +
-            ")";
-
-        console.log(
-            "Text colour:",
-            settings.amiga.text.colour
-        );
 
     }
 );
@@ -1648,14 +1727,46 @@ window.addEventListener(
     "textSizeDown",
     ()=>{
 
-        settings.amiga.text.size -= 4;
+        const textSettings =
+            settings.amiga.text;
 
-        if(settings.amiga.text.size < 8)
-            settings.amiga.text.size = 8;
+        textSettings.size -= 4;
+
+        if(textSettings.size < 8)
+            textSettings.size = 8;
 
         console.log(
             "Text size:",
-            settings.amiga.text.size
+            textSettings.size
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "textColour",
+    e=>{
+
+        settings.amiga.text.colour =
+            "rgb("
+            +
+            e.detail.r
+            +
+            ","
+            +
+            e.detail.g
+            +
+            ","
+            +
+            e.detail.b
+            +
+            ")";
+
+        console.log(
+            "Text colour:",
+            settings.amiga.text.colour
         );
 
     }
@@ -2169,20 +2280,104 @@ window.addEventListener(
 
 /*
 ==================================================
-MASKING
+LAYER REGISTRY
+
+The single source of truth for "everything that exists": one flat
+list covering every video feed, every derived mask, every rings
+instance, text, and ghost. Each entry has the exact same shape
+(label/kind/settings with enabled+visible+maskedBy), which is what
+lets the LAYER selector, the universal ON/OFF+VISIBLE+MASKED BY
+controls, and the mask-source picker all work identically regardless
+of what's actually selected. This replaces the old per-type
+enumeration that used to live separately in getMaskSources().
 ==================================================
 */
 
 
-const FIXED_MASK_SOURCES = [
-    {id:"none", label:"NONE"},
-    {id:"background", label:"BACKGROUND"},
-    {id:"video", label:"VIDEO 1"},
-    {id:"body", label:"MASK 1"},
-    {id:"rings", label:"RINGS 1"},
-    {id:"ghost", label:"GHOST 1"},
-    {id:"text", label:"TEXT 1"}
-];
+function getLayerRegistry(){
+
+    const registry = [];
+
+
+    [originalLayerAdapter, ...videoLayers].forEach(layer=>{
+
+        const isOriginal =
+            layer.id === "original";
+
+
+        registry.push({
+            label:"LAYER " + layer.globalLayerNumber,
+            kind:"video",
+            settings:layer.videoSettings,
+            maskSourceId:
+                isOriginal
+                ?
+                "video"
+                :
+                ("videoLayer:" + layer.id)
+        });
+
+
+        registry.push({
+            label:"MASK " + layer.globalLayerNumber,
+            kind:"mask",
+            settings:layer.bodySettings,
+            maskSourceId:
+                isOriginal
+                ?
+                "body"
+                :
+                ("bodyLayer:" + layer.id),
+            segmentation:layer.segmentation,
+            background:layer.background,
+            video:layer.video
+        });
+
+    });
+
+
+    /*
+    Only the fixed rings/ghost/text singletons are steppable here - no
+    multi-instance ADD mechanism is exposed right now ("only Ghost,
+    Rings, Text for now"). ringsLayers/addRingsLayer still exist and
+    still render/mask correctly if ever populated, they're just not
+    reachable from any menu.
+    */
+    registry.push({
+        label:"LAYER " + rings.globalLayerNumber,
+        kind:"rings",
+        settings:rings.ringsSettings,
+        maskSourceId:"rings",
+        instance:rings
+    });
+
+
+    registry.push({
+        label:"LAYER " + textLayerNumber,
+        kind:"text",
+        settings:settings.amiga.text,
+        maskSourceId:"text"
+    });
+
+
+    registry.push({
+        label:"LAYER " + ghostLayerNumber,
+        kind:"ghost",
+        settings:settings.amiga.ghost,
+        maskSourceId:"ghost"
+    });
+
+
+    return registry;
+
+}
+
+
+/*
+==================================================
+MASKING
+==================================================
+*/
 
 
 const MASK_CHANNELS = [
@@ -2192,30 +2387,17 @@ const MASK_CHANNELS = [
 
 function getMaskSources(){
 
-    const sources =
-        FIXED_MASK_SOURCES.slice();
+    const sources = [
+        {id:"none", label:"NONE"},
+        {id:"background", label:"BACKGROUND"}
+    ];
 
 
-    videoLayers.forEach(layer=>{
-
-        sources.push({
-            id:"videoLayer:" + layer.id,
-            label:"VIDEO " + layer.number
-        });
+    getLayerRegistry().forEach(entry=>{
 
         sources.push({
-            id:"bodyLayer:" + layer.id,
-            label:"MASK " + layer.number
-        });
-
-    });
-
-
-    ringsLayers.forEach(layer=>{
-
-        sources.push({
-            id:"ringsLayer:" + layer.id,
-            label:layer.name
+            id:entry.maskSourceId,
+            label:entry.label
         });
 
     });
@@ -2226,56 +2408,7 @@ function getMaskSources(){
 }
 
 
-function maskedBySettingsFor(layer){
-
-    if(layer === "video")
-        return selectedLayer().videoSettings.maskedBy;
-
-    if(layer === "body")
-        return selectedLayer().bodySettings.maskedBy;
-
-    if(layer === "rings")
-        return settings.amiga.rings.maskedBy;
-
-    if(layer === "text")
-        return settings.amiga.text.maskedBy;
-
-
-    return null;
-
-}
-
-
-function ownSourceId(layer){
-
-    if(layer === "video" || layer === "body"){
-
-        const current =
-            selectedLayer();
-
-        if(current.id === "original")
-            return layer;
-
-
-        return (
-            layer === "video"
-            ?
-            "videoLayer:"
-            :
-            "bodyLayer:"
-        )
-        +
-        current.id;
-
-    }
-
-
-    return layer;
-
-}
-
-
-function reportMaskSettingsChanged(layer, target){
+function reportMaskSettingsChanged(target){
 
     const match =
         getMaskSources().find(
@@ -2288,7 +2421,6 @@ function reportMaskSettingsChanged(layer, target){
             "maskSettingsChanged",
             {
                 detail:{
-                    layer:layer,
                     source:target.source,
                     sourceLabel:
                         match
@@ -2309,22 +2441,16 @@ window.addEventListener(
     "maskSourceStep",
     e=>{
 
-        const layer =
-            e.detail.layer;
+        const entry =
+            selectedEntry();
 
         const target =
-            maskedBySettingsFor(layer);
+            entry.settings.maskedBy;
 
-        if(!target)
-            return;
-
-
-        const ownId =
-            ownSourceId(layer);
 
         const validSources =
             getMaskSources().filter(
-                s=>s.id === "none" || s.id !== ownId
+                s=>s.id === "none" || s.id !== entry.maskSourceId
             );
 
 
@@ -2353,14 +2479,13 @@ window.addEventListener(
 
         console.log(
             "Mask source:",
-            layer,
+            entry.label,
             "<-",
             validSources[index].label
         );
 
 
         reportMaskSettingsChanged(
-            layer,
             target
         );
 
@@ -2372,14 +2497,8 @@ window.addEventListener(
     "maskChannelStep",
     e=>{
 
-        const layer =
-            e.detail.layer;
-
         const target =
-            maskedBySettingsFor(layer);
-
-        if(!target)
-            return;
+            selectedEntry().settings.maskedBy;
 
 
         let index =
@@ -2407,14 +2526,11 @@ window.addEventListener(
 
         console.log(
             "Mask channel:",
-            layer,
-            "<-",
             target.channel
         );
 
 
         reportMaskSettingsChanged(
-            layer,
             target
         );
 

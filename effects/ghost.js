@@ -7,9 +7,10 @@ BODY GHOST TRAIL EFFECT
 
 export class Ghost {
 
-    constructor(settings){
+    constructor(settings, renderer){
 
         this.settings = settings;
+        this.renderer = renderer;
         this.canvas =
             document.getElementById(
                 "ghost-layer"
@@ -17,12 +18,6 @@ export class Ghost {
 
         this.ctx =
             this.canvas.getContext("2d");
-
-
-        this.body =
-            document.getElementById(
-                "body-layer"
-            );
 
 
         this.history = [];
@@ -50,6 +45,16 @@ export class Ghost {
             return;
 
         }
+
+
+        const source =
+            this.renderer.layerByName(
+                ghost.applyToMask
+            );
+
+
+        if(!source)
+            return;
 
 
         let now =
@@ -81,10 +86,10 @@ export class Ghost {
 
 
         copy.width =
-            this.body.width;
+            source.width;
 
         copy.height =
-            this.body.height;
+            source.height;
 
 
         let ctx =
@@ -92,7 +97,7 @@ export class Ghost {
 
 
         ctx.drawImage(
-            this.body,
+            source,
             0,
             0
         );
