@@ -574,7 +574,8 @@ export class Renderer {
 
 
         if(
-            this.settings.video.enabled
+            this.settings.video.enabled &&
+            this.settings.video.visible
         ){
 
             ctx.drawImage(
@@ -596,7 +597,8 @@ export class Renderer {
 
 
         if(
-            this.settings.layers.body
+            this.settings.layers.body &&
+            this.settings.body.visible
         ){
 
             ctx.drawImage(
@@ -622,18 +624,24 @@ export class Renderer {
 
 
 
-        ctx.drawImage(
+        if(
+            this.settings.amiga.rings.visible
+        ){
 
-            this.resolveMaskedLayer(
-                this.layers.rings,
-                this.settings.amiga.rings.maskedBy
-            ),
+            ctx.drawImage(
 
-            0,
+                this.resolveMaskedLayer(
+                    this.layers.rings,
+                    this.settings.amiga.rings.maskedBy
+                ),
 
-            0
+                0,
 
-        );
+                0
+
+            );
+
+        }
 
 
 

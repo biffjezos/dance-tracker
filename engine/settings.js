@@ -33,6 +33,7 @@ export class Settings {
             threshold:100,
             keyColour:{r:0, g:255, b:0},
             fill:"solid",
+            visible:true,
             maskedBy:{source:"none", channel:"alpha"}
         };
 
@@ -70,6 +71,7 @@ export class Settings {
 
             rings:{
                 enabled:false,
+                visible:true,
                 count:2,
                 ringsPerGroup:8,
                 spacing:14,
