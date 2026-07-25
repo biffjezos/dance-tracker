@@ -229,6 +229,102 @@ const rings =
     );
 
 
+const ringsLayers = [];
+
+renderer.extraRingsLayers = ringsLayers;
+
+
+function addRingsLayer(){
+
+    const ringsSettings = {
+
+        enabled:true,
+
+        visible:true,
+
+        count:2,
+
+        ringsPerGroup:8,
+
+        spacing:14,
+
+        speed:2,
+
+        size:20,
+
+        width:6,
+
+        blend:"screen",
+
+        colours:[
+            "rgb(255,0,255)",
+            "rgb(0,255,80)",
+            "rgb(255,0,255)",
+            "rgb(0,255,80)",
+            "rgb(255,0,255)",
+            "rgb(0,255,80)",
+            "rgb(255,0,255)",
+            "rgb(0,255,80)"
+        ],
+
+        constellation:{
+
+            enabled:false,
+
+            distance:70
+
+        },
+
+        maskedBy:{source:"none", channel:"alpha"}
+
+    };
+
+
+    const canvas =
+        document.createElement(
+            "canvas"
+        );
+
+    canvas.width = settings.video.width;
+
+    canvas.height = settings.video.height;
+
+
+    const layer =
+        new Rings(
+            settings,
+            {
+                ringsSettings:ringsSettings,
+                outputCanvas:canvas
+            }
+        );
+
+    ringsLayers.push(layer);
+
+
+    console.log(
+        "Added",
+        layer.name,
+        "- total rings layers:",
+        ringsLayers.length
+    );
+
+
+    return layer;
+
+}
+
+
+window.addEventListener(
+    "addRingsLayer",
+    ()=>{
+
+        addRingsLayer();
+
+    }
+);
+
+
 
 const ghost =
     new Ghost(
@@ -345,11 +441,23 @@ function processBody(){
 
     rings.update();
 
+    ringsLayers.forEach(layer=>{
+
+        layer.update();
+
+    });
+
 
 
     ghost.draw();
 
     rings.draw();
+
+    ringsLayers.forEach(layer=>{
+
+        layer.draw();
+
+    });
 
     text.draw();
 
@@ -562,6 +670,13 @@ function applyResolution(){
 
 
     videoLayers.forEach(layer=>{
+
+        layer.resize();
+
+    });
+
+
+    ringsLayers.forEach(layer=>{
 
         layer.resize();
 
@@ -2091,6 +2206,16 @@ function getMaskSources(){
         sources.push({
             id:"bodyLayer:" + layer.id,
             label:"MASK " + layer.number
+        });
+
+    });
+
+
+    ringsLayers.forEach(layer=>{
+
+        sources.push({
+            id:"ringsLayer:" + layer.id,
+            label:layer.name
         });
 
     });

@@ -27,6 +27,8 @@ export class Renderer {
 
         this.extraVideoLayers = [];
 
+        this.extraRingsLayers = [];
+
 
 
         this.layers = {
@@ -408,6 +410,21 @@ export class Renderer {
         }
 
 
+        if(
+            name &&
+            name.indexOf("ringsLayer:") === 0
+        ){
+
+            const layer =
+                this.extraRingsLayers.find(
+                    l=>l.id === name.slice(11)
+                );
+
+            return layer ? layer.canvas : null;
+
+        }
+
+
         return null;
 
     }
@@ -677,6 +694,9 @@ export class Renderer {
         }
 
 
+        this.composeExtraRingsLayers();
+
+
 
         ctx.drawImage(
 
@@ -774,6 +794,42 @@ export class Renderer {
                     this.resolveMaskedLayer(
                         layer.bodyCanvas,
                         layer.bodySettings.maskedBy
+                    ),
+
+                    0,
+
+                    0
+
+                );
+
+            }
+
+
+        });
+
+
+    }
+
+
+
+
+    composeExtraRingsLayers(){
+
+
+        let ctx =
+            this.contexts.master;
+
+
+        this.extraRingsLayers.forEach(layer=>{
+
+
+            if(layer.ringsSettings.visible){
+
+                ctx.drawImage(
+
+                    this.resolveMaskedLayer(
+                        layer.canvas,
+                        layer.ringsSettings.maskedBy
                     ),
 
                     0,

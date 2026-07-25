@@ -360,6 +360,8 @@ export class MenuManager {
 
             generate:{
 
+                "ADD RINGS LAYER":null,
+
                 GHOST:[
 
                     "GHOST +",
@@ -1635,6 +1637,13 @@ export class MenuManager {
         if(item==="SOLID/VIDEO")
             window.dispatchEvent(
                 new Event("toggleBodyFill")
+            );
+
+
+
+        if(item==="ADD RINGS LAYER")
+            window.dispatchEvent(
+                new Event("addRingsLayer")
             );
 
 
