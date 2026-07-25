@@ -1826,14 +1826,46 @@ MASKING
 */
 
 
-const MASK_SOURCES = [
-    "none", "background", "video", "body", "rings", "text"
+const FIXED_MASK_SOURCES = [
+    {id:"none", label:"NONE"},
+    {id:"background", label:"BACKGROUND"},
+    {id:"video", label:"VIDEO 1"},
+    {id:"body", label:"MASK 1"},
+    {id:"rings", label:"RINGS 1"},
+    {id:"ghost", label:"GHOST 1"},
+    {id:"text", label:"TEXT 1"}
 ];
 
 
 const MASK_CHANNELS = [
     "red", "green", "blue", "alpha"
 ];
+
+
+function getMaskSources(){
+
+    const sources =
+        FIXED_MASK_SOURCES.slice();
+
+
+    videoLayers.forEach(layer=>{
+
+        sources.push({
+            id:"videoLayer:" + layer.id,
+            label:"VIDEO " + layer.number
+        });
+
+        sources.push({
+            id:"bodyLayer:" + layer.id,
+            label:"MASK " + layer.number
+        });
+
+    });
+
+
+    return sources;
+
+}
 
 
 function maskedBySettingsFor(layer){
@@ -1858,6 +1890,12 @@ function maskedBySettingsFor(layer){
 
 function reportMaskSettingsChanged(layer, target){
 
+    const match =
+        getMaskSources().find(
+            s=>s.id === target.source
+        );
+
+
     window.dispatchEvent(
         new CustomEvent(
             "maskSettingsChanged",
@@ -1865,6 +1903,12 @@ function reportMaskSettingsChanged(layer, target){
                 detail:{
                     layer:layer,
                     source:target.source,
+                    sourceLabel:
+                        match
+                        ?
+                        match.label
+                        :
+                        target.source.toUpperCase(),
                     channel:target.channel
                 }
             }
@@ -1889,14 +1933,14 @@ window.addEventListener(
 
 
         const validSources =
-            MASK_SOURCES.filter(
-                s=>s === "none" || s !== layer
+            getMaskSources().filter(
+                s=>s.id === "none" || s.id !== layer
             );
 
 
         let index =
-            validSources.indexOf(
-                target.source
+            validSources.findIndex(
+                s=>s.id === target.source
             );
 
         if(index < 0)
@@ -1914,14 +1958,14 @@ window.addEventListener(
 
 
         target.source =
-            validSources[index];
+            validSources[index].id;
 
 
         console.log(
             "Mask source:",
             layer,
             "<-",
-            target.source
+            validSources[index].label
         );
 
 
