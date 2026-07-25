@@ -176,6 +176,8 @@ function processBody(){
 
     updateTransportDisplay();
 
+    updateAudioSyncDisplay();
+
 
 
     requestAnimationFrame(
@@ -1328,7 +1330,7 @@ window.addEventListener(
             if(transportPlaying){
 
                 startAudioSource(
-                    getPlayheadTime()
+                    getAudioTargetTime()
                 );
 
             }
@@ -1411,6 +1413,9 @@ function formatTimestamp(totalSeconds){
         n=>String(Math.floor(n)).padStart(2, "0");
 
 
+    totalSeconds += 0.001;
+
+
     const minutes =
         Math.floor(totalSeconds / 60);
 
@@ -1486,7 +1491,7 @@ function seekBy(deltaSeconds){
     if(transportPlaying && currentAudioBuffer){
 
         startAudioSource(
-            getPlayheadTime()
+            getAudioTargetTime()
         );
 
     }
@@ -1516,7 +1521,7 @@ window.addEventListener(
 
             if(currentAudioBuffer)
                 startAudioSource(
-                    getPlayheadTime()
+                    getAudioTargetTime()
                 );
 
         }
@@ -1579,6 +1584,130 @@ window.addEventListener(
 window.addEventListener(
     "transportFrameDown",
     ()=>seekBy(-1/30)
+);
+
+
+
+
+/*
+==================================================
+AUDIO SYNC
+==================================================
+*/
+
+
+let audioSyncOffset = 0;
+
+
+function getAudioTargetTime(){
+
+    if(hasVideoFile()){
+
+        return (
+            camera.getVideo().currentTime +
+            audioSyncOffset
+        );
+
+    }
+
+
+    return getPlayheadTime();
+
+}
+
+
+function formatOffset(totalSeconds){
+
+    const sign =
+        totalSeconds < 0
+        ?
+        "-"
+        :
+        "+";
+
+
+    return (
+        sign +
+        formatTimestamp(
+            Math.abs(totalSeconds)
+        )
+    );
+
+}
+
+
+function updateAudioSyncDisplay(){
+
+    const display =
+        document.getElementById(
+            "audio-sync-display"
+        );
+
+    if(display){
+
+        display.innerText =
+            formatOffset(
+                audioSyncOffset
+            );
+
+    }
+
+}
+
+
+function seekAudioSyncBy(deltaSeconds){
+
+    audioSyncOffset +=
+        deltaSeconds;
+
+
+    if(transportPlaying && currentAudioBuffer){
+
+        startAudioSource(
+            getAudioTargetTime()
+        );
+
+    }
+
+
+    updateAudioSyncDisplay();
+
+}
+
+
+window.addEventListener(
+    "audioSyncMinuteUp",
+    ()=>seekAudioSyncBy(60)
+);
+
+
+window.addEventListener(
+    "audioSyncMinuteDown",
+    ()=>seekAudioSyncBy(-60)
+);
+
+
+window.addEventListener(
+    "audioSyncSecondUp",
+    ()=>seekAudioSyncBy(1)
+);
+
+
+window.addEventListener(
+    "audioSyncSecondDown",
+    ()=>seekAudioSyncBy(-1)
+);
+
+
+window.addEventListener(
+    "audioSyncFrameUp",
+    ()=>seekAudioSyncBy(1/30)
+);
+
+
+window.addEventListener(
+    "audioSyncFrameDown",
+    ()=>seekAudioSyncBy(-1/30)
 );
 
 

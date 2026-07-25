@@ -161,7 +161,33 @@ export class MenuManager {
 
                     "FRAME +":null,
 
-                    "FRAME -":null
+                    "FRAME -":null,
+
+
+
+                    "AUDIO SYNC":{
+
+                        OFFSET:{
+
+                            type:"display",
+
+                            id:"audio-sync-display"
+
+                        },
+
+                        "SYNC MINUTE +":null,
+
+                        "SYNC MINUTE -":null,
+
+                        "SYNC SECOND +":null,
+
+                        "SYNC SECOND -":null,
+
+                        "SYNC FRAME +":null,
+
+                        "SYNC FRAME -":null
+
+                    }
 
                 }
 
@@ -1330,6 +1356,48 @@ export class MenuManager {
         if(item==="FRAME -")
             window.dispatchEvent(
                 new Event("transportFrameDown")
+            );
+
+
+
+        if(item==="SYNC MINUTE +")
+            window.dispatchEvent(
+                new Event("audioSyncMinuteUp")
+            );
+
+
+
+        if(item==="SYNC MINUTE -")
+            window.dispatchEvent(
+                new Event("audioSyncMinuteDown")
+            );
+
+
+
+        if(item==="SYNC SECOND +")
+            window.dispatchEvent(
+                new Event("audioSyncSecondUp")
+            );
+
+
+
+        if(item==="SYNC SECOND -")
+            window.dispatchEvent(
+                new Event("audioSyncSecondDown")
+            );
+
+
+
+        if(item==="SYNC FRAME +")
+            window.dispatchEvent(
+                new Event("audioSyncFrameUp")
+            );
+
+
+
+        if(item==="SYNC FRAME -")
+            window.dispatchEvent(
+                new Event("audioSyncFrameDown")
             );
 
 
