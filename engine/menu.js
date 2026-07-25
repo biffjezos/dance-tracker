@@ -195,7 +195,9 @@ export class MenuManager {
 
         this.applyToMaskState = {
 
-            label:"NONE AVAILABLE"
+            label:"NONE AVAILABLE",
+
+            options:[]
 
         };
 
@@ -205,7 +207,8 @@ export class MenuManager {
             e=>{
 
                 this.applyToMaskState = {
-                    label:e.detail.label
+                    label:e.detail.label,
+                    options:e.detail.options
                 };
 
 
@@ -1720,86 +1723,65 @@ export class MenuManager {
 
     /*
     Ghost's own effect input - which mask's shape feeds the trail
-    history. Only ever lists layers currently in MASK WHITE
-    visibility mode, no NONE fallback (app.js's eligibleMaskTargets
-    enforces that). Different from MASKED BY, which masks Ghost's
-    composited output and lives under VIDEO instead.
+    history. A direct selector, not a stepper: one button per mask
+    currently in MASK WHITE visibility mode, no NONE fallback
+    (app.js's eligibleMaskTargets enforces that - the list is simply
+    empty if nothing qualifies yet). Different from MASKED BY, which
+    masks Ghost's composited output and lives under VIDEO instead.
     */
     renderApplyToMaskPicker(){
 
 
-        let sourceMinus =
-        document.createElement(
-            "button"
-        );
-
-        sourceMinus.innerText=
-            "SOURCE -";
-
-        sourceMinus.onclick=()=>{
-
-            window.dispatchEvent(
-                new CustomEvent(
-                    "applyToMaskStep",
-                    {
-                        detail:{
-                            direction:-1
-                        }
-                    }
-                )
-            );
-
-        };
-
-        this.subMenu.appendChild(
-            sourceMinus
-        );
-
-
-
-        let display =
+        let current =
         document.createElement(
             "span"
         );
 
-        display.innerText=
+        current.innerText=
+            "CURRENT: " +
             this.applyToMaskState.label;
 
-        display.className=
+        current.className=
             "ring-id-display";
 
         this.subMenu.appendChild(
-            display
+            current
         );
 
 
 
-        let sourcePlus =
-        document.createElement(
-            "button"
-        );
+        this.applyToMaskState.options.forEach(option=>{
 
-        sourcePlus.innerText=
-            "SOURCE +";
 
-        sourcePlus.onclick=()=>{
-
-            window.dispatchEvent(
-                new CustomEvent(
-                    "applyToMaskStep",
-                    {
-                        detail:{
-                            direction:1
-                        }
-                    }
-                )
+            let button =
+            document.createElement(
+                "button"
             );
 
-        };
+            button.innerText=
+                option.label;
 
-        this.subMenu.appendChild(
-            sourcePlus
-        );
+            button.onclick=()=>{
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "setApplyToMask",
+                        {
+                            detail:{
+                                id:option.id
+                            }
+                        }
+                    )
+                );
+
+            };
+
+            this.subMenu.appendChild(
+                button
+            );
+
+
+        });
 
 
     }

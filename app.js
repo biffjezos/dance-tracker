@@ -1617,13 +1617,54 @@ function reportApplyToMaskChanged(){
                         :
                         "NONE AVAILABLE",
                     options:
-                        eligible.map(e=>e.label)
+                        eligible.map(e=>({
+                            id:e.maskSourceId,
+                            label:e.label
+                        }))
                 }
             }
         )
     );
 
 }
+
+
+/*
+A direct selector, not a stepper - pick one of the masks currently
+in MASK WHITE mode by name. Ignores anything that isn't actually
+eligible right now (e.g. a stale id from a screen that's been open
+since before a mask's mode changed).
+*/
+window.addEventListener(
+    "setApplyToMask",
+    e=>{
+
+        const eligible =
+            eligibleMaskTargets();
+
+        const match =
+            eligible.find(
+                entry=>entry.maskSourceId === e.detail.id
+            );
+
+        if(!match)
+            return;
+
+
+        settings.amiga.ghost.applyToMask =
+            match.maskSourceId;
+
+
+        console.log(
+            "Ghost apply to mask:",
+            match.label
+        );
+
+
+        reportApplyToMaskChanged();
+
+    }
+);
 
 
 window.addEventListener(
