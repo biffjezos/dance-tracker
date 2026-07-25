@@ -16,7 +16,8 @@ export class Settings {
             enabled:true,
             visibilityMode:"on",
             backgroundColour:"rgb(0,0,0)",
-            maskedBy:{source:"none", channel:"alpha"}
+            maskedBy:{source:"none", channel:"alpha"},
+            background:{source:"none", colour:{r:0, g:0, b:0}}
         };
 
 
@@ -34,7 +35,8 @@ export class Settings {
             keyColour:{r:0, g:255, b:0},
             fill:"solid",
             visibilityMode:"on",
-            maskedBy:{source:"none", channel:"alpha"}
+            maskedBy:{source:"none", channel:"alpha"},
+            background:{source:"none", colour:{r:0, g:0, b:0}}
         };
 
 
@@ -93,7 +95,8 @@ export class Settings {
                     enabled:false,
                     distance:70
                 },
-                maskedBy:{source:"none", channel:"alpha"}
+                maskedBy:{source:"none", channel:"alpha"},
+                background:{source:"none", colour:{r:0, g:0, b:0}}
             },
 
             ghost:{
@@ -103,7 +106,8 @@ export class Settings {
                 alpha:0.45,
                 delay:50,
                 applyToMask:null,
-                maskedBy:{source:"none", channel:"alpha"}
+                maskedBy:{source:"none", channel:"alpha"},
+                background:{source:"none", colour:{r:0, g:0, b:0}}
             },
 
             text:{
@@ -112,7 +116,8 @@ export class Settings {
                 size:24,
                 enabled:true,
                 visibilityMode:"on",
-                maskedBy:{source:"none", channel:"alpha"}
+                maskedBy:{source:"none", channel:"alpha"},
+                background:{source:"none", colour:{r:0, g:0, b:0}}
             },
             plasma:{
                 enabled:false,

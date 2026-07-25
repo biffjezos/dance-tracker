@@ -54,7 +54,9 @@ export class VideoLayer {
 
             visibilityMode:"on",
 
-            maskedBy:{source:"none", channel:"alpha"}
+            maskedBy:{source:"none", channel:"alpha"},
+
+            background:{source:"none", colour:{r:0, g:0, b:0}}
 
         };
 
@@ -73,7 +75,9 @@ export class VideoLayer {
 
             visibilityMode:"on",
 
-            maskedBy:{source:"none", channel:"alpha"}
+            maskedBy:{source:"none", channel:"alpha"},
+
+            background:{source:"none", colour:{r:0, g:0, b:0}}
 
         };
 

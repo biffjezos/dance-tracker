@@ -206,6 +206,42 @@ export class MenuManager {
         );
 
 
+        this.backgroundState = {
+
+            video:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}},
+
+            mask:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}}
+
+        };
+
+
+        window.addEventListener(
+            "backgroundSettingsChanged",
+            e=>{
+
+                this.backgroundState[e.detail.scope] = {
+                    source:e.detail.source,
+                    sourceLabel:e.detail.sourceLabel,
+                    colour:e.detail.colour
+                };
+
+
+                let node =
+                    this.node();
+
+                if(
+                    node &&
+                    node.type==="backgroundPicker"
+                ){
+
+                    this.render();
+
+                }
+
+            }
+        );
+
+
         /*
         No event listener for this one - renderApplyToMaskPicker()
         fetches it fresh synchronously every time it renders (see
@@ -292,9 +328,13 @@ export class MenuManager {
 
                 },
 
-                BACKGROUND:colourMenu(
-                    "videoBackgroundColour"
-                ),
+                BACKGROUND:{
+
+                    type:"backgroundPicker",
+
+                    scope:"video"
+
+                },
 
                 TRANSPORT:{
 
@@ -377,9 +417,13 @@ export class MenuManager {
 
                 },
 
-                BACKGROUND:colourMenu(
-                    "videoBackgroundColour"
-                ),
+                BACKGROUND:{
+
+                    type:"backgroundPicker",
+
+                    scope:"mask"
+
+                },
 
                 TRANSPORT:{
 
@@ -665,6 +709,19 @@ export class MenuManager {
         ){
 
             this.renderMaskPicker();
+
+            return;
+
+        }
+
+
+
+        if(
+            node &&
+            node.type==="backgroundPicker"
+        ){
+
+            this.renderBackgroundPicker();
 
             return;
 
@@ -1926,6 +1983,176 @@ export class MenuManager {
         this.subMenu.appendChild(
             channelPlus
         );
+
+
+    }
+
+
+
+
+    /*
+    Shares the SOURCE stepper shape with MASK, but steps through
+    NONE/COLOUR/every real layer instead of NONE/BACKGROUND/every
+    real layer, and shows swatches (instead of a channel stepper)
+    only when COLOUR is the current source - that's the only case
+    where a colour is actually used for anything.
+    */
+    renderBackgroundPicker(){
+
+
+        const scope =
+            this.node().scope;
+
+        const state =
+            this.backgroundState[scope];
+
+        const selection =
+            scope === "mask"
+            ?
+            this.maskSelection
+            :
+            this.videoSelection;
+
+
+        let layerLabel =
+        document.createElement(
+            "span"
+        );
+
+        layerLabel.innerText=
+            selection.label;
+
+        layerLabel.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            layerLabel
+        );
+
+
+        let sourceMinus =
+        document.createElement(
+            "button"
+        );
+
+        sourceMinus.innerText=
+            "SOURCE -";
+
+        sourceMinus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "backgroundSourceStep",
+                    {
+                        detail:{
+                            direction:-1,
+                            scope:scope
+                        }
+                    }
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            sourceMinus
+        );
+
+
+
+        let sourceDisplay =
+        document.createElement(
+            "span"
+        );
+
+        sourceDisplay.innerText=
+            state.sourceLabel;
+
+        sourceDisplay.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            sourceDisplay
+        );
+
+
+
+        let sourcePlus =
+        document.createElement(
+            "button"
+        );
+
+        sourcePlus.innerText=
+            "SOURCE +";
+
+        sourcePlus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "backgroundSourceStep",
+                    {
+                        detail:{
+                            direction:1,
+                            scope:scope
+                        }
+                    }
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            sourcePlus
+        );
+
+
+
+        if(state.source === "colour"){
+
+            SWATCHES.forEach(swatch=>{
+
+
+                let button =
+                document.createElement(
+                    "button"
+                );
+
+                button.innerText=
+                    swatch.label;
+
+                this.styleSwatch(
+                    button,
+                    swatch.r,
+                    swatch.g,
+                    swatch.b
+                );
+
+                button.onclick=()=>{
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "layerBackgroundColour",
+                            {
+                                detail:{
+                                    scope:scope,
+                                    r:swatch.r,
+                                    g:swatch.g,
+                                    b:swatch.b
+                                }
+                            }
+                        )
+                    );
+
+                };
+
+                this.subMenu.appendChild(
+                    button
+                );
+
+
+            });
+
+        }
 
 
     }

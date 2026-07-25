@@ -755,19 +755,179 @@ export class Renderer {
 
 
 
-    visualizeLayer(canvas, maskedBy, mode){
+    visualizeLayer(canvas, maskedBy, mode, background){
 
 
-        return this.applyVisibilityMode(
+        const visualized =
+            this.applyVisibilityMode(
 
-            this.resolveMaskedLayer(
-                canvas,
-                maskedBy
-            ),
+                this.resolveMaskedLayer(
+                    canvas,
+                    maskedBy
+                ),
 
-            mode
+                mode
+
+            );
+
+
+        if(
+            !background ||
+            background.source === "none"
+        )
+            return visualized;
+
+
+        return this.compositeWithBackground(
+            visualized,
+            background
+        );
+
+    }
+
+
+
+
+    /*
+    Resolves a background spec to a fillable canvas: another layer's
+    own raw content if it points at one (falling back to the flat
+    colour if that source doesn't resolve), otherwise the flat colour
+    itself. Note this reads the OTHER layer's raw canvas, not its own
+    fully-composited-with-its-own-background appearance - chaining
+    backgrounds one level deep (A's background is B) works correctly;
+    B's own background (if it has one) won't show through into A yet.
+    */
+    resolveBackgroundFill(background){
+
+
+        if(background.source !== "colour"){
+
+            const sourceCanvas =
+                this.layerByName(
+                    background.source
+                );
+
+            if(sourceCanvas)
+                return sourceCanvas;
+
+        }
+
+
+        if(!this.backgroundFillScratch){
+
+            this.backgroundFillScratch =
+                document.createElement(
+                    "canvas"
+                );
+
+        }
+
+
+        this.backgroundFillScratch.width =
+            this.settings.video.width;
+
+        this.backgroundFillScratch.height =
+            this.settings.video.height;
+
+
+        const ctx =
+            this.backgroundFillScratch.getContext(
+                "2d"
+            );
+
+
+        ctx.fillStyle =
+            "rgb("
+            +
+            background.colour.r
+            +
+            ","
+            +
+            background.colour.g
+            +
+            ","
+            +
+            background.colour.b
+            +
+            ")";
+
+
+        ctx.fillRect(
+
+            0,
+
+            0,
+
+            this.backgroundFillScratch.width,
+
+            this.backgroundFillScratch.height
 
         );
+
+
+        return this.backgroundFillScratch;
+
+    }
+
+
+
+
+    compositeWithBackground(contentCanvas, background){
+
+
+        const width =
+            contentCanvas.width;
+
+        const height =
+            contentCanvas.height;
+
+
+        if(!this.layerCompositeScratch){
+
+            this.layerCompositeScratch =
+                document.createElement(
+                    "canvas"
+                );
+
+        }
+
+
+        this.layerCompositeScratch.width = width;
+
+        this.layerCompositeScratch.height = height;
+
+
+        const ctx =
+            this.layerCompositeScratch.getContext(
+                "2d"
+            );
+
+
+        ctx.clearRect(
+            0,
+            0,
+            width,
+            height
+        );
+
+
+        ctx.drawImage(
+            this.resolveBackgroundFill(
+                background
+            ),
+            0,
+            0
+        );
+
+
+        ctx.drawImage(
+            contentCanvas,
+            0,
+            0
+        );
+
+
+        return this.layerCompositeScratch;
 
     }
 
@@ -813,7 +973,8 @@ export class Renderer {
                 this.visualizeLayer(
                     this.layers.effects,
                     this.settings.video.maskedBy,
-                    this.settings.video.visibilityMode
+                    this.settings.video.visibilityMode,
+                    this.settings.video.background
                 ),
 
                 0,
@@ -837,7 +998,8 @@ export class Renderer {
                 this.visualizeLayer(
                     this.layers.body,
                     this.settings.body.maskedBy,
-                    this.settings.body.visibilityMode
+                    this.settings.body.visibilityMode,
+                    this.settings.body.background
                 ),
 
                 0,
@@ -865,7 +1027,8 @@ export class Renderer {
                 this.visualizeLayer(
                     this.layers.rings,
                     this.settings.amiga.rings.maskedBy,
-                    this.settings.amiga.rings.visibilityMode
+                    this.settings.amiga.rings.visibilityMode,
+                    this.settings.amiga.rings.background
                 ),
 
                 0,
@@ -890,7 +1053,8 @@ export class Renderer {
                 this.visualizeLayer(
                     this.layers.ghost,
                     this.settings.amiga.ghost.maskedBy,
-                    this.settings.amiga.ghost.visibilityMode
+                    this.settings.amiga.ghost.visibilityMode,
+                    this.settings.amiga.ghost.background
                 ),
 
                 0,
@@ -920,7 +1084,8 @@ export class Renderer {
                 this.visualizeLayer(
                     this.layers.text,
                     this.settings.amiga.text.maskedBy,
-                    this.settings.amiga.text.visibilityMode
+                    this.settings.amiga.text.visibilityMode,
+                    this.settings.amiga.text.background
                 ),
 
                 0,
@@ -972,7 +1137,8 @@ export class Renderer {
                     this.visualizeLayer(
                         layer.rawCanvas,
                         layer.videoSettings.maskedBy,
-                        layer.videoSettings.visibilityMode
+                        layer.videoSettings.visibilityMode,
+                        layer.videoSettings.background
                     ),
 
                     0,
@@ -995,7 +1161,8 @@ export class Renderer {
                     this.visualizeLayer(
                         layer.bodyCanvas,
                         layer.bodySettings.maskedBy,
-                        layer.bodySettings.visibilityMode
+                        layer.bodySettings.visibilityMode,
+                        layer.bodySettings.background
                     ),
 
                     0,
@@ -1032,7 +1199,8 @@ export class Renderer {
                     this.visualizeLayer(
                         layer.canvas,
                         layer.ringsSettings.maskedBy,
-                        layer.ringsSettings.visibilityMode
+                        layer.ringsSettings.visibilityMode,
+                        layer.ringsSettings.background
                     ),
 
                     0,
@@ -1069,7 +1237,8 @@ export class Renderer {
                     this.visualizeLayer(
                         layer.canvas,
                         layer.ghostSettings.maskedBy,
-                        layer.ghostSettings.visibilityMode
+                        layer.ghostSettings.visibilityMode,
+                        layer.ghostSettings.background
                     ),
 
                     0,
@@ -1106,7 +1275,8 @@ export class Renderer {
                     this.visualizeLayer(
                         layer.canvas,
                         layer.textSettings.maskedBy,
-                        layer.textSettings.visibilityMode
+                        layer.textSettings.visibilityMode,
+                        layer.textSettings.background
                     ),
 
                     0,

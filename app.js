@@ -267,6 +267,11 @@ function reportSelection(scope){
         entry.settings.maskedBy
     );
 
+    reportBackgroundChanged(
+        scope,
+        entry.settings.background
+    );
+
     window.dispatchEvent(
         new CustomEvent(
             "layerSelectionChanged",
@@ -395,7 +400,9 @@ function addRingsLayer(){
 
         },
 
-        maskedBy:{source:"none", channel:"alpha"}
+        maskedBy:{source:"none", channel:"alpha"},
+
+        background:{source:"none", colour:{r:0, g:0, b:0}}
 
     };
 
@@ -480,7 +487,9 @@ function addGhostLayer(){
 
         applyToMask:null,
 
-        maskedBy:{source:"none", channel:"alpha"}
+        maskedBy:{source:"none", channel:"alpha"},
+
+        background:{source:"none", colour:{r:0, g:0, b:0}}
 
     };
 
@@ -563,7 +572,9 @@ function addTextLayer(){
 
         visibilityMode:"on",
 
-        maskedBy:{source:"none", channel:"alpha"}
+        maskedBy:{source:"none", channel:"alpha"},
+
+        background:{source:"none", colour:{r:0, g:0, b:0}}
 
     };
 
@@ -2844,6 +2855,165 @@ window.addEventListener(
         reportMaskSettingsChanged(
             e.detail.scope,
             target
+        );
+
+    }
+);
+
+
+
+
+/*
+==================================================
+BACKGROUND
+
+Per-layer, not scene-wide: what shows through wherever a layer's own
+content is transparent - either a flat colour or another real
+layer's own raw content (one level - a layer whose background is set
+to something that itself has a background won't show that second
+layer's own backdrop, just its plain content). Shares the scoped
+selector/stepper pattern with MASKED BY (scope "video" or "mask"; a
+rings/ghost/text instance's background is also reached this way,
+through the video scope, since that's where those instances live in
+the registry).
+==================================================
+*/
+
+
+function getBackgroundSources(){
+
+    const sources = [
+        {id:"none", label:"NONE"},
+        {id:"colour", label:"COLOUR"}
+    ];
+
+
+    getAllRealEntries().forEach(entry=>{
+
+        sources.push({
+            id:entry.maskSourceId,
+            label:entry.label
+        });
+
+    });
+
+
+    return sources;
+
+}
+
+
+function reportBackgroundChanged(scope, target){
+
+    const match =
+        getBackgroundSources().find(
+            s=>s.id === target.source
+        );
+
+
+    window.dispatchEvent(
+        new CustomEvent(
+            "backgroundSettingsChanged",
+            {
+                detail:{
+                    scope:scope,
+                    source:target.source,
+                    sourceLabel:
+                        match
+                        ?
+                        match.label
+                        :
+                        target.source.toUpperCase(),
+                    colour:target.colour
+                }
+            }
+        )
+    );
+
+}
+
+
+window.addEventListener(
+    "backgroundSourceStep",
+    e=>{
+
+        const entry =
+            scopedEntry(e.detail.scope);
+
+        const target =
+            entry.settings.background;
+
+
+        const validSources =
+            getBackgroundSources().filter(
+                s=>
+                    s.id === "none" ||
+                    s.id === "colour" ||
+                    s.id !== entry.maskSourceId
+            );
+
+
+        let index =
+            validSources.findIndex(
+                s=>s.id === target.source
+            );
+
+        if(index < 0)
+            index = 0;
+
+
+        index =
+            Math.min(
+                Math.max(
+                    index + e.detail.direction,
+                    0
+                ),
+                validSources.length - 1
+            );
+
+
+        target.source =
+            validSources[index].id;
+
+
+        console.log(
+            "Background source:",
+            entry.label,
+            "<-",
+            validSources[index].label
+        );
+
+
+        reportBackgroundChanged(
+            e.detail.scope,
+            target
+        );
+
+    }
+);
+
+
+window.addEventListener(
+    "layerBackgroundColour",
+    e=>{
+
+        const entry =
+            scopedEntry(e.detail.scope);
+
+        entry.settings.background.colour = {
+
+            r:e.detail.r,
+
+            g:e.detail.g,
+
+            b:e.detail.b
+
+        };
+
+
+        console.log(
+            "Background colour:",
+            entry.settings.background.colour
         );
 
     }
