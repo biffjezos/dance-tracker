@@ -695,18 +695,24 @@ export class Renderer {
 
 
 
-        ctx.drawImage(
+        if(
+            this.settings.amiga.text.visible
+        ){
 
-            this.resolveMaskedLayer(
-                this.layers.text,
-                this.settings.amiga.text.maskedBy
-            ),
+            ctx.drawImage(
 
-            0,
+                this.resolveMaskedLayer(
+                    this.layers.text,
+                    this.settings.amiga.text.maskedBy
+                ),
 
-            0
+                0,
 
-        );
+                0
+
+            );
+
+        }
 
 
 

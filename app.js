@@ -1468,6 +1468,23 @@ window.addEventListener(
 
 
 window.addEventListener(
+    "toggleTextVisible",
+    ()=>{
+
+        settings.amiga.text.visible =
+        !settings.amiga.text.visible;
+
+        console.log(
+            "Text visible:",
+            settings.amiga.text.visible
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
     "setTextColour",
     e=>{
 

@@ -107,6 +107,7 @@ export class Settings {
                 content:"",
                 colour:"rgb(255,255,255)",
                 size:24,
+                visible:true,
                 maskedBy:{source:"none", channel:"alpha"}
             },
             plasma:{

@@ -441,6 +441,8 @@ export class MenuManager {
 
                     "SIZE -":null,
 
+                    "TEXT VISIBLE ON/OFF":null,
+
 
 
                     COLOUR:colourMenu(
@@ -1752,6 +1754,13 @@ export class MenuManager {
         if(item==="SIZE -")
             window.dispatchEvent(
                 new Event("textSizeDown")
+            );
+
+
+
+        if(item==="TEXT VISIBLE ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleTextVisible")
             );
 
 
