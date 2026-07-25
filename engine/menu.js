@@ -114,25 +114,40 @@ export class MenuManager {
 
 
         /*
-        Every kind of layer (video, mask, rings, text, ghost) is
-        navigated through the exact same LAYER -/+ stepper and shows
-        the exact same shape of universal controls (see
-        renderLayerEditor) - this mirror just tracks which one is
-        currently selected, what kind it is, and its visibility mode,
-        kept in sync by app.js's layerSelectionChanged event.
+        VIDEO and KEY are two independent steppers (video layers+real
+        generators vs masks-only), each tracked separately here, kept
+        in sync by app.js's layerSelectionChanged event (its "scope"
+        field says which one changed). Both render through the same
+        renderLayerEditor() - only which selection object it reads
+        differs.
         */
-        this.registrySelection = {label:"LAYER 1", kind:"video", visibilityMode:"on"};
+        this.videoSelection = {label:"LAYER 1", kind:"video", visibilityMode:"on"};
+
+        this.maskSelection = {label:"MASK 1", kind:"mask", visibilityMode:"on"};
 
 
         window.addEventListener(
             "layerSelectionChanged",
             e=>{
 
-                this.registrySelection = {
+                const selection = {
                     label:e.detail.label,
                     kind:e.detail.kind,
                     visibilityMode:e.detail.visibilityMode
                 };
+
+
+                if(e.detail.scope === "mask"){
+
+                    this.maskSelection = selection;
+
+                }
+                else {
+
+                    this.videoSelection = selection;
+
+                }
+
 
                 if(e.detail.keyColour){
 
@@ -145,7 +160,7 @@ export class MenuManager {
                 }
 
 
-                if(this.path[0] === "video"){
+                if(this.path[0] === "video" || this.path[0] === "key"){
 
                     this.render();
 
@@ -157,11 +172,9 @@ export class MenuManager {
 
         this.maskState = {
 
-            source:"none",
+            video:{source:"none", sourceLabel:"NONE", channel:"alpha"},
 
-            sourceLabel:"NONE",
-
-            channel:"alpha"
+            mask:{source:"none", sourceLabel:"NONE", channel:"alpha"}
 
         };
 
@@ -170,7 +183,7 @@ export class MenuManager {
             "maskSettingsChanged",
             e=>{
 
-                this.maskState = {
+                this.maskState[e.detail.scope] = {
                     source:e.detail.source,
                     sourceLabel:e.detail.sourceLabel,
                     channel:e.detail.channel
@@ -193,22 +206,23 @@ export class MenuManager {
         );
 
 
-        this.applyToMaskState = {
+        this.backgroundState = {
 
-            label:"NONE AVAILABLE",
+            video:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}},
 
-            options:[]
+            mask:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}}
 
         };
 
 
         window.addEventListener(
-            "applyToMaskChanged",
+            "backgroundSettingsChanged",
             e=>{
 
-                this.applyToMaskState = {
-                    label:e.detail.label,
-                    options:e.detail.options
+                this.backgroundState[e.detail.scope] = {
+                    source:e.detail.source,
+                    sourceLabel:e.detail.sourceLabel,
+                    colour:e.detail.colour
                 };
 
 
@@ -217,7 +231,7 @@ export class MenuManager {
 
                 if(
                     node &&
-                    node.type==="applyToMaskPicker"
+                    node.type==="backgroundPicker"
                 ){
 
                     this.render();
@@ -226,6 +240,21 @@ export class MenuManager {
 
             }
         );
+
+
+        /*
+        No event listener for this one - renderApplyToMaskPicker()
+        fetches it fresh synchronously every time it renders (see
+        there for why: a broadcast-and-listen round trip here would
+        re-enter render() from inside a render()).
+        */
+        this.applyToMaskState = {
+
+            label:"NONE AVAILABLE",
+
+            options:[]
+
+        };
 
 
 
@@ -274,38 +303,38 @@ export class MenuManager {
 
 
             /*
-            The universal navigator: every video feed, every derived
-            mask, and the rings/ghost/text generators, all through the
-            same LAYER -/+ stepper, all showing the same universal
-            row (VISIBILITY MODE/BACKGROUND COLOUR/MASKED BY/
-            TRANSPORT) - see renderLayerEditor(). Mask-kind entries
-            additionally get their own deep settings here since masks
-            have no other screen; rings/ghost/text's deep settings
-            live under GENERATE instead, not duplicated here.
+            VIDEO only lists things that really exist: video layers
+            you've actually added, plus every rings/ghost/text
+            instance you've actually added via GENERATE's ADD RINGS/
+            ADD GHOST/ADD TEXT (any number of each, same as video
+            layers). Every entry, whatever kind, gets the exact same
+            minimal row - VISIBILITY MODE, BACKGROUND, MASK,
+            TRANSPORT - plus, for a generator instance, EDIT: a
+            bridge to that specific instance's own deep settings
+            (ring/ghost/text kinds only - a plain video has nothing
+            more to configure beyond the universal row).
             */
             video:{
 
                 type:"layerEditor",
 
-                "MASKED BY":{
+                scope:"video",
 
-                    type:"maskPicker"
+                MASK:{
 
-                },
+                    type:"maskPicker",
 
-                "KEY COLOUR":{
-
-                    type:"keyColourPicker"
+                    scope:"video"
 
                 },
 
-                COLOUR:colourMenu(
-                    "layerColour"
-                ),
+                BACKGROUND:{
 
-                "BACKGROUND COLOUR":colourMenu(
-                    "videoBackgroundColour"
-                ),
+                    type:"backgroundPicker",
+
+                    scope:"video"
+
+                },
 
                 TRANSPORT:{
 
@@ -331,53 +360,13 @@ export class MenuManager {
 
                     "FRAME -":null
 
-                }
-
-            },
-
-
-
-            /*
-            No default crap - just the three fixed generators, no add
-            action, no stepper. Each shows only what's specific to
-            that generator; visibility/background/masked by for these
-            live under VIDEO instead.
-            */
-            generate:{
-
-                GHOST:{
-
-                    "GHOST +":null,
-
-                    "GHOST -":null,
-
-                    "GHOST DELAY +":null,
-
-                    "GHOST DELAY -":null,
-
-                    "APPLY TO MASK":{
-
-                        type:"applyToMaskPicker"
-
-                    }
-
                 },
 
-                RINGS:{
+                EDIT:{
 
-                    "RING COUNT +":null,
+                    type:"instanceEditor",
 
-                    "RING COUNT -":null,
-
-                    "RING SIZE +":null,
-
-                    "RING SIZE -":null,
-
-                    "RING THICKNESS +":null,
-
-                    "RING THICKNESS -":null,
-
-                    COLOUR:{
+                    "RING COLOUR":{
 
                         type:"ringColourPicker"
 
@@ -385,37 +374,111 @@ export class MenuManager {
 
                     CONSTELLATION:[
 
-                        "ON/OFF",
+                        "CONSTELLATION ON/OFF",
 
                         "DISTANCE +",
 
                         "DISTANCE -"
 
-                    ]
+                    ],
+
+                    "TEXT COLOUR":colourMenu(
+                        "textColour"
+                    ),
+
+                    "APPLY TO MASK":{
+
+                        type:"applyToMaskPicker"
+
+                    }
+
+                }
+
+            },
+
+
+
+            /*
+            KEY is its own selector, scoped to masks only - the same
+            minimal universal row as VIDEO, plus the actual chroma-key
+            deep settings, which live here and nowhere else.
+            */
+            key:{
+
+                type:"layerEditor",
+
+                scope:"mask",
+
+                MASK:{
+
+                    type:"maskPicker",
+
+                    scope:"mask"
 
                 },
 
-                TEXT:{
+                BACKGROUND:{
 
-                    CONTENT:{
+                    type:"backgroundPicker",
 
-                        type:"input",
+                    scope:"mask"
 
-                        placeholder:"ENTER YOUR TEXT HERE",
+                },
 
-                        event:"setText"
+                TRANSPORT:{
+
+                    "PLAY/STOP":null,
+
+                    TIME:{
+
+                        type:"display",
+
+                        id:"transport-display"
 
                     },
 
-                    "TEXT SIZE +":null,
+                    "MINUTE +":null,
 
-                    "TEXT SIZE -":null,
+                    "MINUTE -":null,
 
-                    COLOUR:colourMenu(
-                        "textColour"
-                    )
+                    "SECOND +":null,
 
-                }
+                    "SECOND -":null,
+
+                    "FRAME +":null,
+
+                    "FRAME -":null
+
+                },
+
+                "KEY COLOUR":{
+
+                    type:"keyColourPicker"
+
+                },
+
+                COLOUR:colourMenu(
+                    "layerColour"
+                )
+
+            },
+
+
+
+            /*
+            No default crap - one action per kind, mirrors INPUT's ADD
+            VIDEO SOURCE/ADD AUDIO SOURCE exactly. Each click creates a
+            brand new instance, which immediately appears as its own
+            real entry in VIDEO - that's where it's edited (via EDIT),
+            not here. Any number of each, same as video layers.
+            */
+            generate:{
+
+                "ADD RINGS":null,
+
+                "ADD GHOST":null,
+
+                "ADD TEXT":null
 
             },
 
@@ -655,10 +718,36 @@ export class MenuManager {
 
         if(
             node &&
+            node.type==="backgroundPicker"
+        ){
+
+            this.renderBackgroundPicker();
+
+            return;
+
+        }
+
+
+
+        if(
+            node &&
             node.type==="applyToMaskPicker"
         ){
 
             this.renderApplyToMaskPicker();
+
+            return;
+
+        }
+
+
+
+        if(
+            node &&
+            node.type==="instanceEditor"
+        ){
+
+            this.renderInstanceEditor();
 
             return;
 
@@ -1019,14 +1108,25 @@ export class MenuManager {
 
 
     /*
-    The universal navigator screen: LAYER -/+ stepper, then
-    VISIBILITY MODE, BACKGROUND COLOUR, MASKED BY, TRANSPORT -
-    identical for every kind, video/mask/rings/ghost/text alike. Mask
-    kind additionally gets its own deep settings since a mask has no
-    other screen - everything else's deep settings live under
-    GENERATE instead, not duplicated here.
+    Serves both VIDEO and KEY - which one is which is entirely
+    determined by this.node().scope ("video" or "mask"). Both show
+    the exact same minimal row: LAYER -/+ stepper, VISIBILITY MODE,
+    BACKGROUND COLOUR, MASK, TRANSPORT. KEY additionally shows the
+    actual chroma-key deep settings, since scope is always "mask"
+    there and a mask has no other screen to live on.
     */
     renderLayerEditor(){
+
+
+        const scope =
+            this.node().scope;
+
+        const selection =
+            scope === "mask"
+            ?
+            this.maskSelection
+            :
+            this.videoSelection;
 
 
         let minus =
@@ -1041,7 +1141,7 @@ export class MenuManager {
 
             window.dispatchEvent(
                 new CustomEvent(
-                    "layerIndexStep",
+                    scope === "mask" ? "maskIndexStep" : "videoIndexStep",
                     {detail:{direction:-1}}
                 )
             );
@@ -1060,7 +1160,7 @@ export class MenuManager {
         );
 
         display.innerText=
-            this.registrySelection.label;
+            selection.label;
 
         display.className=
             "ring-id-display";
@@ -1083,7 +1183,7 @@ export class MenuManager {
 
             window.dispatchEvent(
                 new CustomEvent(
-                    "layerIndexStep",
+                    scope === "mask" ? "maskIndexStep" : "videoIndexStep",
                     {detail:{direction:1}}
                 )
             );
@@ -1097,13 +1197,12 @@ export class MenuManager {
 
 
         /*
-        One button, four states, cycled forward each click - replaces
-        the old separate ON/OFF + VISIBLE ON/OFF pair. Re-renders
-        immediately after dispatching since, unlike the other
-        buttons here, this one's own label depends on the state it
-        just changed (dispatchEvent runs the app.js handler
-        synchronously, so registrySelection is already updated by
-        the time render() reads it back).
+        One button, four states, cycled forward each click. Re-renders
+        immediately after dispatching since, unlike the other buttons
+        here, this one's own label depends on the state it just
+        changed (dispatchEvent runs the app.js handler synchronously,
+        so the selection is already updated by the time render()
+        reads it back).
         */
         let visibility =
         document.createElement(
@@ -1114,7 +1213,7 @@ export class MenuManager {
             "VISIBILITY: " +
             (
                 VISIBILITY_MODE_LABELS[
-                    this.registrySelection.visibilityMode
+                    selection.visibilityMode
                 ] ||
                 "ON"
             );
@@ -1122,7 +1221,10 @@ export class MenuManager {
         visibility.onclick=()=>{
 
             window.dispatchEvent(
-                new Event("cycleVisibilityMode")
+                new CustomEvent(
+                    "cycleVisibilityMode",
+                    {detail:{scope:scope}}
+                )
             );
 
             this.render();
@@ -1136,31 +1238,15 @@ export class MenuManager {
 
 
         this.addLayerScreenButton(
-            "BACKGROUND COLOUR",
-            "BACKGROUND COLOUR"
+            "BACKGROUND",
+            "BACKGROUND"
         );
 
 
-        let maskedBy =
-        document.createElement(
-            "button"
+        this.addLayerScreenButton(
+            "MASK",
+            "MASK"
         );
-
-        maskedBy.innerText=
-            "MASKED BY";
-
-        maskedBy.onclick=()=>{
-
-            this.enter(
-                "MASKED BY"
-            );
-
-        };
-
-        this.subMenu.appendChild(
-            maskedBy
-        );
-
 
 
         this.addLayerScreenButton(
@@ -1170,11 +1256,7 @@ export class MenuManager {
 
 
 
-        const kind =
-            this.registrySelection.kind;
-
-
-        if(kind === "mask"){
+        if(scope === "mask"){
 
             this.addLayerButton(
                 "CAPTURE BACKGROUND",
@@ -1209,6 +1291,179 @@ export class MenuManager {
             this.addLayerScreenButton(
                 "KEY COLOUR",
                 "KEY COLOUR"
+            );
+
+        }
+
+
+        if(
+            scope === "video" &&
+            (
+                selection.kind === "rings" ||
+                selection.kind === "ghost" ||
+                selection.kind === "text"
+            )
+        ){
+
+            this.addLayerScreenButton(
+                "EDIT",
+                "EDIT"
+            );
+
+        }
+
+
+    }
+
+
+
+
+    /*
+    Reached via EDIT from VIDEO - the type-specific deep settings for
+    whichever generator instance is currently selected there
+    (this.videoSelection.kind says which shape to show). No stepper
+    of its own, no universal row duplicated here - just what's unique
+    to rings/ghost/text, operating on whichever instance VIDEO has
+    selected.
+    */
+    renderInstanceEditor(){
+
+
+        const kind =
+            this.videoSelection.kind;
+
+
+        if(kind === "rings"){
+
+            this.addLayerButton(
+                "RING COUNT +",
+                "ringCountUp"
+            );
+
+            this.addLayerButton(
+                "RING COUNT -",
+                "ringCountDown"
+            );
+
+            this.addLayerButton(
+                "RING SIZE +",
+                "ringSizeUp"
+            );
+
+            this.addLayerButton(
+                "RING SIZE -",
+                "ringSizeDown"
+            );
+
+            this.addLayerButton(
+                "RING THICKNESS +",
+                "ringThicknessUp"
+            );
+
+            this.addLayerButton(
+                "RING THICKNESS -",
+                "ringThicknessDown"
+            );
+
+            this.addLayerScreenButton(
+                "COLOUR",
+                "RING COLOUR"
+            );
+
+            this.addLayerScreenButton(
+                "CONSTELLATION",
+                "CONSTELLATION"
+            );
+
+        }
+        else if(kind === "ghost"){
+
+            this.addLayerButton(
+                "GHOST +",
+                "ghostUp"
+            );
+
+            this.addLayerButton(
+                "GHOST -",
+                "ghostDown"
+            );
+
+            this.addLayerButton(
+                "GHOST DELAY +",
+                "ghostDelayUp"
+            );
+
+            this.addLayerButton(
+                "GHOST DELAY -",
+                "ghostDelayDown"
+            );
+
+            this.addLayerScreenButton(
+                "APPLY TO MASK",
+                "APPLY TO MASK"
+            );
+
+        }
+        else if(kind === "text"){
+
+            let input =
+            document.createElement(
+                "input"
+            );
+
+            input.type="text";
+
+            input.placeholder=
+                "ENTER YOUR TEXT HERE";
+
+            input.maxLength=200;
+
+            input.className=
+                "menu-input";
+
+            input.value=
+                this.textValue;
+
+            input.addEventListener(
+                "input",
+                ()=>{
+
+                    this.textValue=
+                        input.value;
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "setText",
+                            {
+                                detail:{
+                                    value:
+                                    input.value
+                                }
+                            }
+                        )
+                    );
+
+                }
+            );
+
+            this.subMenu.appendChild(
+                input
+            );
+
+
+            this.addLayerButton(
+                "SIZE +",
+                "textSizeUp"
+            );
+
+            this.addLayerButton(
+                "SIZE -",
+                "textSizeDown"
+            );
+
+            this.addLayerScreenButton(
+                "COLOUR",
+                "TEXT COLOUR"
             );
 
         }
@@ -1427,7 +1682,7 @@ export class MenuManager {
         );
 
         layerLabel.innerText=
-            this.registrySelection.label;
+            this.maskSelection.label;
 
         layerLabel.className=
             "ring-id-display";
@@ -1546,8 +1801,18 @@ export class MenuManager {
     renderMaskPicker(){
 
 
+        const scope =
+            this.node().scope;
+
         const state =
-            this.maskState;
+            this.maskState[scope];
+
+        const selection =
+            scope === "mask"
+            ?
+            this.maskSelection
+            :
+            this.videoSelection;
 
 
         let layerLabel =
@@ -1556,7 +1821,7 @@ export class MenuManager {
         );
 
         layerLabel.innerText=
-            this.registrySelection.label;
+            selection.label;
 
         layerLabel.className=
             "ring-id-display";
@@ -1581,7 +1846,8 @@ export class MenuManager {
                     "maskSourceStep",
                     {
                         detail:{
-                            direction:-1
+                            direction:-1,
+                            scope:scope
                         }
                     }
                 )
@@ -1627,7 +1893,8 @@ export class MenuManager {
                     "maskSourceStep",
                     {
                         detail:{
-                            direction:1
+                            direction:1,
+                            scope:scope
                         }
                     }
                 )
@@ -1657,7 +1924,8 @@ export class MenuManager {
                     "maskChannelStep",
                     {
                         detail:{
-                            direction:-1
+                            direction:-1,
+                            scope:scope
                         }
                     }
                 )
@@ -1703,7 +1971,8 @@ export class MenuManager {
                     "maskChannelStep",
                     {
                         detail:{
-                            direction:1
+                            direction:1,
+                            scope:scope
                         }
                     }
                 )
@@ -1722,14 +1991,211 @@ export class MenuManager {
 
 
     /*
+    Shares the SOURCE stepper shape with MASK, but steps through
+    NONE/COLOUR/every real layer instead of NONE/BACKGROUND/every
+    real layer, and shows swatches (instead of a channel stepper)
+    only when COLOUR is the current source - that's the only case
+    where a colour is actually used for anything.
+    */
+    renderBackgroundPicker(){
+
+
+        const scope =
+            this.node().scope;
+
+        const state =
+            this.backgroundState[scope];
+
+        const selection =
+            scope === "mask"
+            ?
+            this.maskSelection
+            :
+            this.videoSelection;
+
+
+        let layerLabel =
+        document.createElement(
+            "span"
+        );
+
+        layerLabel.innerText=
+            selection.label;
+
+        layerLabel.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            layerLabel
+        );
+
+
+        let sourceMinus =
+        document.createElement(
+            "button"
+        );
+
+        sourceMinus.innerText=
+            "SOURCE -";
+
+        sourceMinus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "backgroundSourceStep",
+                    {
+                        detail:{
+                            direction:-1,
+                            scope:scope
+                        }
+                    }
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            sourceMinus
+        );
+
+
+
+        let sourceDisplay =
+        document.createElement(
+            "span"
+        );
+
+        sourceDisplay.innerText=
+            state.sourceLabel;
+
+        sourceDisplay.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            sourceDisplay
+        );
+
+
+
+        let sourcePlus =
+        document.createElement(
+            "button"
+        );
+
+        sourcePlus.innerText=
+            "SOURCE +";
+
+        sourcePlus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "backgroundSourceStep",
+                    {
+                        detail:{
+                            direction:1,
+                            scope:scope
+                        }
+                    }
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            sourcePlus
+        );
+
+
+
+        if(state.source === "colour"){
+
+            SWATCHES.forEach(swatch=>{
+
+
+                let button =
+                document.createElement(
+                    "button"
+                );
+
+                button.innerText=
+                    swatch.label;
+
+                this.styleSwatch(
+                    button,
+                    swatch.r,
+                    swatch.g,
+                    swatch.b
+                );
+
+                button.onclick=()=>{
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "layerBackgroundColour",
+                            {
+                                detail:{
+                                    scope:scope,
+                                    r:swatch.r,
+                                    g:swatch.g,
+                                    b:swatch.b
+                                }
+                            }
+                        )
+                    );
+
+                };
+
+                this.subMenu.appendChild(
+                    button
+                );
+
+
+            });
+
+        }
+
+
+    }
+
+
+
+
+    /*
     Ghost's own effect input - which mask's shape feeds the trail
     history. A direct selector, not a stepper: one button per mask
     currently in MASK WHITE visibility mode, no NONE fallback
     (app.js's eligibleMaskTargets enforces that - the list is simply
     empty if nothing qualifies yet). Different from MASKED BY, which
     masks Ghost's composited output and lives under VIDEO instead.
+
+    Fetches fresh data every time it renders, synchronously, via a
+    request object app.js mutates in place rather than a broadcast
+    event - dispatching a broadcast from here and having its listener
+    call render() would re-enter this same method from inside itself.
     */
     renderApplyToMaskPicker(){
+
+
+        const request = {
+            label:null,
+            options:null
+        };
+
+        window.dispatchEvent(
+            new CustomEvent(
+                "requestApplyToMaskRefresh",
+                {detail:request}
+            )
+        );
+
+        if(request.options){
+
+            this.applyToMaskState = {
+                label:request.label,
+                options:request.options
+            };
+
+        }
 
 
         let current =
@@ -1774,6 +2240,8 @@ export class MenuManager {
                     )
                 );
 
+                this.render();
+
             };
 
             this.subMenu.appendChild(
@@ -1806,6 +2274,27 @@ export class MenuManager {
 
 
 
+        if(item==="ADD RINGS")
+            window.dispatchEvent(
+                new Event("addRingsLayer")
+            );
+
+
+
+        if(item==="ADD GHOST")
+            window.dispatchEvent(
+                new Event("addGhostLayer")
+            );
+
+
+
+        if(item==="ADD TEXT")
+            window.dispatchEvent(
+                new Event("addTextLayer")
+            );
+
+
+
         if(item==="ADD RINGS LAYER")
             window.dispatchEvent(
                 new Event("addRingsLayer")
@@ -1821,6 +2310,13 @@ export class MenuManager {
 
 
         if(item==="ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleRingsEnabled")
+            );
+
+
+
+        if(item==="CONSTELLATION ON/OFF")
             window.dispatchEvent(
                 new Event("toggleConstellation")
             );
