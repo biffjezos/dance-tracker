@@ -29,6 +29,10 @@ export class Renderer {
 
         this.extraRingsLayers = [];
 
+        this.extraGhostLayers = [];
+
+        this.extraTextLayers = [];
+
 
 
         this.layers = {
@@ -418,6 +422,36 @@ export class Renderer {
             const layer =
                 this.extraRingsLayers.find(
                     l=>l.id === name.slice(11)
+                );
+
+            return layer ? layer.canvas : null;
+
+        }
+
+
+        if(
+            name &&
+            name.indexOf("ghostLayer:") === 0
+        ){
+
+            const layer =
+                this.extraGhostLayers.find(
+                    l=>l.id === name.slice(11)
+                );
+
+            return layer ? layer.canvas : null;
+
+        }
+
+
+        if(
+            name &&
+            name.indexOf("textLayer:") === 0
+        ){
+
+            const layer =
+                this.extraTextLayers.find(
+                    l=>l.id === name.slice(10)
                 );
 
             return layer ? layer.canvas : null;
@@ -868,6 +902,9 @@ export class Renderer {
         }
 
 
+        this.composeExtraGhostLayers();
+
+
 
         ctx.globalCompositeOperation =
             "source-over";
@@ -893,6 +930,9 @@ export class Renderer {
             );
 
         }
+
+
+        this.composeExtraTextLayers();
 
 
 
@@ -993,6 +1033,80 @@ export class Renderer {
                         layer.canvas,
                         layer.ringsSettings.maskedBy,
                         layer.ringsSettings.visibilityMode
+                    ),
+
+                    0,
+
+                    0
+
+                );
+
+            }
+
+
+        });
+
+
+    }
+
+
+
+
+    composeExtraGhostLayers(){
+
+
+        let ctx =
+            this.contexts.master;
+
+
+        this.extraGhostLayers.forEach(layer=>{
+
+
+            if(layer.ghostSettings.visibilityMode !== "off"){
+
+                ctx.drawImage(
+
+                    this.visualizeLayer(
+                        layer.canvas,
+                        layer.ghostSettings.maskedBy,
+                        layer.ghostSettings.visibilityMode
+                    ),
+
+                    0,
+
+                    0
+
+                );
+
+            }
+
+
+        });
+
+
+    }
+
+
+
+
+    composeExtraTextLayers(){
+
+
+        let ctx =
+            this.contexts.master;
+
+
+        this.extraTextLayers.forEach(layer=>{
+
+
+            if(layer.textSettings.visibilityMode !== "off"){
+
+                ctx.drawImage(
+
+                    this.visualizeLayer(
+                        layer.canvas,
+                        layer.textSettings.maskedBy,
+                        layer.textSettings.visibilityMode
                     ),
 
                     0,

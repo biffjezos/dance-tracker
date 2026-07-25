@@ -456,24 +456,170 @@ const ghost =
         renderer
     );
 
+assignGlobalLayerNumber(
+    ghost
+);
+
+
+const ghostLayers = [];
+
+
+function addGhostLayer(){
+
+    const ghostSettings = {
+
+        enabled:true,
+
+        visibilityMode:"on",
+
+        count:3,
+
+        alpha:0.45,
+
+        delay:50,
+
+        applyToMask:null,
+
+        maskedBy:{source:"none", channel:"alpha"}
+
+    };
+
+
+    const canvas =
+        document.createElement(
+            "canvas"
+        );
+
+    canvas.width = settings.video.width;
+
+    canvas.height = settings.video.height;
+
+
+    const layer =
+        new Ghost(
+            settings,
+            renderer,
+            {
+                ghostSettings:ghostSettings,
+                outputCanvas:canvas
+            }
+        );
+
+    assignGlobalLayerNumber(
+        layer
+    );
+
+    ghostLayers.push(layer);
+
+
+    console.log(
+        "Added LAYER",
+        layer.globalLayerNumber,
+        "(ghost) - total ghost layers:",
+        ghostLayers.length
+    );
+
+
+    return layer;
+
+}
+
+
+window.addEventListener(
+    "addGhostLayer",
+    ()=>{
+
+        addGhostLayer();
+
+    }
+);
+
+
 
 const text =
     new Text(
         settings
     );
 
+assignGlobalLayerNumber(
+    text
+);
 
-/*
-TEXT and GHOST stay singleton for now (no ADD action of their own
-yet), but still claim one global layer number each, at the same
-point in the sequence they'd occupy if they were regular registry
-entries - rings, then text, then ghost, matching creation order.
-*/
-const textLayerNumber =
-    nextGlobalLayerNumber++;
 
-const ghostLayerNumber =
-    nextGlobalLayerNumber++;
+const textLayers = [];
+
+
+function addTextLayer(){
+
+    const textSettings = {
+
+        content:"",
+
+        colour:"rgb(255,255,255)",
+
+        size:24,
+
+        enabled:true,
+
+        visibilityMode:"on",
+
+        maskedBy:{source:"none", channel:"alpha"}
+
+    };
+
+
+    const canvas =
+        document.createElement(
+            "canvas"
+        );
+
+    canvas.width = settings.video.width;
+
+    canvas.height = settings.video.height;
+
+
+    const layer =
+        new Text(
+            settings,
+            {
+                textSettings:textSettings,
+                outputCanvas:canvas
+            }
+        );
+
+    assignGlobalLayerNumber(
+        layer
+    );
+
+    textLayers.push(layer);
+
+
+    console.log(
+        "Added LAYER",
+        layer.globalLayerNumber,
+        "(text) - total text layers:",
+        textLayers.length
+    );
+
+
+    return layer;
+
+}
+
+
+window.addEventListener(
+    "addTextLayer",
+    ()=>{
+
+        addTextLayer();
+
+    }
+);
+
+
+renderer.extraGhostLayers = ghostLayers;
+
+renderer.extraTextLayers = textLayers;
 
 
 
@@ -538,6 +684,37 @@ function processBody(){
     );
 
 
+    /*
+    Neither Rings nor Ghost clear their own canvas before drawing (Text
+    does) - every added instance needs the same external per-frame
+    clear the fixed ones get above, or rings would leave trail
+    artifacts and ghost's screen-blended history would brighten
+    forever instead of actually fading.
+    */
+    ringsLayers.forEach(layer=>{
+
+        layer.ctx.clearRect(
+            0,
+            0,
+            layer.canvas.width,
+            layer.canvas.height
+        );
+
+    });
+
+
+    ghostLayers.forEach(layer=>{
+
+        layer.ctx.clearRect(
+            0,
+            0,
+            layer.canvas.width,
+            layer.canvas.height
+        );
+
+    });
+
+
 
     segmentation.process(
         camera.getVideo()
@@ -561,6 +738,12 @@ function processBody(){
 
     });
 
+    ghostLayers.forEach(layer=>{
+
+        layer.update();
+
+    });
+
 
 
     ghost.draw();
@@ -573,7 +756,19 @@ function processBody(){
 
     });
 
+    ghostLayers.forEach(layer=>{
+
+        layer.draw();
+
+    });
+
     text.draw();
+
+    textLayers.forEach(layer=>{
+
+        layer.draw();
+
+    });
 
 
     updateTransportDisplay();
@@ -801,6 +996,20 @@ function applyResolution(){
     });
 
 
+    ghostLayers.forEach(layer=>{
+
+        layer.resize();
+
+    });
+
+
+    textLayers.forEach(layer=>{
+
+        layer.resize();
+
+    });
+
+
     document
     .querySelector(".statusbar")
     .children[5]
@@ -947,14 +1156,6 @@ window.addEventListener(
         reportSelection(
             e.detail.scope
         );
-
-        /*
-        Any layer's visibility mode can change whether it's eligible
-        for Ghost's APPLY TO MASK list, so keep that reported too -
-        otherwise the GENERATE > GHOST screen would only learn about
-        it once you click SOURCE +/- there.
-        */
-        reportApplyToMaskChanged();
 
     }
 );
@@ -1305,30 +1506,13 @@ camera.getVideo().addEventListener(
 ==================================================
 RINGS
 
-GENERATE > RINGS is a fixed, non-steppable screen (no multi-instance
-ADD for now), so these read/write the one rings singleton directly.
-Once toggleRingsEnabled turns it on, it becomes "real" and appears
-as its own entry in VIDEO's registry with the same universal row
-(visibility mode/background/masked by/transport) as everything else -
-this file section is only the rings-specific deep settings.
+Every rings instance is added via GENERATE > ADD RINGS and edited via
+its own EDIT button in VIDEO (see renderGeneratorEditor in menu.js) -
+these all operate on whichever rings-kind entry is currently selected
+in VIDEO's stepper, never a fixed singleton, since there can be any
+number of them.
 ==================================================
 */
-
-
-window.addEventListener(
-    "toggleRingsEnabled",
-    ()=>{
-
-        rings.ringsSettings.enabled =
-        !rings.ringsSettings.enabled;
-
-        console.log(
-            "Rings enabled:",
-            rings.ringsSettings.enabled
-        );
-
-    }
-);
 
 
 window.addEventListener(
@@ -1336,7 +1520,7 @@ window.addEventListener(
     ()=>{
 
         const ringsSettings =
-            rings.ringsSettings;
+            selectedVideoEntry().settings;
 
         if(ringsSettings.count < 8)
             ringsSettings.count++;
@@ -1356,13 +1540,16 @@ window.addEventListener(
     "toggleConstellation",
     ()=>{
 
+        const entry =
+            selectedVideoEntry();
+
         const constellation =
-            rings.ringsSettings.constellation;
+            entry.settings.constellation;
 
 
         if(constellation.enabled){
 
-            rings.exitConstellation();
+            entry.instance.exitConstellation();
 
         }
 
@@ -1385,11 +1572,11 @@ window.addEventListener(
     "constellationDistanceUp",
     ()=>{
 
-        rings.ringsSettings.constellation.distance += 10;
+        selectedVideoEntry().settings.constellation.distance += 10;
 
         console.log(
             "Constellation distance:",
-            rings.ringsSettings.constellation.distance
+            selectedVideoEntry().settings.constellation.distance
         );
 
     }
@@ -1402,7 +1589,7 @@ window.addEventListener(
     ()=>{
 
         const constellation =
-            rings.ringsSettings.constellation;
+            selectedVideoEntry().settings.constellation;
 
         constellation.distance -= 10;
 
@@ -1424,7 +1611,7 @@ window.addEventListener(
     ()=>{
 
         const ringsSettings =
-            rings.ringsSettings;
+            selectedVideoEntry().settings;
 
 
         if(ringsSettings.count > 1)
@@ -1446,7 +1633,7 @@ window.addEventListener(
     "ringSizeUp",
     ()=>{
 
-        rings.ringsSettings.size += 10;
+        selectedVideoEntry().settings.size += 10;
 
     }
 );
@@ -1458,7 +1645,7 @@ window.addEventListener(
     ()=>{
 
         const ringsSettings =
-            rings.ringsSettings;
+            selectedVideoEntry().settings;
 
         if(ringsSettings.size > 20)
             ringsSettings.size -= 10;
@@ -1472,11 +1659,11 @@ window.addEventListener(
     "ringThicknessUp",
     ()=>{
 
-        rings.ringsSettings.width += 2;
+        selectedVideoEntry().settings.width += 2;
 
         console.log(
             "Ring thickness:",
-            rings.ringsSettings.width
+            selectedVideoEntry().settings.width
         );
 
     }
@@ -1489,7 +1676,7 @@ window.addEventListener(
     ()=>{
 
         const ringsSettings =
-            rings.ringsSettings;
+            selectedVideoEntry().settings;
 
         ringsSettings.width -= 2;
 
@@ -1515,7 +1702,7 @@ window.addEventListener(
 
 
         const colours =
-            rings.ringsSettings.colours;
+            selectedVideoEntry().settings.colours;
 
         colours[index] =
             "rgb("
@@ -1550,11 +1737,12 @@ window.addEventListener(
 ==================================================
 GHOSTS
 
-GENERATE > GHOST is fixed/non-steppable too, so these read/write
-settings.amiga.ghost directly. APPLY TO MASK (which mask feeds the
-trail-history algorithm) is a different control from MASKED BY
-(which masks Ghost's own composited output, still reachable via
-VIDEO's universal row when Ghost's entry is selected).
+Every ghost instance is added via GENERATE > ADD GHOST and edited via
+its own EDIT button in VIDEO - these operate on whichever ghost-kind
+entry is currently selected in VIDEO's stepper. APPLY TO MASK (which
+mask feeds THIS instance's trail-history algorithm) is per-instance
+too, different from MASKED BY (which masks this instance's own
+composited output, reachable via VIDEO's universal row).
 ==================================================
 */
 
@@ -1564,7 +1752,7 @@ window.addEventListener(
     ()=>{
 
         const ghostSettings =
-            settings.amiga.ghost;
+            selectedVideoEntry().settings;
 
         ghostSettings.count++;
 
@@ -1590,7 +1778,7 @@ window.addEventListener(
     ()=>{
 
         const ghostSettings =
-            settings.amiga.ghost;
+            selectedVideoEntry().settings;
 
         if(ghostSettings.count > 0)
             ghostSettings.count--;
@@ -1617,11 +1805,11 @@ window.addEventListener(
     "ghostDelayUp",
     ()=>{
 
-        settings.amiga.ghost.delay += 50;
+        selectedVideoEntry().settings.delay += 50;
 
         console.log(
             "Ghost delay:",
-            settings.amiga.ghost.delay
+            selectedVideoEntry().settings.delay
         );
 
     }
@@ -1634,7 +1822,7 @@ window.addEventListener(
     ()=>{
 
         const ghostSettings =
-            settings.amiga.ghost;
+            selectedVideoEntry().settings;
 
         ghostSettings.delay -= 50;
 
@@ -1661,43 +1849,53 @@ function eligibleMaskTargets(){
 }
 
 
-function reportApplyToMaskChanged(){
+/*
+menu.js dispatches this synchronously right before it renders the
+APPLY TO MASK screen (and mutates the event's own detail object to
+read the answer back, rather than a separate broadcast-and-listen
+round trip - that would re-trigger a render from inside a render).
+Reachable only after selecting a specific ghost instance in VIDEO, so
+selectedVideoEntry() is guaranteed to be that instance when this
+fires - request.options stays null (menu.js's cue to leave its
+current state alone) if that's ever not the case.
+*/
+window.addEventListener(
+    "requestApplyToMaskRefresh",
+    e=>{
 
-    const ghostSettings =
-        settings.amiga.ghost;
+        const entry =
+            selectedVideoEntry();
 
-    const eligible =
-        eligibleMaskTargets();
+        if(entry.kind !== "ghost")
+            return;
 
-    const match =
-        eligible.find(
-            e=>e.maskSourceId === ghostSettings.applyToMask
-        );
+        const ghostSettings =
+            entry.settings;
+
+        const eligible =
+            eligibleMaskTargets();
+
+        const match =
+            eligible.find(
+                target=>target.maskSourceId === ghostSettings.applyToMask
+            );
 
 
-    window.dispatchEvent(
-        new CustomEvent(
-            "applyToMaskChanged",
-            {
-                detail:{
-                    id:ghostSettings.applyToMask,
-                    label:
-                        match
-                        ?
-                        match.label
-                        :
-                        "NONE AVAILABLE",
-                    options:
-                        eligible.map(e=>({
-                            id:e.maskSourceId,
-                            label:e.label
-                        }))
-                }
-            }
-        )
-    );
+        e.detail.label =
+            match
+            ?
+            match.label
+            :
+            "NONE AVAILABLE";
 
-}
+        e.detail.options =
+            eligible.map(target=>({
+                id:target.maskSourceId,
+                label:target.label
+            }));
+
+    }
+);
 
 
 /*
@@ -1710,19 +1908,26 @@ window.addEventListener(
     "setApplyToMask",
     e=>{
 
+        const entry =
+            selectedVideoEntry();
+
+        if(entry.kind !== "ghost")
+            return;
+
+
         const eligible =
             eligibleMaskTargets();
 
         const match =
             eligible.find(
-                entry=>entry.maskSourceId === e.detail.id
+                target=>target.maskSourceId === e.detail.id
             );
 
         if(!match)
             return;
 
 
-        settings.amiga.ghost.applyToMask =
+        entry.settings.applyToMask =
             match.maskSourceId;
 
 
@@ -1730,66 +1935,6 @@ window.addEventListener(
             "Ghost apply to mask:",
             match.label
         );
-
-
-        reportApplyToMaskChanged();
-
-    }
-);
-
-
-window.addEventListener(
-    "applyToMaskStep",
-    e=>{
-
-        const ghostSettings =
-            settings.amiga.ghost;
-
-        const eligible =
-            eligibleMaskTargets();
-
-
-        if(eligible.length === 0){
-
-            ghostSettings.applyToMask = null;
-
-            reportApplyToMaskChanged();
-
-            return;
-
-        }
-
-
-        let index =
-            eligible.findIndex(
-                entry=>entry.maskSourceId === ghostSettings.applyToMask
-            );
-
-        if(index < 0)
-            index = 0;
-
-
-        index =
-            Math.min(
-                Math.max(
-                    index + e.detail.direction,
-                    0
-                ),
-                eligible.length - 1
-            );
-
-
-        ghostSettings.applyToMask =
-            eligible[index].maskSourceId;
-
-
-        console.log(
-            "Ghost apply to mask:",
-            eligible[index].label
-        );
-
-
-        reportApplyToMaskChanged();
 
     }
 );
@@ -1801,8 +1946,9 @@ window.addEventListener(
 ==================================================
 TEXT
 
-GENERATE > TEXT is fixed/non-steppable too, so these read/write
-settings.amiga.text directly.
+Every text instance is added via GENERATE > ADD TEXT and edited via
+its own EDIT button in VIDEO - these operate on whichever text-kind
+entry is currently selected in VIDEO's stepper.
 ==================================================
 */
 
@@ -1811,7 +1957,7 @@ window.addEventListener(
     "setText",
     e=>{
 
-        settings.amiga.text.content =
+        selectedVideoEntry().settings.content =
             e.detail.value;
 
     }
@@ -1823,11 +1969,11 @@ window.addEventListener(
     "textSizeUp",
     ()=>{
 
-        settings.amiga.text.size += 4;
+        selectedVideoEntry().settings.size += 4;
 
         console.log(
             "Text size:",
-            settings.amiga.text.size
+            selectedVideoEntry().settings.size
         );
 
     }
@@ -1840,7 +1986,7 @@ window.addEventListener(
     ()=>{
 
         const textSettings =
-            settings.amiga.text;
+            selectedVideoEntry().settings;
 
         textSettings.size -= 4;
 
@@ -1861,7 +2007,10 @@ window.addEventListener(
     "textColour",
     e=>{
 
-        settings.amiga.text.colour =
+        const textSettings =
+            selectedVideoEntry().settings;
+
+        textSettings.colour =
             "rgb("
             +
             e.detail.r
@@ -1878,7 +2027,7 @@ window.addEventListener(
 
         console.log(
             "Text colour:",
-            settings.amiga.text.colour
+            textSettings.colour
         );
 
     }
@@ -2394,33 +2543,21 @@ window.addEventListener(
 ==================================================
 LAYER REGISTRY
 
-Two independent lists, not one. VIDEO steps over "real" things only -
-every video layer you've actually added, plus a generator only once
-you've actually done something with it (ghost once its count is
-above zero, rings once explicitly turned on, text once it has real
-content) - untouched defaults never show up just because the class
-instance happens to exist. KEY steps over masks only, one per video
-layer. Both share the same entry shape (label/kind/settings with
-enabled/visibilityMode/maskedBy), which is what lets one set of
-universal handlers serve both.
+Two independent lists, not one. VIDEO steps over real things only:
+every video layer you've actually added, and every generator instance
+you've actually added via GENERATE's ADD RINGS/ADD GHOST/ADD TEXT -
+the original singleton of each generator kind is deliberately never
+listed here (it exists only so renderer.js's fixed-canvas compositing
+still has something to read; nothing ever makes it "real" now that
+adding is the only way generators come into being, matching "no
+default crap"). Once added, an instance stays in the registry for
+its whole lifetime regardless of its own visibility mode or enabled
+state - those are just properties of a real thing, not a second gate
+on top of "does it exist" (a rings instance you've switched to
+VISIBILITY: OFF must stay selectable so you can switch it back).
+KEY steps over masks only, one per video layer.
 ==================================================
 */
-
-
-function isGeneratorReal(kind){
-
-    if(kind === "ghost")
-        return settings.amiga.ghost.enabled;
-
-    if(kind === "rings")
-        return rings.ringsSettings.enabled;
-
-    if(kind === "text")
-        return settings.amiga.text.content.trim() !== "";
-
-    return false;
-
-}
 
 
 function getVideoRegistry(){
@@ -2449,41 +2586,43 @@ function getVideoRegistry(){
     });
 
 
-    if(isGeneratorReal("rings")){
+    ringsLayers.forEach(layer=>{
 
         registry.push({
-            label:"LAYER " + rings.globalLayerNumber,
+            label:"LAYER " + layer.globalLayerNumber,
             kind:"rings",
-            settings:rings.ringsSettings,
-            maskSourceId:"rings",
-            instance:rings
+            settings:layer.ringsSettings,
+            maskSourceId:"ringsLayer:" + layer.id,
+            instance:layer
         });
 
-    }
+    });
 
 
-    if(isGeneratorReal("text")){
+    textLayers.forEach(layer=>{
 
         registry.push({
-            label:"LAYER " + textLayerNumber,
+            label:"LAYER " + layer.globalLayerNumber,
             kind:"text",
-            settings:settings.amiga.text,
-            maskSourceId:"text"
+            settings:layer.textSettings,
+            maskSourceId:"textLayer:" + layer.id,
+            instance:layer
         });
 
-    }
+    });
 
 
-    if(isGeneratorReal("ghost")){
+    ghostLayers.forEach(layer=>{
 
         registry.push({
-            label:"LAYER " + ghostLayerNumber,
+            label:"LAYER " + layer.globalLayerNumber,
             kind:"ghost",
-            settings:settings.amiga.ghost,
-            maskSourceId:"ghost"
+            settings:layer.ghostSettings,
+            maskSourceId:"ghostLayer:" + layer.id,
+            instance:layer
         });
 
-    }
+    });
 
 
     return registry;

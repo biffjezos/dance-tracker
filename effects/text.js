@@ -6,16 +6,51 @@ BOLD OVERLAY TEXT
 */
 
 
+let nextTextNumber = 2;
+
+
 export class Text {
 
 
-    constructor(settings){
+    constructor(settings, options){
 
+
+        options = options || {};
 
         this.settings = settings;
 
 
+        const isAdded =
+            !!options.textSettings;
+
+
+        this.textSettings =
+            options.textSettings ||
+            settings.amiga.text;
+
+
+        this.number =
+            isAdded
+            ?
+            nextTextNumber++
+            :
+            1;
+
+
+        this.id =
+            isAdded
+            ?
+            ("text-layer-" + this.number)
+            :
+            "text";
+
+
+        this.name =
+            "TEXT " + this.number;
+
+
         this.canvas =
+            options.outputCanvas ||
             document.getElementById(
                 "text-layer"
             );
@@ -26,6 +61,18 @@ export class Text {
                 "2d"
             );
 
+
+    }
+
+
+
+    resize(){
+
+        this.canvas.width =
+            this.settings.video.width;
+
+        this.canvas.height =
+            this.settings.video.height;
 
     }
 
@@ -128,7 +175,7 @@ export class Text {
 
 
         const text =
-            this.settings.amiga.text;
+            this.textSettings;
 
 
         const ctx =

@@ -5,13 +5,51 @@ BODY GHOST TRAIL EFFECT
 ==================================================
 */
 
+
+let nextGhostNumber = 2;
+
+
 export class Ghost {
 
-    constructor(settings, renderer){
+    constructor(settings, renderer, options){
+
+        options = options || {};
 
         this.settings = settings;
         this.renderer = renderer;
+
+
+        const isAdded =
+            !!options.ghostSettings;
+
+
+        this.ghostSettings =
+            options.ghostSettings ||
+            settings.amiga.ghost;
+
+
+        this.number =
+            isAdded
+            ?
+            nextGhostNumber++
+            :
+            1;
+
+
+        this.id =
+            isAdded
+            ?
+            ("ghost-layer-" + this.number)
+            :
+            "ghost";
+
+
+        this.name =
+            "GHOST " + this.number;
+
+
         this.canvas =
+            options.outputCanvas ||
             document.getElementById(
                 "ghost-layer"
             );
@@ -28,10 +66,24 @@ export class Ghost {
 
     }
 
+
+
+    resize(){
+
+        this.canvas.width =
+            this.settings.video.width;
+
+        this.canvas.height =
+            this.settings.video.height;
+
+    }
+
+
+
     update(){
 
         const ghost =
-            this.settings.amiga.ghost;
+            this.ghostSettings;
 
 
         if(!ghost.enabled){
@@ -124,7 +176,7 @@ export class Ghost {
     draw(){
 
         const ghost =
-            this.settings.amiga.ghost;
+            this.ghostSettings;
 
 
         if(!ghost.enabled)

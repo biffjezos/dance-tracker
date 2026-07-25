@@ -206,6 +206,12 @@ export class MenuManager {
         );
 
 
+        /*
+        No event listener for this one - renderApplyToMaskPicker()
+        fetches it fresh synchronously every time it renders (see
+        there for why: a broadcast-and-listen round trip here would
+        re-enter render() from inside a render()).
+        */
         this.applyToMaskState = {
 
             label:"NONE AVAILABLE",
@@ -213,32 +219,6 @@ export class MenuManager {
             options:[]
 
         };
-
-
-        window.addEventListener(
-            "applyToMaskChanged",
-            e=>{
-
-                this.applyToMaskState = {
-                    label:e.detail.label,
-                    options:e.detail.options
-                };
-
-
-                let node =
-                    this.node();
-
-                if(
-                    node &&
-                    node.type==="applyToMaskPicker"
-                ){
-
-                    this.render();
-
-                }
-
-            }
-        );
 
 
 
@@ -288,11 +268,15 @@ export class MenuManager {
 
             /*
             VIDEO only lists things that really exist: video layers
-            you've actually added, plus a generator once you've
-            actually done something with it (see GENERATE). Every
-            entry, whatever kind, gets the exact same minimal row -
-            VISIBILITY MODE, BACKGROUND, MASK, TRANSPORT - nothing
-            kind-specific here at all.
+            you've actually added, plus every rings/ghost/text
+            instance you've actually added via GENERATE's ADD RINGS/
+            ADD GHOST/ADD TEXT (any number of each, same as video
+            layers). Every entry, whatever kind, gets the exact same
+            minimal row - VISIBILITY MODE, BACKGROUND, MASK,
+            TRANSPORT - plus, for a generator instance, EDIT: a
+            bridge to that specific instance's own deep settings
+            (ring/ghost/text kinds only - a plain video has nothing
+            more to configure beyond the universal row).
             */
             video:{
 
@@ -308,7 +292,7 @@ export class MenuManager {
 
                 },
 
-                "BACKGROUND COLOUR":colourMenu(
+                BACKGROUND:colourMenu(
                     "videoBackgroundColour"
                 ),
 
@@ -336,6 +320,38 @@ export class MenuManager {
 
                     "FRAME -":null
 
+                },
+
+                EDIT:{
+
+                    type:"instanceEditor",
+
+                    "RING COLOUR":{
+
+                        type:"ringColourPicker"
+
+                    },
+
+                    CONSTELLATION:[
+
+                        "CONSTELLATION ON/OFF",
+
+                        "DISTANCE +",
+
+                        "DISTANCE -"
+
+                    ],
+
+                    "TEXT COLOUR":colourMenu(
+                        "textColour"
+                    ),
+
+                    "APPLY TO MASK":{
+
+                        type:"applyToMaskPicker"
+
+                    }
+
                 }
 
             },
@@ -361,7 +377,7 @@ export class MenuManager {
 
                 },
 
-                "BACKGROUND COLOUR":colourMenu(
+                BACKGROUND:colourMenu(
                     "videoBackgroundColour"
                 ),
 
@@ -406,88 +422,19 @@ export class MenuManager {
 
 
             /*
-            No default crap - just the three fixed generators, no add
-            action, no stepper. Each shows only what's specific to
-            that generator, plus whatever actually turns it "real"
-            (RINGS' ON/OFF, GHOST's count going above zero, TEXT
-            getting actual content) - once real it shows up in VIDEO
-            with the full universal row, not duplicated here.
+            No default crap - one action per kind, mirrors INPUT's ADD
+            VIDEO SOURCE/ADD AUDIO SOURCE exactly. Each click creates a
+            brand new instance, which immediately appears as its own
+            real entry in VIDEO - that's where it's edited (via EDIT),
+            not here. Any number of each, same as video layers.
             */
             generate:{
 
-                GHOST:{
+                "ADD RINGS":null,
 
-                    "GHOST +":null,
+                "ADD GHOST":null,
 
-                    "GHOST -":null,
-
-                    "GHOST DELAY +":null,
-
-                    "GHOST DELAY -":null,
-
-                    "APPLY TO MASK":{
-
-                        type:"applyToMaskPicker"
-
-                    }
-
-                },
-
-                RINGS:{
-
-                    "ON/OFF":null,
-
-                    "RING COUNT +":null,
-
-                    "RING COUNT -":null,
-
-                    "RING SIZE +":null,
-
-                    "RING SIZE -":null,
-
-                    "RING THICKNESS +":null,
-
-                    "RING THICKNESS -":null,
-
-                    COLOUR:{
-
-                        type:"ringColourPicker"
-
-                    },
-
-                    CONSTELLATION:[
-
-                        "CONSTELLATION ON/OFF",
-
-                        "DISTANCE +",
-
-                        "DISTANCE -"
-
-                    ]
-
-                },
-
-                TEXT:{
-
-                    CONTENT:{
-
-                        type:"input",
-
-                        placeholder:"ENTER YOUR TEXT HERE",
-
-                        event:"setText"
-
-                    },
-
-                    "TEXT SIZE +":null,
-
-                    "TEXT SIZE -":null,
-
-                    COLOUR:colourMenu(
-                        "textColour"
-                    )
-
-                }
+                "ADD TEXT":null
 
             },
 
@@ -731,6 +678,19 @@ export class MenuManager {
         ){
 
             this.renderApplyToMaskPicker();
+
+            return;
+
+        }
+
+
+
+        if(
+            node &&
+            node.type==="instanceEditor"
+        ){
+
+            this.renderInstanceEditor();
 
             return;
 
@@ -1221,8 +1181,8 @@ export class MenuManager {
 
 
         this.addLayerScreenButton(
-            "BACKGROUND COLOUR",
-            "BACKGROUND COLOUR"
+            "BACKGROUND",
+            "BACKGROUND"
         );
 
 
@@ -1274,6 +1234,179 @@ export class MenuManager {
             this.addLayerScreenButton(
                 "KEY COLOUR",
                 "KEY COLOUR"
+            );
+
+        }
+
+
+        if(
+            scope === "video" &&
+            (
+                selection.kind === "rings" ||
+                selection.kind === "ghost" ||
+                selection.kind === "text"
+            )
+        ){
+
+            this.addLayerScreenButton(
+                "EDIT",
+                "EDIT"
+            );
+
+        }
+
+
+    }
+
+
+
+
+    /*
+    Reached via EDIT from VIDEO - the type-specific deep settings for
+    whichever generator instance is currently selected there
+    (this.videoSelection.kind says which shape to show). No stepper
+    of its own, no universal row duplicated here - just what's unique
+    to rings/ghost/text, operating on whichever instance VIDEO has
+    selected.
+    */
+    renderInstanceEditor(){
+
+
+        const kind =
+            this.videoSelection.kind;
+
+
+        if(kind === "rings"){
+
+            this.addLayerButton(
+                "RING COUNT +",
+                "ringCountUp"
+            );
+
+            this.addLayerButton(
+                "RING COUNT -",
+                "ringCountDown"
+            );
+
+            this.addLayerButton(
+                "RING SIZE +",
+                "ringSizeUp"
+            );
+
+            this.addLayerButton(
+                "RING SIZE -",
+                "ringSizeDown"
+            );
+
+            this.addLayerButton(
+                "RING THICKNESS +",
+                "ringThicknessUp"
+            );
+
+            this.addLayerButton(
+                "RING THICKNESS -",
+                "ringThicknessDown"
+            );
+
+            this.addLayerScreenButton(
+                "COLOUR",
+                "RING COLOUR"
+            );
+
+            this.addLayerScreenButton(
+                "CONSTELLATION",
+                "CONSTELLATION"
+            );
+
+        }
+        else if(kind === "ghost"){
+
+            this.addLayerButton(
+                "GHOST +",
+                "ghostUp"
+            );
+
+            this.addLayerButton(
+                "GHOST -",
+                "ghostDown"
+            );
+
+            this.addLayerButton(
+                "GHOST DELAY +",
+                "ghostDelayUp"
+            );
+
+            this.addLayerButton(
+                "GHOST DELAY -",
+                "ghostDelayDown"
+            );
+
+            this.addLayerScreenButton(
+                "APPLY TO MASK",
+                "APPLY TO MASK"
+            );
+
+        }
+        else if(kind === "text"){
+
+            let input =
+            document.createElement(
+                "input"
+            );
+
+            input.type="text";
+
+            input.placeholder=
+                "ENTER YOUR TEXT HERE";
+
+            input.maxLength=200;
+
+            input.className=
+                "menu-input";
+
+            input.value=
+                this.textValue;
+
+            input.addEventListener(
+                "input",
+                ()=>{
+
+                    this.textValue=
+                        input.value;
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "setText",
+                            {
+                                detail:{
+                                    value:
+                                    input.value
+                                }
+                            }
+                        )
+                    );
+
+                }
+            );
+
+            this.subMenu.appendChild(
+                input
+            );
+
+
+            this.addLayerButton(
+                "SIZE +",
+                "textSizeUp"
+            );
+
+            this.addLayerButton(
+                "SIZE -",
+                "textSizeDown"
+            );
+
+            this.addLayerScreenButton(
+                "COLOUR",
+                "TEXT COLOUR"
             );
 
         }
@@ -1807,8 +1940,35 @@ export class MenuManager {
     (app.js's eligibleMaskTargets enforces that - the list is simply
     empty if nothing qualifies yet). Different from MASKED BY, which
     masks Ghost's composited output and lives under VIDEO instead.
+
+    Fetches fresh data every time it renders, synchronously, via a
+    request object app.js mutates in place rather than a broadcast
+    event - dispatching a broadcast from here and having its listener
+    call render() would re-enter this same method from inside itself.
     */
     renderApplyToMaskPicker(){
+
+
+        const request = {
+            label:null,
+            options:null
+        };
+
+        window.dispatchEvent(
+            new CustomEvent(
+                "requestApplyToMaskRefresh",
+                {detail:request}
+            )
+        );
+
+        if(request.options){
+
+            this.applyToMaskState = {
+                label:request.label,
+                options:request.options
+            };
+
+        }
 
 
         let current =
@@ -1853,6 +2013,8 @@ export class MenuManager {
                     )
                 );
 
+                this.render();
+
             };
 
             this.subMenu.appendChild(
@@ -1881,6 +2043,27 @@ export class MenuManager {
         if(item==="CAMERA ON/OFF")
             window.dispatchEvent(
                 new Event("toggleCamera")
+            );
+
+
+
+        if(item==="ADD RINGS")
+            window.dispatchEvent(
+                new Event("addRingsLayer")
+            );
+
+
+
+        if(item==="ADD GHOST")
+            window.dispatchEvent(
+                new Event("addGhostLayer")
+            );
+
+
+
+        if(item==="ADD TEXT")
+            window.dispatchEvent(
+                new Event("addTextLayer")
             );
 
 
