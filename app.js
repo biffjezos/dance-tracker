@@ -61,6 +61,46 @@ const videoLayers = [];
 renderer.extraVideoLayers = videoLayers;
 
 
+/*
+The original camera/video/body pair, wrapped in the same shape as a
+VideoLayer instance (id/number/name/videoSettings/bodySettings/
+rawCanvas/bodyCanvas/video) so future layer-selector code can treat
+it uniformly with added layers. videoSettings/bodySettings/rawCanvas/
+bodyCanvas/video are direct references to the same live settings
+objects and DOM canvases the existing render loop already reads and
+writes - not copies - so this stays in sync automatically and changes
+nothing about how the original is rendered, toggled, keyed or masked.
+Its mask-source id intentionally stays "video"/"body" (not derived
+from .id) to match the existing MASKED BY entries from phase 1.
+*/
+const originalLayerAdapter = {
+
+    id:"original",
+
+    number:1,
+
+    name:"VIDEO 1",
+
+    videoSettings:settings.video,
+
+    bodySettings:settings.body,
+
+    rawCanvas:renderer.layers.effects,
+
+    bodyCanvas:renderer.layers.body,
+
+    video:camera.getVideo()
+
+};
+
+
+function allVideoLayers(){
+
+    return [originalLayerAdapter, ...videoLayers];
+
+}
+
+
 
 const rings =
     new Rings(
