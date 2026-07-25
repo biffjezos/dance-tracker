@@ -30,7 +30,8 @@ export class Settings {
             blendMode:"normal",
             threshold:100,
             keyColour:{r:0, g:255, b:0},
-            fill:"solid"
+            fill:"solid",
+            maskedBy:{source:"none", channel:"alpha"}
         };
 
 
@@ -87,7 +88,8 @@ export class Settings {
                 constellation:{
                     enabled:false,
                     distance:70
-                }
+                },
+                maskedBy:{source:"none", channel:"alpha"}
             },
 
             ghost:{
@@ -100,7 +102,8 @@ export class Settings {
             text:{
                 content:"",
                 colour:"rgb(255,255,255)",
-                size:24
+                size:24,
+                maskedBy:{source:"none", channel:"alpha"}
             },
             plasma:{
                 enabled:false,

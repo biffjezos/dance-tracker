@@ -353,6 +353,197 @@ export class Renderer {
 
 
 
+    layerByName(name){
+
+
+        if(name === "background")
+            return this.layers.background;
+
+        if(name === "video")
+            return this.layers.effects;
+
+        if(name === "body")
+            return this.layers.body;
+
+        if(name === "rings")
+            return this.layers.rings;
+
+        if(name === "ghost")
+            return this.layers.ghost;
+
+        if(name === "text")
+            return this.layers.text;
+
+
+        return null;
+
+    }
+
+
+
+
+    maskChannelValue(pixels, i, channel){
+
+
+        if(channel === "red")
+            return pixels[i];
+
+        if(channel === "green")
+            return pixels[i+1];
+
+        if(channel === "blue")
+            return pixels[i+2];
+
+
+        return pixels[i+3];
+
+    }
+
+
+
+
+    applyMask(contentCanvas, sourceCanvas, channel){
+
+
+        const width =
+            contentCanvas.width;
+
+        const height =
+            contentCanvas.height;
+
+
+        if(!this.maskScratch){
+
+            this.maskScratch =
+                document.createElement(
+                    "canvas"
+                );
+
+        }
+
+
+        this.maskScratch.width = width;
+
+        this.maskScratch.height = height;
+
+
+        const scratchCtx =
+            this.maskScratch.getContext(
+                "2d"
+            );
+
+
+        scratchCtx.clearRect(
+            0,
+            0,
+            width,
+            height
+        );
+
+        scratchCtx.drawImage(
+            contentCanvas,
+            0,
+            0
+        );
+
+
+        const content =
+            scratchCtx.getImageData(
+                0,
+                0,
+                width,
+                height
+            );
+
+
+        const source =
+            sourceCanvas
+            .getContext("2d")
+            .getImageData(
+                0,
+                0,
+                width,
+                height
+            );
+
+
+        const contentPixels =
+            content.data;
+
+        const sourcePixels =
+            source.data;
+
+
+        for(
+            let i=0;
+            i<contentPixels.length;
+            i+=4
+        ){
+
+
+            const maskValue =
+                this.maskChannelValue(
+                    sourcePixels,
+                    i,
+                    channel
+                );
+
+
+            contentPixels[i+3] =
+                Math.round(
+                    contentPixels[i+3] *
+                    (maskValue / 255)
+                );
+
+
+        }
+
+
+        scratchCtx.putImageData(
+            content,
+            0,
+            0
+        );
+
+
+        return this.maskScratch;
+
+    }
+
+
+
+
+    resolveMaskedLayer(canvas, maskedBy){
+
+
+        if(
+            !maskedBy ||
+            maskedBy.source === "none"
+        )
+            return canvas;
+
+
+        const sourceCanvas =
+            this.layerByName(
+                maskedBy.source
+            );
+
+
+        if(!sourceCanvas)
+            return canvas;
+
+
+        return this.applyMask(
+            canvas,
+            sourceCanvas,
+            maskedBy.channel
+        );
+
+    }
+
+
+
+
     compose(){
 
 
@@ -407,7 +598,10 @@ export class Renderer {
 
             ctx.drawImage(
 
-                this.layers.body,
+                this.resolveMaskedLayer(
+                    this.layers.body,
+                    this.settings.body.maskedBy
+                ),
 
                 0,
 
@@ -427,7 +621,10 @@ export class Renderer {
 
         ctx.drawImage(
 
-            this.layers.rings,
+            this.resolveMaskedLayer(
+                this.layers.rings,
+                this.settings.amiga.rings.maskedBy
+            ),
 
             0,
 
@@ -456,7 +653,10 @@ export class Renderer {
 
         ctx.drawImage(
 
-            this.layers.text,
+            this.resolveMaskedLayer(
+                this.layers.text,
+                this.settings.amiga.text.maskedBy
+            ),
 
             0,
 

@@ -1721,6 +1721,174 @@ window.addEventListener(
 
 /*
 ==================================================
+MASKING
+==================================================
+*/
+
+
+const MASK_SOURCES = [
+    "none", "background", "video", "body", "rings", "text"
+];
+
+
+const MASK_CHANNELS = [
+    "red", "green", "blue", "alpha"
+];
+
+
+function maskedBySettingsFor(layer){
+
+    if(layer === "body")
+        return settings.body.maskedBy;
+
+    if(layer === "rings")
+        return settings.amiga.rings.maskedBy;
+
+    if(layer === "text")
+        return settings.amiga.text.maskedBy;
+
+
+    return null;
+
+}
+
+
+function reportMaskSettingsChanged(layer, target){
+
+    window.dispatchEvent(
+        new CustomEvent(
+            "maskSettingsChanged",
+            {
+                detail:{
+                    layer:layer,
+                    source:target.source,
+                    channel:target.channel
+                }
+            }
+        )
+    );
+
+}
+
+
+window.addEventListener(
+    "maskSourceStep",
+    e=>{
+
+        const layer =
+            e.detail.layer;
+
+        const target =
+            maskedBySettingsFor(layer);
+
+        if(!target)
+            return;
+
+
+        const validSources =
+            MASK_SOURCES.filter(
+                s=>s === "none" || s !== layer
+            );
+
+
+        let index =
+            validSources.indexOf(
+                target.source
+            );
+
+        if(index < 0)
+            index = 0;
+
+
+        index =
+            Math.min(
+                Math.max(
+                    index + e.detail.direction,
+                    0
+                ),
+                validSources.length - 1
+            );
+
+
+        target.source =
+            validSources[index];
+
+
+        console.log(
+            "Mask source:",
+            layer,
+            "<-",
+            target.source
+        );
+
+
+        reportMaskSettingsChanged(
+            layer,
+            target
+        );
+
+    }
+);
+
+
+window.addEventListener(
+    "maskChannelStep",
+    e=>{
+
+        const layer =
+            e.detail.layer;
+
+        const target =
+            maskedBySettingsFor(layer);
+
+        if(!target)
+            return;
+
+
+        let index =
+            MASK_CHANNELS.indexOf(
+                target.channel
+            );
+
+        if(index < 0)
+            index = 0;
+
+
+        index =
+            Math.min(
+                Math.max(
+                    index + e.detail.direction,
+                    0
+                ),
+                MASK_CHANNELS.length - 1
+            );
+
+
+        target.channel =
+            MASK_CHANNELS[index];
+
+
+        console.log(
+            "Mask channel:",
+            layer,
+            "<-",
+            target.channel
+        );
+
+
+        reportMaskSettingsChanged(
+            layer,
+            target
+        );
+
+    }
+);
+
+
+
+
+/*
+==================================================
 RECORDING
 ==================================================
 */
