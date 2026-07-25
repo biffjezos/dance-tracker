@@ -73,6 +73,44 @@ nothing about how the original is rendered, toggled, keyed or masked.
 Its mask-source id intentionally stays "video"/"body" (not derived
 from .id) to match the existing MASKED BY entries from phase 1.
 */
+/*
+settings.body has no "enabled" field - the original's body segmentation
+is (and always was) gated by the separate settings.layers.body flag,
+read directly by both Segmentation.process() and Renderer.compose().
+This proxy makes bodySettings.enabled transparently read/write that
+same flag so generalized BODY ON/OFF code can treat every layer
+uniformly, without actually restructuring that pre-existing gate.
+*/
+const originalBodySettings = new Proxy(settings.body, {
+
+    get(target, prop){
+
+        if(prop === "enabled")
+            return settings.layers.body;
+
+        return target[prop];
+
+    },
+
+    set(target, prop, value){
+
+        if(prop === "enabled"){
+
+            settings.layers.body = value;
+
+            return true;
+
+        }
+
+        target[prop] = value;
+
+        return true;
+
+    }
+
+});
+
+
 const originalLayerAdapter = {
 
     id:"original",
@@ -83,7 +121,7 @@ const originalLayerAdapter = {
 
     videoSettings:settings.video,
 
-    bodySettings:settings.body,
+    bodySettings:originalBodySettings,
 
     rawCanvas:renderer.layers.effects,
 
@@ -130,6 +168,20 @@ function reportLayerSelection(){
 
     updateMatteStatusDisplay(
         layer.bodySettings.mode
+    );
+
+    updateBodyStatusDisplay(
+        layer.bodySettings.enabled
+    );
+
+    reportMaskSettingsChanged(
+        "video",
+        layer.videoSettings.maskedBy
+    );
+
+    reportMaskSettingsChanged(
+        "body",
+        layer.bodySettings.maskedBy
     );
 
     window.dispatchEvent(
@@ -588,13 +640,16 @@ window.addEventListener(
     ()=>{
 
 
-        settings.video.enabled =
-        !settings.video.enabled;
+        const videoSettings =
+            selectedLayer().videoSettings;
+
+        videoSettings.enabled =
+        !videoSettings.enabled;
 
 
         console.log(
             "Video:",
-            settings.video.enabled
+            videoSettings.enabled
         );
 
     }
@@ -606,12 +661,15 @@ window.addEventListener(
     "toggleVideoVisible",
     ()=>{
 
-        settings.video.visible =
-        !settings.video.visible;
+        const videoSettings =
+            selectedLayer().videoSettings;
+
+        videoSettings.visible =
+        !videoSettings.visible;
 
         console.log(
             "Video visible:",
-            settings.video.visible
+            videoSettings.visible
         );
 
     }
@@ -623,6 +681,13 @@ window.addEventListener(
     "videoBackgroundColour",
     e=>{
 
+        /*
+        Scene-wide backdrop fill, not per-layer - there is only one
+        background-layer canvas and Renderer.drawBackground() always
+        reads settings.video.backgroundColour directly, regardless of
+        which layer is selected. Deliberately not routed through
+        selectedLayer().
+        */
 
         settings.video.backgroundColour =
             "rgb("
@@ -658,33 +723,45 @@ BODY
 */
 
 
+function updateBodyStatusDisplay(enabled){
+
+    document
+    .querySelector(".statusbar")
+    .children[2]
+    .innerText =
+        "BODY: " +
+        (
+            enabled
+            ?
+            "ON"
+            :
+            "OFF"
+        );
+
+}
+
+
 window.addEventListener(
     "toggleBody",
     ()=>{
 
 
-        settings.layers.body =
-        !settings.layers.body;
+        const bodySettings =
+            selectedLayer().bodySettings;
+
+        bodySettings.enabled =
+        !bodySettings.enabled;
 
 
         console.log(
             "Body:",
-            settings.layers.body
+            bodySettings.enabled
         );
 
 
-        document
-        .querySelector(".statusbar")
-        .children[2]
-        .innerText =
-            "BODY: " +
-            (
-                settings.layers.body
-                ?
-                "ON"
-                :
-                "OFF"
-            );
+        updateBodyStatusDisplay(
+            bodySettings.enabled
+        );
 
 
     }
@@ -696,12 +773,15 @@ window.addEventListener(
     "toggleBodyVisible",
     ()=>{
 
-        settings.body.visible =
-        !settings.body.visible;
+        const bodySettings =
+            selectedLayer().bodySettings;
+
+        bodySettings.visible =
+        !bodySettings.visible;
 
         console.log(
             "Body visible:",
-            settings.body.visible
+            bodySettings.visible
         );
 
     }
@@ -2007,10 +2087,10 @@ function getMaskSources(){
 function maskedBySettingsFor(layer){
 
     if(layer === "video")
-        return settings.video.maskedBy;
+        return selectedLayer().videoSettings.maskedBy;
 
     if(layer === "body")
-        return settings.body.maskedBy;
+        return selectedLayer().bodySettings.maskedBy;
 
     if(layer === "rings")
         return settings.amiga.rings.maskedBy;
@@ -2020,6 +2100,35 @@ function maskedBySettingsFor(layer){
 
 
     return null;
+
+}
+
+
+function ownSourceId(layer){
+
+    if(layer === "video" || layer === "body"){
+
+        const current =
+            selectedLayer();
+
+        if(current.id === "original")
+            return layer;
+
+
+        return (
+            layer === "video"
+            ?
+            "videoLayer:"
+            :
+            "bodyLayer:"
+        )
+        +
+        current.id;
+
+    }
+
+
+    return layer;
 
 }
 
@@ -2068,9 +2177,12 @@ window.addEventListener(
             return;
 
 
+        const ownId =
+            ownSourceId(layer);
+
         const validSources =
             getMaskSources().filter(
-                s=>s.id === "none" || s.id !== layer
+                s=>s.id === "none" || s.id !== ownId
             );
 
 

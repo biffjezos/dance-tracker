@@ -124,7 +124,10 @@ export class MenuManager {
                 };
 
 
-                if(this.path[0] === "key"){
+                if(
+                    this.path[0] === "key" ||
+                    this.path[0] === "video"
+                ){
 
                     this.render();
 
@@ -275,6 +278,12 @@ export class MenuManager {
 
             video:{
 
+                LAYER:{
+
+                    type:"layerStepper"
+
+                },
+
                 "VIDEO ON/OFF":null,
 
                 "VIDEO VISIBLE ON/OFF":null,
@@ -290,11 +299,26 @@ export class MenuManager {
                 },
 
 
-                "MASKED BY":{
+                "VIDEO MASKED BY":{
 
                     type:"maskPicker",
 
                     layer:"video"
+
+                },
+
+
+
+                "BODY ON/OFF":null,
+
+                "BODY VISIBLE ON/OFF":null,
+
+
+                "BODY MASKED BY":{
+
+                    type:"maskPicker",
+
+                    layer:"body"
 
                 }
 
@@ -334,38 +358,19 @@ export class MenuManager {
 
 
 
-            amiga:{
+            generate:{
 
-                BODY:{
+                GHOST:[
 
-                    "BODY ON/OFF":null,
+                    "GHOST +",
 
-                    "BODY VISIBLE ON/OFF":null,
+                    "GHOST -",
 
+                    "GHOST DELAY +",
 
-                    "MASKED BY":{
+                    "GHOST DELAY -"
 
-                        type:"maskPicker",
-
-                        layer:"body"
-
-                    },
-
-
-
-                    GHOST:[
-
-                        "GHOST +",
-
-                        "GHOST -",
-
-                        "GHOST DELAY +",
-
-                        "GHOST DELAY -"
-
-                    ]
-
-                },
+                ],
 
 
 
@@ -452,6 +457,14 @@ export class MenuManager {
                     }
 
                 }
+
+            },
+
+
+
+            transform:{
+
+                "COMING SOON":null
 
             },
 
@@ -1353,6 +1366,29 @@ export class MenuManager {
 
         const state =
             this.maskState[layerName];
+
+
+        if(
+            layerName === "video" ||
+            layerName === "body"
+        ){
+
+            let layerLabel =
+            document.createElement(
+                "span"
+            );
+
+            layerLabel.innerText=
+                this.layerSelection.name;
+
+            layerLabel.className=
+                "ring-id-display";
+
+            this.subMenu.appendChild(
+                layerLabel
+            );
+
+        }
 
 
         let sourceMinus =
