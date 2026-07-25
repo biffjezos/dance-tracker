@@ -1738,6 +1738,9 @@ const MASK_CHANNELS = [
 
 function maskedBySettingsFor(layer){
 
+    if(layer === "video")
+        return settings.video.maskedBy;
+
     if(layer === "body")
         return settings.body.maskedBy;
 

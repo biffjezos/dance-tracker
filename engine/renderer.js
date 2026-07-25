@@ -579,7 +579,10 @@ export class Renderer {
 
             ctx.drawImage(
 
-                this.layers.effects,
+                this.resolveMaskedLayer(
+                    this.layers.effects,
+                    this.settings.video.maskedBy
+                ),
 
                 0,
 

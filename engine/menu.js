@@ -107,6 +107,8 @@ export class MenuManager {
 
         this.maskState = {
 
+            video:{source:"none", channel:"alpha"},
+
             body:{source:"none", channel:"alpha"},
 
             rings:{source:"none", channel:"alpha"},
@@ -244,6 +246,15 @@ export class MenuManager {
                     COLOUR:colourMenu(
                         "videoBackgroundColour"
                     )
+
+                },
+
+
+                "MASKED BY":{
+
+                    type:"maskPicker",
+
+                    layer:"video"
 
                 }
 

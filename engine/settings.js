@@ -14,7 +14,9 @@ export class Settings {
             width:320,
             height:240,
             enabled:true,
-            backgroundColour:"rgb(0,0,0)"
+            visible:true,
+            backgroundColour:"rgb(0,0,0)",
+            maskedBy:{source:"none", channel:"alpha"}
         };
 
 
