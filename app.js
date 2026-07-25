@@ -127,7 +127,7 @@ function processBody(){
 
 
     /*
-    CLEAR ONLY EFFECT OVERLAY
+    CLEAR ONLY EFFECT OVERLAYS
 
     Body layer stays.
     Camera stays.
@@ -135,23 +135,29 @@ function processBody(){
     */
 
 
-    const overlay =
+    const ringsLayer =
         document.getElementById(
-            "overlay-layer"
+            "rings-layer"
         );
 
+    ringsLayer.getContext("2d").clearRect(
+        0,
+        0,
+        ringsLayer.width,
+        ringsLayer.height
+    );
 
-    const overlayCtx =
-        overlay.getContext(
-            "2d"
+
+    const ghostLayer =
+        document.getElementById(
+            "ghost-layer"
         );
 
-
-    overlayCtx.clearRect(
+    ghostLayer.getContext("2d").clearRect(
         0,
         0,
-        overlay.width,
-        overlay.height
+        ghostLayer.width,
+        ghostLayer.height
     );
 
 
@@ -175,6 +181,8 @@ function processBody(){
 
 
     updateTransportDisplay();
+
+    updateAudioSyncDisplay();
 
 
 
@@ -1328,7 +1336,7 @@ window.addEventListener(
             if(transportPlaying){
 
                 startAudioSource(
-                    getPlayheadTime()
+                    getAudioTargetTime()
                 );
 
             }
@@ -1411,6 +1419,9 @@ function formatTimestamp(totalSeconds){
         n=>String(Math.floor(n)).padStart(2, "0");
 
 
+    totalSeconds += 0.001;
+
+
     const minutes =
         Math.floor(totalSeconds / 60);
 
@@ -1486,7 +1497,7 @@ function seekBy(deltaSeconds){
     if(transportPlaying && currentAudioBuffer){
 
         startAudioSource(
-            getPlayheadTime()
+            getAudioTargetTime()
         );
 
     }
@@ -1516,7 +1527,7 @@ window.addEventListener(
 
             if(currentAudioBuffer)
                 startAudioSource(
-                    getPlayheadTime()
+                    getAudioTargetTime()
                 );
 
         }
@@ -1579,6 +1590,298 @@ window.addEventListener(
 window.addEventListener(
     "transportFrameDown",
     ()=>seekBy(-1/30)
+);
+
+
+
+
+/*
+==================================================
+AUDIO SYNC
+==================================================
+*/
+
+
+let audioSyncOffset = 0;
+
+
+function getAudioTargetTime(){
+
+    if(hasVideoFile()){
+
+        return (
+            camera.getVideo().currentTime +
+            audioSyncOffset
+        );
+
+    }
+
+
+    return getPlayheadTime();
+
+}
+
+
+function formatOffset(totalSeconds){
+
+    const sign =
+        totalSeconds < 0
+        ?
+        "-"
+        :
+        "+";
+
+
+    return (
+        sign +
+        formatTimestamp(
+            Math.abs(totalSeconds)
+        )
+    );
+
+}
+
+
+function updateAudioSyncDisplay(){
+
+    const display =
+        document.getElementById(
+            "audio-sync-display"
+        );
+
+    if(display){
+
+        display.innerText =
+            formatOffset(
+                audioSyncOffset
+            );
+
+    }
+
+}
+
+
+function seekAudioSyncBy(deltaSeconds){
+
+    audioSyncOffset +=
+        deltaSeconds;
+
+
+    if(transportPlaying && currentAudioBuffer){
+
+        startAudioSource(
+            getAudioTargetTime()
+        );
+
+    }
+
+
+    updateAudioSyncDisplay();
+
+}
+
+
+window.addEventListener(
+    "audioSyncMinuteUp",
+    ()=>seekAudioSyncBy(60)
+);
+
+
+window.addEventListener(
+    "audioSyncMinuteDown",
+    ()=>seekAudioSyncBy(-60)
+);
+
+
+window.addEventListener(
+    "audioSyncSecondUp",
+    ()=>seekAudioSyncBy(1)
+);
+
+
+window.addEventListener(
+    "audioSyncSecondDown",
+    ()=>seekAudioSyncBy(-1)
+);
+
+
+window.addEventListener(
+    "audioSyncFrameUp",
+    ()=>seekAudioSyncBy(1/30)
+);
+
+
+window.addEventListener(
+    "audioSyncFrameDown",
+    ()=>seekAudioSyncBy(-1/30)
+);
+
+
+
+
+/*
+==================================================
+MASKING
+==================================================
+*/
+
+
+const MASK_SOURCES = [
+    "none", "background", "video", "body", "rings", "text"
+];
+
+
+const MASK_CHANNELS = [
+    "red", "green", "blue", "alpha"
+];
+
+
+function maskedBySettingsFor(layer){
+
+    if(layer === "body")
+        return settings.body.maskedBy;
+
+    if(layer === "rings")
+        return settings.amiga.rings.maskedBy;
+
+    if(layer === "text")
+        return settings.amiga.text.maskedBy;
+
+
+    return null;
+
+}
+
+
+function reportMaskSettingsChanged(layer, target){
+
+    window.dispatchEvent(
+        new CustomEvent(
+            "maskSettingsChanged",
+            {
+                detail:{
+                    layer:layer,
+                    source:target.source,
+                    channel:target.channel
+                }
+            }
+        )
+    );
+
+}
+
+
+window.addEventListener(
+    "maskSourceStep",
+    e=>{
+
+        const layer =
+            e.detail.layer;
+
+        const target =
+            maskedBySettingsFor(layer);
+
+        if(!target)
+            return;
+
+
+        const validSources =
+            MASK_SOURCES.filter(
+                s=>s === "none" || s !== layer
+            );
+
+
+        let index =
+            validSources.indexOf(
+                target.source
+            );
+
+        if(index < 0)
+            index = 0;
+
+
+        index =
+            Math.min(
+                Math.max(
+                    index + e.detail.direction,
+                    0
+                ),
+                validSources.length - 1
+            );
+
+
+        target.source =
+            validSources[index];
+
+
+        console.log(
+            "Mask source:",
+            layer,
+            "<-",
+            target.source
+        );
+
+
+        reportMaskSettingsChanged(
+            layer,
+            target
+        );
+
+    }
+);
+
+
+window.addEventListener(
+    "maskChannelStep",
+    e=>{
+
+        const layer =
+            e.detail.layer;
+
+        const target =
+            maskedBySettingsFor(layer);
+
+        if(!target)
+            return;
+
+
+        let index =
+            MASK_CHANNELS.indexOf(
+                target.channel
+            );
+
+        if(index < 0)
+            index = 0;
+
+
+        index =
+            Math.min(
+                Math.max(
+                    index + e.detail.direction,
+                    0
+                ),
+                MASK_CHANNELS.length - 1
+            );
+
+
+        target.channel =
+            MASK_CHANNELS[index];
+
+
+        console.log(
+            "Mask channel:",
+            layer,
+            "<-",
+            target.channel
+        );
+
+
+        reportMaskSettingsChanged(
+            layer,
+            target
+        );
+
+    }
 );
 
 

@@ -12,7 +12,7 @@ export class Ghost {
         this.settings = settings;
         this.canvas =
             document.getElementById(
-                "overlay-layer"
+                "ghost-layer"
             );
 
         this.ctx =
