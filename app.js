@@ -127,7 +127,7 @@ function processBody(){
 
 
     /*
-    CLEAR ONLY EFFECT OVERLAY
+    CLEAR ONLY EFFECT OVERLAYS
 
     Body layer stays.
     Camera stays.
@@ -135,23 +135,29 @@ function processBody(){
     */
 
 
-    const overlay =
+    const ringsLayer =
         document.getElementById(
-            "overlay-layer"
+            "rings-layer"
         );
 
+    ringsLayer.getContext("2d").clearRect(
+        0,
+        0,
+        ringsLayer.width,
+        ringsLayer.height
+    );
 
-    const overlayCtx =
-        overlay.getContext(
-            "2d"
+
+    const ghostLayer =
+        document.getElementById(
+            "ghost-layer"
         );
 
-
-    overlayCtx.clearRect(
+    ghostLayer.getContext("2d").clearRect(
         0,
         0,
-        overlay.width,
-        overlay.height
+        ghostLayer.width,
+        ghostLayer.height
     );
 
 

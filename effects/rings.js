@@ -17,7 +17,7 @@ export class Rings {
 
         this.canvas =
             document.getElementById(
-                "overlay-layer"
+                "rings-layer"
             );
 
 

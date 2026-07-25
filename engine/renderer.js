@@ -47,9 +47,15 @@ export class Renderer {
             ),
 
 
-            overlay:
+            rings:
             document.getElementById(
-                "overlay-layer"
+                "rings-layer"
+            ),
+
+
+            ghost:
+            document.getElementById(
+                "ghost-layer"
             ),
 
 
@@ -105,8 +111,14 @@ export class Renderer {
 
 
 
-            overlay:
-            this.layers.overlay
+            rings:
+            this.layers.rings
+            .getContext("2d"),
+
+
+
+            ghost:
+            this.layers.ghost
             .getContext("2d"),
 
 
@@ -415,7 +427,19 @@ export class Renderer {
 
         ctx.drawImage(
 
-            this.layers.overlay,
+            this.layers.rings,
+
+            0,
+
+            0
+
+        );
+
+
+
+        ctx.drawImage(
+
+            this.layers.ghost,
 
             0,
 
