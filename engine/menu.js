@@ -114,25 +114,40 @@ export class MenuManager {
 
 
         /*
-        Every kind of layer (video, mask, rings, text, ghost) is
-        navigated through the exact same LAYER -/+ stepper and shows
-        the exact same shape of universal controls (see
-        renderLayerEditor) - this mirror just tracks which one is
-        currently selected, what kind it is, and its visibility mode,
-        kept in sync by app.js's layerSelectionChanged event.
+        VIDEO and KEY are two independent steppers (video layers+real
+        generators vs masks-only), each tracked separately here, kept
+        in sync by app.js's layerSelectionChanged event (its "scope"
+        field says which one changed). Both render through the same
+        renderLayerEditor() - only which selection object it reads
+        differs.
         */
-        this.registrySelection = {label:"LAYER 1", kind:"video", visibilityMode:"on"};
+        this.videoSelection = {label:"LAYER 1", kind:"video", visibilityMode:"on"};
+
+        this.maskSelection = {label:"MASK 1", kind:"mask", visibilityMode:"on"};
 
 
         window.addEventListener(
             "layerSelectionChanged",
             e=>{
 
-                this.registrySelection = {
+                const selection = {
                     label:e.detail.label,
                     kind:e.detail.kind,
                     visibilityMode:e.detail.visibilityMode
                 };
+
+
+                if(e.detail.scope === "mask"){
+
+                    this.maskSelection = selection;
+
+                }
+                else {
+
+                    this.videoSelection = selection;
+
+                }
+
 
                 if(e.detail.keyColour){
 
@@ -145,7 +160,7 @@ export class MenuManager {
                 }
 
 
-                if(this.path[0] === "video"){
+                if(this.path[0] === "video" || this.path[0] === "key"){
 
                     this.render();
 
@@ -157,11 +172,9 @@ export class MenuManager {
 
         this.maskState = {
 
-            source:"none",
+            video:{source:"none", sourceLabel:"NONE", channel:"alpha"},
 
-            sourceLabel:"NONE",
-
-            channel:"alpha"
+            mask:{source:"none", sourceLabel:"NONE", channel:"alpha"}
 
         };
 
@@ -170,7 +183,7 @@ export class MenuManager {
             "maskSettingsChanged",
             e=>{
 
-                this.maskState = {
+                this.maskState[e.detail.scope] = {
                     source:e.detail.source,
                     sourceLabel:e.detail.sourceLabel,
                     channel:e.detail.channel
@@ -274,34 +287,26 @@ export class MenuManager {
 
 
             /*
-            The universal navigator: every video feed, every derived
-            mask, and the rings/ghost/text generators, all through the
-            same LAYER -/+ stepper, all showing the same universal
-            row (VISIBILITY MODE/BACKGROUND COLOUR/MASKED BY/
-            TRANSPORT) - see renderLayerEditor(). Mask-kind entries
-            additionally get their own deep settings here since masks
-            have no other screen; rings/ghost/text's deep settings
-            live under GENERATE instead, not duplicated here.
+            VIDEO only lists things that really exist: video layers
+            you've actually added, plus a generator once you've
+            actually done something with it (see GENERATE). Every
+            entry, whatever kind, gets the exact same minimal row -
+            VISIBILITY MODE, BACKGROUND, MASK, TRANSPORT - nothing
+            kind-specific here at all.
             */
             video:{
 
                 type:"layerEditor",
 
-                "MASKED BY":{
+                scope:"video",
 
-                    type:"maskPicker"
+                MASK:{
 
-                },
+                    type:"maskPicker",
 
-                "KEY COLOUR":{
-
-                    type:"keyColourPicker"
+                    scope:"video"
 
                 },
-
-                COLOUR:colourMenu(
-                    "layerColour"
-                ),
 
                 "BACKGROUND COLOUR":colourMenu(
                     "videoBackgroundColour"
@@ -338,10 +343,75 @@ export class MenuManager {
 
 
             /*
+            KEY is its own selector, scoped to masks only - the same
+            minimal universal row as VIDEO, plus the actual chroma-key
+            deep settings, which live here and nowhere else.
+            */
+            key:{
+
+                type:"layerEditor",
+
+                scope:"mask",
+
+                MASK:{
+
+                    type:"maskPicker",
+
+                    scope:"mask"
+
+                },
+
+                "BACKGROUND COLOUR":colourMenu(
+                    "videoBackgroundColour"
+                ),
+
+                TRANSPORT:{
+
+                    "PLAY/STOP":null,
+
+                    TIME:{
+
+                        type:"display",
+
+                        id:"transport-display"
+
+                    },
+
+                    "MINUTE +":null,
+
+                    "MINUTE -":null,
+
+                    "SECOND +":null,
+
+                    "SECOND -":null,
+
+                    "FRAME +":null,
+
+                    "FRAME -":null
+
+                },
+
+                "KEY COLOUR":{
+
+                    type:"keyColourPicker"
+
+                },
+
+                COLOUR:colourMenu(
+                    "layerColour"
+                )
+
+            },
+
+
+
+            /*
             No default crap - just the three fixed generators, no add
             action, no stepper. Each shows only what's specific to
-            that generator; visibility/background/masked by for these
-            live under VIDEO instead.
+            that generator, plus whatever actually turns it "real"
+            (RINGS' ON/OFF, GHOST's count going above zero, TEXT
+            getting actual content) - once real it shows up in VIDEO
+            with the full universal row, not duplicated here.
             */
             generate:{
 
@@ -365,6 +435,8 @@ export class MenuManager {
 
                 RINGS:{
 
+                    "ON/OFF":null,
+
                     "RING COUNT +":null,
 
                     "RING COUNT -":null,
@@ -385,7 +457,7 @@ export class MenuManager {
 
                     CONSTELLATION:[
 
-                        "ON/OFF",
+                        "CONSTELLATION ON/OFF",
 
                         "DISTANCE +",
 
@@ -1019,14 +1091,25 @@ export class MenuManager {
 
 
     /*
-    The universal navigator screen: LAYER -/+ stepper, then
-    VISIBILITY MODE, BACKGROUND COLOUR, MASKED BY, TRANSPORT -
-    identical for every kind, video/mask/rings/ghost/text alike. Mask
-    kind additionally gets its own deep settings since a mask has no
-    other screen - everything else's deep settings live under
-    GENERATE instead, not duplicated here.
+    Serves both VIDEO and KEY - which one is which is entirely
+    determined by this.node().scope ("video" or "mask"). Both show
+    the exact same minimal row: LAYER -/+ stepper, VISIBILITY MODE,
+    BACKGROUND COLOUR, MASK, TRANSPORT. KEY additionally shows the
+    actual chroma-key deep settings, since scope is always "mask"
+    there and a mask has no other screen to live on.
     */
     renderLayerEditor(){
+
+
+        const scope =
+            this.node().scope;
+
+        const selection =
+            scope === "mask"
+            ?
+            this.maskSelection
+            :
+            this.videoSelection;
 
 
         let minus =
@@ -1041,7 +1124,7 @@ export class MenuManager {
 
             window.dispatchEvent(
                 new CustomEvent(
-                    "layerIndexStep",
+                    scope === "mask" ? "maskIndexStep" : "videoIndexStep",
                     {detail:{direction:-1}}
                 )
             );
@@ -1060,7 +1143,7 @@ export class MenuManager {
         );
 
         display.innerText=
-            this.registrySelection.label;
+            selection.label;
 
         display.className=
             "ring-id-display";
@@ -1083,7 +1166,7 @@ export class MenuManager {
 
             window.dispatchEvent(
                 new CustomEvent(
-                    "layerIndexStep",
+                    scope === "mask" ? "maskIndexStep" : "videoIndexStep",
                     {detail:{direction:1}}
                 )
             );
@@ -1097,13 +1180,12 @@ export class MenuManager {
 
 
         /*
-        One button, four states, cycled forward each click - replaces
-        the old separate ON/OFF + VISIBLE ON/OFF pair. Re-renders
-        immediately after dispatching since, unlike the other
-        buttons here, this one's own label depends on the state it
-        just changed (dispatchEvent runs the app.js handler
-        synchronously, so registrySelection is already updated by
-        the time render() reads it back).
+        One button, four states, cycled forward each click. Re-renders
+        immediately after dispatching since, unlike the other buttons
+        here, this one's own label depends on the state it just
+        changed (dispatchEvent runs the app.js handler synchronously,
+        so the selection is already updated by the time render()
+        reads it back).
         */
         let visibility =
         document.createElement(
@@ -1114,7 +1196,7 @@ export class MenuManager {
             "VISIBILITY: " +
             (
                 VISIBILITY_MODE_LABELS[
-                    this.registrySelection.visibilityMode
+                    selection.visibilityMode
                 ] ||
                 "ON"
             );
@@ -1122,7 +1204,10 @@ export class MenuManager {
         visibility.onclick=()=>{
 
             window.dispatchEvent(
-                new Event("cycleVisibilityMode")
+                new CustomEvent(
+                    "cycleVisibilityMode",
+                    {detail:{scope:scope}}
+                )
             );
 
             this.render();
@@ -1141,26 +1226,10 @@ export class MenuManager {
         );
 
 
-        let maskedBy =
-        document.createElement(
-            "button"
+        this.addLayerScreenButton(
+            "MASK",
+            "MASK"
         );
-
-        maskedBy.innerText=
-            "MASKED BY";
-
-        maskedBy.onclick=()=>{
-
-            this.enter(
-                "MASKED BY"
-            );
-
-        };
-
-        this.subMenu.appendChild(
-            maskedBy
-        );
-
 
 
         this.addLayerScreenButton(
@@ -1170,11 +1239,7 @@ export class MenuManager {
 
 
 
-        const kind =
-            this.registrySelection.kind;
-
-
-        if(kind === "mask"){
+        if(scope === "mask"){
 
             this.addLayerButton(
                 "CAPTURE BACKGROUND",
@@ -1427,7 +1492,7 @@ export class MenuManager {
         );
 
         layerLabel.innerText=
-            this.registrySelection.label;
+            this.maskSelection.label;
 
         layerLabel.className=
             "ring-id-display";
@@ -1546,8 +1611,18 @@ export class MenuManager {
     renderMaskPicker(){
 
 
+        const scope =
+            this.node().scope;
+
         const state =
-            this.maskState;
+            this.maskState[scope];
+
+        const selection =
+            scope === "mask"
+            ?
+            this.maskSelection
+            :
+            this.videoSelection;
 
 
         let layerLabel =
@@ -1556,7 +1631,7 @@ export class MenuManager {
         );
 
         layerLabel.innerText=
-            this.registrySelection.label;
+            selection.label;
 
         layerLabel.className=
             "ring-id-display";
@@ -1581,7 +1656,8 @@ export class MenuManager {
                     "maskSourceStep",
                     {
                         detail:{
-                            direction:-1
+                            direction:-1,
+                            scope:scope
                         }
                     }
                 )
@@ -1627,7 +1703,8 @@ export class MenuManager {
                     "maskSourceStep",
                     {
                         detail:{
-                            direction:1
+                            direction:1,
+                            scope:scope
                         }
                     }
                 )
@@ -1657,7 +1734,8 @@ export class MenuManager {
                     "maskChannelStep",
                     {
                         detail:{
-                            direction:-1
+                            direction:-1,
+                            scope:scope
                         }
                     }
                 )
@@ -1703,7 +1781,8 @@ export class MenuManager {
                     "maskChannelStep",
                     {
                         detail:{
-                            direction:1
+                            direction:1,
+                            scope:scope
                         }
                     }
                 )
@@ -1821,6 +1900,13 @@ export class MenuManager {
 
 
         if(item==="ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleRingsEnabled")
+            );
+
+
+
+        if(item==="CONSTELLATION ON/OFF")
             window.dispatchEvent(
                 new Event("toggleConstellation")
             );

@@ -61,7 +61,7 @@ export class VideoLayer {
 
         this.bodySettings = {
 
-            mode:"keying",
+            mode:"difference",
 
             threshold:100,
 

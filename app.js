@@ -166,18 +166,49 @@ assignGlobalLayerNumber(
 );
 
 
-let selectedLayerIndex = 0;
+let selectedVideoIndex = 0;
+
+let selectedMaskIndex = 0;
 
 
-function selectedEntry(){
+function selectedVideoEntry(){
 
     const registry =
-        getLayerRegistry();
+        getVideoRegistry();
 
     return (
-        registry[selectedLayerIndex] ||
+        registry[selectedVideoIndex] ||
         registry[0]
     );
+
+}
+
+
+function selectedMaskEntry(){
+
+    const registry =
+        getMaskRegistry();
+
+    return (
+        registry[selectedMaskIndex] ||
+        registry[0]
+    );
+
+}
+
+
+/*
+VIDEO and KEY both show the exact same universal row (visibility
+mode/background/masked by/transport) - this resolves which of the
+two independent steppers a given button click is about, so one
+shared set of handlers can serve both instead of duplicating them.
+*/
+function scopedEntry(scope){
+
+    if(scope === "mask")
+        return selectedMaskEntry();
+
+    return selectedVideoEntry();
 
 }
 
@@ -222,16 +253,17 @@ function updateLayerStatusDisplay(entry){
 }
 
 
-function reportLayerSelection(){
+function reportSelection(scope){
 
     const entry =
-        selectedEntry();
+        scopedEntry(scope);
 
     updateLayerStatusDisplay(
         entry
     );
 
     reportMaskSettingsChanged(
+        scope,
         entry.settings.maskedBy
     );
 
@@ -240,7 +272,7 @@ function reportLayerSelection(){
             "layerSelectionChanged",
             {
                 detail:{
-                    index:selectedLayerIndex,
+                    scope:scope,
                     label:entry.label,
                     kind:entry.kind,
                     visibilityMode:entry.settings.visibilityMode,
@@ -259,22 +291,48 @@ function reportLayerSelection(){
 
 
 window.addEventListener(
-    "layerIndexStep",
+    "videoIndexStep",
     e=>{
 
         const count =
-            getLayerRegistry().length;
+            getVideoRegistry().length;
 
-        selectedLayerIndex =
+        selectedVideoIndex =
             Math.min(
                 Math.max(
-                    selectedLayerIndex + e.detail.direction,
+                    selectedVideoIndex + e.detail.direction,
                     0
                 ),
                 count - 1
             );
 
-        reportLayerSelection();
+        reportSelection(
+            "video"
+        );
+
+    }
+);
+
+
+window.addEventListener(
+    "maskIndexStep",
+    e=>{
+
+        const count =
+            getMaskRegistry().length;
+
+        selectedMaskIndex =
+            Math.min(
+                Math.max(
+                    selectedMaskIndex + e.detail.direction,
+                    0
+                ),
+                count - 1
+            );
+
+        reportSelection(
+            "mask"
+        );
 
     }
 );
@@ -436,7 +494,7 @@ renderer.start();
 
 
 updateLayerStatusDisplay(
-    selectedEntry()
+    selectedVideoEntry()
 );
 
 
@@ -807,19 +865,21 @@ window.addEventListener(
 ==================================================
 LAYER
 
-Universal controls: every registry entry, whatever kind it is, has
-the same enabled/visible/maskedBy shape, so these two handlers work
-identically no matter what's selected - no per-kind branching.
+Universal controls, shared identically by VIDEO and KEY (each keeps
+its own selected index/registry, "scope" in the event detail just
+says which one a given click was about) - no per-kind branching.
+toggleLayerEnabled is unused by any menu now (visibility mode
+replaced it) but stays wired in case it's needed again.
 ==================================================
 */
 
 
 window.addEventListener(
     "toggleLayerEnabled",
-    ()=>{
+    e=>{
 
         const entry =
-            selectedEntry();
+            scopedEntry(e.detail.scope);
 
         entry.settings.enabled =
         !entry.settings.enabled;
@@ -855,10 +915,10 @@ const VISIBILITY_MODES = [
 
 window.addEventListener(
     "cycleVisibilityMode",
-    ()=>{
+    e=>{
 
         const entry =
-            selectedEntry();
+            scopedEntry(e.detail.scope);
 
         let index =
             VISIBILITY_MODES.indexOf(
@@ -884,7 +944,9 @@ window.addEventListener(
             entry.settings.visibilityMode
         );
 
-        reportLayerSelection();
+        reportSelection(
+            e.detail.scope
+        );
 
         /*
         Any layer's visibility mode can change whether it's eligible
@@ -941,7 +1003,7 @@ window.addEventListener(
     ()=>{
 
         const entry =
-            selectedEntry();
+            selectedMaskEntry();
 
         if(!entry.background)
             return;
@@ -969,7 +1031,7 @@ window.addEventListener(
 
 
         const maskSettings =
-            selectedEntry().settings;
+            selectedMaskEntry().settings;
 
         maskSettings.threshold += 5;
 
@@ -991,7 +1053,7 @@ window.addEventListener(
 
 
         const maskSettings =
-            selectedEntry().settings;
+            selectedMaskEntry().settings;
 
         maskSettings.threshold -= 5;
 
@@ -1017,7 +1079,7 @@ window.addEventListener(
     ()=>{
 
         const maskSettings =
-            selectedEntry().settings;
+            selectedMaskEntry().settings;
 
         maskSettings.mode =
             maskSettings.mode === "difference"
@@ -1042,7 +1104,7 @@ window.addEventListener(
     ()=>{
 
         const maskSettings =
-            selectedEntry().settings;
+            selectedMaskEntry().settings;
 
         maskSettings.fill =
             maskSettings.fill === "solid"
@@ -1074,15 +1136,7 @@ window.addEventListener(
     "layerColour",
     e=>{
 
-        const entry =
-            selectedEntry();
-
-
-        if(entry.kind !== "mask")
-            return;
-
-
-        entry.segmentation.setColour(
+        selectedMaskEntry().segmentation.setColour(
             e.detail.r,
             e.detail.g,
             e.detail.b
@@ -1098,7 +1152,7 @@ window.addEventListener(
     e=>{
 
         const maskSettings =
-            selectedEntry().settings;
+            selectedMaskEntry().settings;
 
         maskSettings.keyColour = {
 
@@ -1252,12 +1306,29 @@ camera.getVideo().addEventListener(
 RINGS
 
 GENERATE > RINGS is a fixed, non-steppable screen (no multi-instance
-ADD for now), so these read/write the one rings singleton directly
-rather than going through selectedEntry(). Universal stuff
-(visibility mode/background/masked by) still goes through the
-registry via VIDEO - this is only the rings-specific deep settings.
+ADD for now), so these read/write the one rings singleton directly.
+Once toggleRingsEnabled turns it on, it becomes "real" and appears
+as its own entry in VIDEO's registry with the same universal row
+(visibility mode/background/masked by/transport) as everything else -
+this file section is only the rings-specific deep settings.
 ==================================================
 */
+
+
+window.addEventListener(
+    "toggleRingsEnabled",
+    ()=>{
+
+        rings.ringsSettings.enabled =
+        !rings.ringsSettings.enabled;
+
+        console.log(
+            "Rings enabled:",
+            rings.ringsSettings.enabled
+        );
+
+    }
+);
 
 
 window.addEventListener(
@@ -1583,7 +1654,7 @@ window.addEventListener(
 
 function eligibleMaskTargets(){
 
-    return getLayerRegistry().filter(
+    return getAllRealEntries().filter(
         entry=>entry.settings.visibilityMode === "maskWhite"
     );
 
@@ -2323,19 +2394,36 @@ window.addEventListener(
 ==================================================
 LAYER REGISTRY
 
-The single source of truth for "everything that exists": one flat
-list covering every video feed, every derived mask, every rings
-instance, text, and ghost. Each entry has the exact same shape
-(label/kind/settings with enabled+visible+maskedBy), which is what
-lets the LAYER selector, the universal ON/OFF+VISIBLE+MASKED BY
-controls, and the mask-source picker all work identically regardless
-of what's actually selected. This replaces the old per-type
-enumeration that used to live separately in getMaskSources().
+Two independent lists, not one. VIDEO steps over "real" things only -
+every video layer you've actually added, plus a generator only once
+you've actually done something with it (ghost once its count is
+above zero, rings once explicitly turned on, text once it has real
+content) - untouched defaults never show up just because the class
+instance happens to exist. KEY steps over masks only, one per video
+layer. Both share the same entry shape (label/kind/settings with
+enabled/visibilityMode/maskedBy), which is what lets one set of
+universal handlers serve both.
 ==================================================
 */
 
 
-function getLayerRegistry(){
+function isGeneratorReal(kind){
+
+    if(kind === "ghost")
+        return settings.amiga.ghost.enabled;
+
+    if(kind === "rings")
+        return rings.ringsSettings.enabled;
+
+    if(kind === "text")
+        return settings.amiga.text.content.trim() !== "";
+
+    return false;
+
+}
+
+
+function getVideoRegistry(){
 
     const registry = [];
 
@@ -2358,6 +2446,61 @@ function getLayerRegistry(){
                 ("videoLayer:" + layer.id)
         });
 
+    });
+
+
+    if(isGeneratorReal("rings")){
+
+        registry.push({
+            label:"LAYER " + rings.globalLayerNumber,
+            kind:"rings",
+            settings:rings.ringsSettings,
+            maskSourceId:"rings",
+            instance:rings
+        });
+
+    }
+
+
+    if(isGeneratorReal("text")){
+
+        registry.push({
+            label:"LAYER " + textLayerNumber,
+            kind:"text",
+            settings:settings.amiga.text,
+            maskSourceId:"text"
+        });
+
+    }
+
+
+    if(isGeneratorReal("ghost")){
+
+        registry.push({
+            label:"LAYER " + ghostLayerNumber,
+            kind:"ghost",
+            settings:settings.amiga.ghost,
+            maskSourceId:"ghost"
+        });
+
+    }
+
+
+    return registry;
+
+}
+
+
+function getMaskRegistry(){
+
+    const registry = [];
+
+
+    [originalLayerAdapter, ...videoLayers].forEach(layer=>{
+
+        const isOriginal =
+            layer.id === "original";
+
 
         registry.push({
             label:"MASK " + layer.globalLayerNumber,
@@ -2377,39 +2520,25 @@ function getLayerRegistry(){
     });
 
 
-    /*
-    Only the fixed rings/ghost/text singletons are steppable here - no
-    multi-instance ADD mechanism is exposed right now ("only Ghost,
-    Rings, Text for now"). ringsLayers/addRingsLayer still exist and
-    still render/mask correctly if ever populated, they're just not
-    reachable from any menu.
-    */
-    registry.push({
-        label:"LAYER " + rings.globalLayerNumber,
-        kind:"rings",
-        settings:rings.ringsSettings,
-        maskSourceId:"rings",
-        instance:rings
-    });
-
-
-    registry.push({
-        label:"LAYER " + textLayerNumber,
-        kind:"text",
-        settings:settings.amiga.text,
-        maskSourceId:"text"
-    });
-
-
-    registry.push({
-        label:"LAYER " + ghostLayerNumber,
-        kind:"ghost",
-        settings:settings.amiga.ghost,
-        maskSourceId:"ghost"
-    });
-
-
     return registry;
+
+}
+
+
+/*
+Everything real, video and mask alike, in one list - used only for
+mask-source ELIGIBILITY (MASKED BY pickers, Ghost's APPLY TO MASK),
+never for stepper navigation. ringsLayers/addRingsLayer still exist
+and still render/mask correctly if ever populated, they're just not
+reachable from any menu right now ("only Ghost, Rings, Text for
+now"), so they're intentionally left out here too.
+*/
+function getAllRealEntries(){
+
+    return [
+        ...getVideoRegistry(),
+        ...getMaskRegistry()
+    ];
 
 }
 
@@ -2434,7 +2563,7 @@ function getMaskSources(){
     ];
 
 
-    getLayerRegistry().forEach(entry=>{
+    getAllRealEntries().forEach(entry=>{
 
         sources.push({
             id:entry.maskSourceId,
@@ -2449,7 +2578,7 @@ function getMaskSources(){
 }
 
 
-function reportMaskSettingsChanged(target){
+function reportMaskSettingsChanged(scope, target){
 
     const match =
         getMaskSources().find(
@@ -2462,6 +2591,7 @@ function reportMaskSettingsChanged(target){
             "maskSettingsChanged",
             {
                 detail:{
+                    scope:scope,
                     source:target.source,
                     sourceLabel:
                         match
@@ -2483,7 +2613,7 @@ window.addEventListener(
     e=>{
 
         const entry =
-            selectedEntry();
+            scopedEntry(e.detail.scope);
 
         const target =
             entry.settings.maskedBy;
@@ -2527,6 +2657,7 @@ window.addEventListener(
 
 
         reportMaskSettingsChanged(
+            e.detail.scope,
             target
         );
 
@@ -2539,7 +2670,7 @@ window.addEventListener(
     e=>{
 
         const target =
-            selectedEntry().settings.maskedBy;
+            scopedEntry(e.detail.scope).settings.maskedBy;
 
 
         let index =
@@ -2572,6 +2703,7 @@ window.addEventListener(
 
 
         reportMaskSettingsChanged(
+            e.detail.scope,
             target
         );
 
