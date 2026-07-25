@@ -14,7 +14,7 @@ export class Settings {
             width:320,
             height:240,
             enabled:true,
-            visible:true,
+            visibilityMode:"on",
             backgroundColour:"rgb(0,0,0)",
             maskedBy:{source:"none", channel:"alpha"}
         };
@@ -33,7 +33,7 @@ export class Settings {
             threshold:100,
             keyColour:{r:0, g:255, b:0},
             fill:"solid",
-            visible:true,
+            visibilityMode:"on",
             maskedBy:{source:"none", channel:"alpha"}
         };
 
@@ -71,7 +71,7 @@ export class Settings {
 
             rings:{
                 enabled:false,
-                visible:true,
+                visibilityMode:"on",
                 count:2,
                 ringsPerGroup:8,
                 spacing:14,
@@ -98,16 +98,20 @@ export class Settings {
 
             ghost:{
                 enabled:false,
+                visibilityMode:"on",
                 count:0,
                 alpha:0.45,
-                delay:50
+                delay:50,
+                applyToMask:null,
+                maskedBy:{source:"none", channel:"alpha"}
             },
 
             text:{
                 content:"",
                 colour:"rgb(255,255,255)",
                 size:24,
-                visible:true,
+                enabled:true,
+                visibilityMode:"on",
                 maskedBy:{source:"none", channel:"alpha"}
             },
             plasma:{

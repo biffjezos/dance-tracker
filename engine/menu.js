@@ -6,6 +6,14 @@ AMIGA TWO ROW MENU SYSTEM
 */
 
 
+const VISIBILITY_MODE_LABELS = {
+    on:"ON",
+    alpha:"ALPHA",
+    maskWhite:"MASK WHITE",
+    off:"OFF"
+};
+
+
 const SWATCHES = [
 
     {label:"BLACK", r:0, g:0, b:0},
@@ -105,29 +113,39 @@ export class MenuManager {
         );
 
 
-        this.layerSelection = {index:0, name:"VIDEO 1"};
+        /*
+        Every kind of layer (video, mask, rings, text, ghost) is
+        navigated through the exact same LAYER -/+ stepper and shows
+        the exact same shape of universal controls (see
+        renderLayerEditor) - this mirror just tracks which one is
+        currently selected, what kind it is, and its visibility mode,
+        kept in sync by app.js's layerSelectionChanged event.
+        */
+        this.registrySelection = {label:"LAYER 1", kind:"video", visibilityMode:"on"};
 
 
         window.addEventListener(
             "layerSelectionChanged",
             e=>{
 
-                this.layerSelection = {
-                    index:e.detail.index,
-                    name:e.detail.name
+                this.registrySelection = {
+                    label:e.detail.label,
+                    kind:e.detail.kind,
+                    visibilityMode:e.detail.visibilityMode
                 };
 
-                this.keyColour = {
-                    r:e.detail.keyColour.r,
-                    g:e.detail.keyColour.g,
-                    b:e.detail.keyColour.b
-                };
+                if(e.detail.keyColour){
+
+                    this.keyColour = {
+                        r:e.detail.keyColour.r,
+                        g:e.detail.keyColour.g,
+                        b:e.detail.keyColour.b
+                    };
+
+                }
 
 
-                if(
-                    this.path[0] === "key" ||
-                    this.path[0] === "video"
-                ){
+                if(this.path[0] === "video"){
 
                     this.render();
 
@@ -139,13 +157,11 @@ export class MenuManager {
 
         this.maskState = {
 
-            video:{source:"none", sourceLabel:"NONE", channel:"alpha"},
+            source:"none",
 
-            body:{source:"none", sourceLabel:"NONE", channel:"alpha"},
+            sourceLabel:"NONE",
 
-            rings:{source:"none", sourceLabel:"NONE", channel:"alpha"},
-
-            text:{source:"none", sourceLabel:"NONE", channel:"alpha"}
+            channel:"alpha"
 
         };
 
@@ -154,7 +170,7 @@ export class MenuManager {
             "maskSettingsChanged",
             e=>{
 
-                this.maskState[e.detail.layer] = {
+                this.maskState = {
                     source:e.detail.source,
                     sourceLabel:e.detail.sourceLabel,
                     channel:e.detail.channel
@@ -166,8 +182,42 @@ export class MenuManager {
 
                 if(
                     node &&
-                    node.type==="maskPicker" &&
-                    node.layer===e.detail.layer
+                    node.type==="maskPicker"
+                ){
+
+                    this.render();
+
+                }
+
+            }
+        );
+
+
+        this.applyToMaskState = {
+
+            label:"NONE AVAILABLE",
+
+            options:[]
+
+        };
+
+
+        window.addEventListener(
+            "applyToMaskChanged",
+            e=>{
+
+                this.applyToMaskState = {
+                    label:e.detail.label,
+                    options:e.detail.options
+                };
+
+
+                let node =
+                    this.node();
+
+                if(
+                    node &&
+                    node.type==="applyToMaskPicker"
                 ){
 
                     this.render();
@@ -182,6 +232,15 @@ export class MenuManager {
         this.menus = {
 
 
+            /*
+            One unified add per media type - no separate "load into
+            the camera slot" vs "add a layer" anymore. Camera keeps
+            its own on/off since it's not a file. TRANSPORT moved out
+            to VIDEO (see below, "similar to BACKGROUND or MASK" -
+            reachable per selected node, not a global INPUT thing) -
+            interim: still the one shared transport tree underneath,
+            full per-node offset overhaul is tracked separately.
+            */
             input:{
 
                 CAMERA:{
@@ -190,27 +249,7 @@ export class MenuManager {
 
                 },
 
-                "LOAD VIDEO":{
-
-                    type:"fileInput",
-
-                    accept:"video/*",
-
-                    event:"loadVideoFile"
-
-                },
-
-                "LOAD AUDIO":{
-
-                    type:"fileInput",
-
-                    accept:"audio/*",
-
-                    event:"loadAudioFile"
-
-                },
-
-                "ADD VIDEO LAYER":{
+                "ADD VIDEO SOURCE":{
 
                     type:"fileInput",
 
@@ -219,6 +258,54 @@ export class MenuManager {
                     event:"addVideoLayer"
 
                 },
+
+                "ADD AUDIO SOURCE":{
+
+                    type:"fileInput",
+
+                    accept:"audio/*",
+
+                    event:"loadAudioFile"
+
+                }
+
+            },
+
+
+
+            /*
+            The universal navigator: every video feed, every derived
+            mask, and the rings/ghost/text generators, all through the
+            same LAYER -/+ stepper, all showing the same universal
+            row (VISIBILITY MODE/BACKGROUND COLOUR/MASKED BY/
+            TRANSPORT) - see renderLayerEditor(). Mask-kind entries
+            additionally get their own deep settings here since masks
+            have no other screen; rings/ghost/text's deep settings
+            live under GENERATE instead, not duplicated here.
+            */
+            video:{
+
+                type:"layerEditor",
+
+                "MASKED BY":{
+
+                    type:"maskPicker"
+
+                },
+
+                "KEY COLOUR":{
+
+                    type:"keyColourPicker"
+
+                },
+
+                COLOUR:colourMenu(
+                    "layerColour"
+                ),
+
+                "BACKGROUND COLOUR":colourMenu(
+                    "videoBackgroundColour"
+                ),
 
                 TRANSPORT:{
 
@@ -242,145 +329,41 @@ export class MenuManager {
 
                     "FRAME +":null,
 
-                    "FRAME -":null,
+                    "FRAME -":null
+
+                }
+
+            },
 
 
 
-                    "AUDIO SYNC":{
+            /*
+            No default crap - just the three fixed generators, no add
+            action, no stepper. Each shows only what's specific to
+            that generator; visibility/background/masked by for these
+            live under VIDEO instead.
+            */
+            generate:{
 
-                        OFFSET:{
+                GHOST:{
 
-                            type:"display",
+                    "GHOST +":null,
 
-                            id:"audio-sync-display"
+                    "GHOST -":null,
 
-                        },
+                    "GHOST DELAY +":null,
 
-                        "SYNC MINUTE +":null,
+                    "GHOST DELAY -":null,
 
-                        "SYNC MINUTE -":null,
+                    "APPLY TO MASK":{
 
-                        "SYNC SECOND +":null,
-
-                        "SYNC SECOND -":null,
-
-                        "SYNC FRAME +":null,
-
-                        "SYNC FRAME -":null
+                        type:"applyToMaskPicker"
 
                     }
 
-                }
-
-            },
-
-
-
-            video:{
-
-                LAYER:{
-
-                    type:"layerStepper"
-
                 },
-
-                "VIDEO ON/OFF":null,
-
-                "VIDEO VISIBLE ON/OFF":null,
-
-
-
-                BACKGROUND:{
-
-                    COLOUR:colourMenu(
-                        "videoBackgroundColour"
-                    )
-
-                },
-
-
-                "VIDEO MASKED BY":{
-
-                    type:"maskPicker",
-
-                    layer:"video"
-
-                },
-
-
-
-                "BODY ON/OFF":null,
-
-                "BODY VISIBLE ON/OFF":null,
-
-
-                "BODY MASKED BY":{
-
-                    type:"maskPicker",
-
-                    layer:"body"
-
-                }
-
-            },
-
-
-
-            key:{
-
-                LAYER:{
-
-                    type:"layerStepper"
-
-                },
-
-                "CAPTURE BACKGROUND":null,
-
-                "THRESHOLD +":null,
-
-                "THRESHOLD -":null,
-
-                "DIFFERENCE/CHROMA":null,
-
-                "SOLID/VIDEO":null,
-
-                COLOUR:colourMenu(
-                    "bodyColour"
-                ),
-
-                "KEY COLOUR":{
-
-                    type:"keyColourPicker"
-
-                }
-
-            },
-
-
-
-            generate:{
-
-                "ADD RINGS LAYER":null,
-
-                GHOST:[
-
-                    "GHOST +",
-
-                    "GHOST -",
-
-                    "GHOST DELAY +",
-
-                    "GHOST DELAY -"
-
-                ],
-
-
 
                 RINGS:{
-
-                    "RINGS ON/OFF":null,
-
-                    "RINGS VISIBLE ON/OFF":null,
 
                     "RING COUNT +":null,
 
@@ -394,7 +377,11 @@ export class MenuManager {
 
                     "RING THICKNESS -":null,
 
+                    COLOUR:{
 
+                        type:"ringColourPicker"
+
+                    },
 
                     CONSTELLATION:[
 
@@ -404,32 +391,13 @@ export class MenuManager {
 
                         "DISTANCE -"
 
-                    ],
-
-
-
-                    COLOUR:{
-
-                        type:"ringColourPicker"
-
-                    },
-
-
-                    "MASKED BY":{
-
-                        type:"maskPicker",
-
-                        layer:"rings"
-
-                    }
+                    ]
 
                 },
 
-
-
                 TEXT:{
 
-                    "ENTER TEXT":{
+                    CONTENT:{
 
                         type:"input",
 
@@ -439,26 +407,13 @@ export class MenuManager {
 
                     },
 
-                    "SIZE +":null,
+                    "TEXT SIZE +":null,
 
-                    "SIZE -":null,
-
-                    "TEXT VISIBLE ON/OFF":null,
-
-
+                    "TEXT SIZE -":null,
 
                     COLOUR:colourMenu(
-                        "setTextColour"
-                    ),
-
-
-                    "MASKED BY":{
-
-                        type:"maskPicker",
-
-                        layer:"text"
-
-                    }
+                        "textColour"
+                    )
 
                 }
 
@@ -483,6 +438,14 @@ export class MenuManager {
                     "OUTPUT SIZE +":null,
 
                     "OUTPUT SIZE -":null
+
+                },
+
+                BACKGROUND:{
+
+                    COLOUR:colourMenu(
+                        "videoBackgroundColour"
+                    )
 
                 }
 
@@ -640,6 +603,19 @@ export class MenuManager {
 
         if(
             node &&
+            node.type==="layerEditor"
+        ){
+
+            this.renderLayerEditor();
+
+            return;
+
+        }
+
+
+
+        if(
+            node &&
             node.type==="ringColourPicker"
         ){
 
@@ -669,9 +645,20 @@ export class MenuManager {
             node.type==="maskPicker"
         ){
 
-            this.renderMaskPicker(
-                node.layer
-            );
+            this.renderMaskPicker();
+
+            return;
+
+        }
+
+
+
+        if(
+            node &&
+            node.type==="applyToMaskPicker"
+        ){
+
+            this.renderApplyToMaskPicker();
 
             return;
 
@@ -919,79 +906,6 @@ export class MenuManager {
                 }
                 else if(
                     value &&
-                    value.type==="layerStepper"
-                ){
-
-
-                    let minus =
-                    document.createElement(
-                        "button"
-                    );
-
-                    minus.innerText=
-                        "LAYER -";
-
-                    minus.onclick=()=>{
-
-                        window.dispatchEvent(
-                            new CustomEvent(
-                                "layerIndexStep",
-                                {detail:{direction:-1}}
-                            )
-                        );
-
-                    };
-
-                    this.subMenu.appendChild(
-                        minus
-                    );
-
-
-
-                    let display =
-                    document.createElement(
-                        "span"
-                    );
-
-                    display.innerText=
-                        this.layerSelection.name;
-
-                    display.className=
-                        "ring-id-display";
-
-                    this.subMenu.appendChild(
-                        display
-                    );
-
-
-
-                    let plus =
-                    document.createElement(
-                        "button"
-                    );
-
-                    plus.innerText=
-                        "LAYER +";
-
-                    plus.onclick=()=>{
-
-                        window.dispatchEvent(
-                            new CustomEvent(
-                                "layerIndexStep",
-                                {detail:{direction:1}}
-                            )
-                        );
-
-                    };
-
-                    this.subMenu.appendChild(
-                        plus
-                    );
-
-
-                }
-                else if(
-                    value &&
                     typeof value === "object"
                 ){
 
@@ -1097,6 +1011,270 @@ export class MenuManager {
             "#000"
             :
             "#fff";
+
+
+    }
+
+
+
+
+    /*
+    The universal navigator screen: LAYER -/+ stepper, then
+    VISIBILITY MODE, BACKGROUND COLOUR, MASKED BY, TRANSPORT -
+    identical for every kind, video/mask/rings/ghost/text alike. Mask
+    kind additionally gets its own deep settings since a mask has no
+    other screen - everything else's deep settings live under
+    GENERATE instead, not duplicated here.
+    */
+    renderLayerEditor(){
+
+
+        let minus =
+        document.createElement(
+            "button"
+        );
+
+        minus.innerText=
+            "LAYER -";
+
+        minus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "layerIndexStep",
+                    {detail:{direction:-1}}
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            minus
+        );
+
+
+
+        let display =
+        document.createElement(
+            "span"
+        );
+
+        display.innerText=
+            this.registrySelection.label;
+
+        display.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            display
+        );
+
+
+
+        let plus =
+        document.createElement(
+            "button"
+        );
+
+        plus.innerText=
+            "LAYER +";
+
+        plus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "layerIndexStep",
+                    {detail:{direction:1}}
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            plus
+        );
+
+
+
+        /*
+        One button, four states, cycled forward each click - replaces
+        the old separate ON/OFF + VISIBLE ON/OFF pair. Re-renders
+        immediately after dispatching since, unlike the other
+        buttons here, this one's own label depends on the state it
+        just changed (dispatchEvent runs the app.js handler
+        synchronously, so registrySelection is already updated by
+        the time render() reads it back).
+        */
+        let visibility =
+        document.createElement(
+            "button"
+        );
+
+        visibility.innerText=
+            "VISIBILITY: " +
+            (
+                VISIBILITY_MODE_LABELS[
+                    this.registrySelection.visibilityMode
+                ] ||
+                "ON"
+            );
+
+        visibility.onclick=()=>{
+
+            window.dispatchEvent(
+                new Event("cycleVisibilityMode")
+            );
+
+            this.render();
+
+        };
+
+        this.subMenu.appendChild(
+            visibility
+        );
+
+
+
+        this.addLayerScreenButton(
+            "BACKGROUND COLOUR",
+            "BACKGROUND COLOUR"
+        );
+
+
+        let maskedBy =
+        document.createElement(
+            "button"
+        );
+
+        maskedBy.innerText=
+            "MASKED BY";
+
+        maskedBy.onclick=()=>{
+
+            this.enter(
+                "MASKED BY"
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            maskedBy
+        );
+
+
+
+        this.addLayerScreenButton(
+            "TRANSPORT",
+            "TRANSPORT"
+        );
+
+
+
+        const kind =
+            this.registrySelection.kind;
+
+
+        if(kind === "mask"){
+
+            this.addLayerButton(
+                "CAPTURE BACKGROUND",
+                "captureLayerBackground"
+            );
+
+            this.addLayerButton(
+                "THRESHOLD +",
+                "thresholdUp"
+            );
+
+            this.addLayerButton(
+                "THRESHOLD -",
+                "thresholdDown"
+            );
+
+            this.addLayerButton(
+                "DIFFERENCE/CHROMA",
+                "toggleMatteMode"
+            );
+
+            this.addLayerButton(
+                "SOLID/VIDEO",
+                "toggleLayerFill"
+            );
+
+            this.addLayerScreenButton(
+                "COLOUR",
+                "COLOUR"
+            );
+
+            this.addLayerScreenButton(
+                "KEY COLOUR",
+                "KEY COLOUR"
+            );
+
+        }
+
+
+    }
+
+
+
+
+    addLayerButton(label, eventName){
+
+
+        let button =
+        document.createElement(
+            "button"
+        );
+
+        button.innerText=
+            label;
+
+        button.onclick=()=>{
+
+            console.log(
+                "MENU SELECTED:",
+                label
+            );
+
+            window.dispatchEvent(
+                new Event(eventName)
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            button
+        );
+
+
+    }
+
+
+
+
+    addLayerScreenButton(label, screenKey){
+
+
+        let button =
+        document.createElement(
+            "button"
+        );
+
+        button.innerText=
+            label;
+
+        button.onclick=()=>{
+
+            this.enter(
+                screenKey
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            button
+        );
 
 
     }
@@ -1249,7 +1427,7 @@ export class MenuManager {
         );
 
         layerLabel.innerText=
-            this.layerSelection.name;
+            this.registrySelection.label;
 
         layerLabel.className=
             "ring-id-display";
@@ -1365,34 +1543,27 @@ export class MenuManager {
 
 
 
-    renderMaskPicker(layerName){
+    renderMaskPicker(){
 
 
         const state =
-            this.maskState[layerName];
+            this.maskState;
 
 
-        if(
-            layerName === "video" ||
-            layerName === "body"
-        ){
+        let layerLabel =
+        document.createElement(
+            "span"
+        );
 
-            let layerLabel =
-            document.createElement(
-                "span"
-            );
+        layerLabel.innerText=
+            this.registrySelection.label;
 
-            layerLabel.innerText=
-                this.layerSelection.name;
+        layerLabel.className=
+            "ring-id-display";
 
-            layerLabel.className=
-                "ring-id-display";
-
-            this.subMenu.appendChild(
-                layerLabel
-            );
-
-        }
+        this.subMenu.appendChild(
+            layerLabel
+        );
 
 
         let sourceMinus =
@@ -1410,7 +1581,6 @@ export class MenuManager {
                     "maskSourceStep",
                     {
                         detail:{
-                            layer:layerName,
                             direction:-1
                         }
                     }
@@ -1457,7 +1627,6 @@ export class MenuManager {
                     "maskSourceStep",
                     {
                         detail:{
-                            layer:layerName,
                             direction:1
                         }
                     }
@@ -1488,7 +1657,6 @@ export class MenuManager {
                     "maskChannelStep",
                     {
                         detail:{
-                            layer:layerName,
                             direction:-1
                         }
                     }
@@ -1535,7 +1703,6 @@ export class MenuManager {
                     "maskChannelStep",
                     {
                         detail:{
-                            layer:layerName,
                             direction:1
                         }
                     }
@@ -1547,6 +1714,74 @@ export class MenuManager {
         this.subMenu.appendChild(
             channelPlus
         );
+
+
+    }
+
+
+
+
+    /*
+    Ghost's own effect input - which mask's shape feeds the trail
+    history. A direct selector, not a stepper: one button per mask
+    currently in MASK WHITE visibility mode, no NONE fallback
+    (app.js's eligibleMaskTargets enforces that - the list is simply
+    empty if nothing qualifies yet). Different from MASKED BY, which
+    masks Ghost's composited output and lives under VIDEO instead.
+    */
+    renderApplyToMaskPicker(){
+
+
+        let current =
+        document.createElement(
+            "span"
+        );
+
+        current.innerText=
+            "CURRENT: " +
+            this.applyToMaskState.label;
+
+        current.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            current
+        );
+
+
+
+        this.applyToMaskState.options.forEach(option=>{
+
+
+            let button =
+            document.createElement(
+                "button"
+            );
+
+            button.innerText=
+                option.label;
+
+            button.onclick=()=>{
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "setApplyToMask",
+                        {
+                            detail:{
+                                id:option.id
+                            }
+                        }
+                    )
+                );
+
+            };
+
+            this.subMenu.appendChild(
+                button
+            );
+
+
+        });
 
 
     }
@@ -1571,9 +1806,9 @@ export class MenuManager {
 
 
 
-        if(item==="CAPTURE BACKGROUND")
+        if(item==="ADD RINGS LAYER")
             window.dispatchEvent(
-                new Event("captureBackground")
+                new Event("addRingsLayer")
             );
 
 
@@ -1585,142 +1820,9 @@ export class MenuManager {
 
 
 
-        if(item==="VIDEO ON/OFF")
-            window.dispatchEvent(
-                new Event("toggleVideo")
-            );
-
-
-
-        if(item==="VIDEO VISIBLE ON/OFF")
-            window.dispatchEvent(
-                new Event("toggleVideoVisible")
-            );
-
-
-
-        if(item==="BODY ON/OFF")
-            window.dispatchEvent(
-                new Event("toggleBody")
-            );
-
-
-
-        if(item==="BODY VISIBLE ON/OFF")
-            window.dispatchEvent(
-                new Event("toggleBodyVisible")
-            );
-
-
-
-        if(item==="THRESHOLD +")
-            window.dispatchEvent(
-                new Event("thresholdUp")
-            );
-
-
-
-        if(item==="THRESHOLD -")
-            window.dispatchEvent(
-                new Event("thresholdDown")
-            );
-
-
-
-        if(item==="DIFFERENCE/CHROMA")
-            window.dispatchEvent(
-                new Event("toggleMatteMode")
-            );
-
-
-
-        if(item==="SOLID/VIDEO")
-            window.dispatchEvent(
-                new Event("toggleBodyFill")
-            );
-
-
-
-        if(item==="ADD RINGS LAYER")
-            window.dispatchEvent(
-                new Event("addRingsLayer")
-            );
-
-
-
-        if(item==="RINGS ON/OFF")
-            window.dispatchEvent(
-                new Event("toggleRings")
-            );
-
-
-
-        if(item==="RINGS VISIBLE ON/OFF")
-            window.dispatchEvent(
-                new Event("toggleRingsVisible")
-            );
-
-
-
-        if(item==="RING COUNT +")
-            window.dispatchEvent(
-                new Event("ringCountUp")
-            );
-
-
-
-        if(item==="RING COUNT -")
-            window.dispatchEvent(
-                new Event("ringCountDown")
-            );
-
-
-
-        if(item==="RING SIZE +")
-            window.dispatchEvent(
-                new Event("ringSizeUp")
-            );
-
-
-
-        if(item==="RING SIZE -")
-            window.dispatchEvent(
-                new Event("ringSizeDown")
-            );
-
-
-
-        if(item==="RING THICKNESS +")
-            window.dispatchEvent(
-                new Event("ringThicknessUp")
-            );
-
-
-
-        if(item==="RING THICKNESS -")
-            window.dispatchEvent(
-                new Event("ringThicknessDown")
-            );
-
-
-
         if(item==="ON/OFF")
             window.dispatchEvent(
                 new Event("toggleConstellation")
-            );
-
-
-
-        if(item==="GHOST +")
-            window.dispatchEvent(
-                new Event("ghostUp")
-            );
-
-
-
-        if(item==="GHOST -")
-            window.dispatchEvent(
-                new Event("ghostDown")
             );
 
 
@@ -1735,41 +1837,6 @@ export class MenuManager {
         if(item==="DISTANCE -")
             window.dispatchEvent(
                 new Event("constellationDistanceDown")
-            );
-
-
-
-        if(item==="GHOST DELAY +")
-            window.dispatchEvent(
-                new Event("ghostDelayUp")
-            );
-
-
-
-        if(item==="GHOST DELAY -")
-            window.dispatchEvent(
-                new Event("ghostDelayDown")
-            );
-
-
-
-        if(item==="SIZE +")
-            window.dispatchEvent(
-                new Event("textSizeUp")
-            );
-
-
-
-        if(item==="SIZE -")
-            window.dispatchEvent(
-                new Event("textSizeDown")
-            );
-
-
-
-        if(item==="TEXT VISIBLE ON/OFF")
-            window.dispatchEvent(
-                new Event("toggleTextVisible")
             );
 
 
@@ -1875,6 +1942,90 @@ export class MenuManager {
         if(item==="SYNC FRAME -")
             window.dispatchEvent(
                 new Event("audioSyncFrameDown")
+            );
+
+
+
+        if(item==="RING COUNT +")
+            window.dispatchEvent(
+                new Event("ringCountUp")
+            );
+
+
+
+        if(item==="RING COUNT -")
+            window.dispatchEvent(
+                new Event("ringCountDown")
+            );
+
+
+
+        if(item==="RING SIZE +")
+            window.dispatchEvent(
+                new Event("ringSizeUp")
+            );
+
+
+
+        if(item==="RING SIZE -")
+            window.dispatchEvent(
+                new Event("ringSizeDown")
+            );
+
+
+
+        if(item==="RING THICKNESS +")
+            window.dispatchEvent(
+                new Event("ringThicknessUp")
+            );
+
+
+
+        if(item==="RING THICKNESS -")
+            window.dispatchEvent(
+                new Event("ringThicknessDown")
+            );
+
+
+
+        if(item==="GHOST +")
+            window.dispatchEvent(
+                new Event("ghostUp")
+            );
+
+
+
+        if(item==="GHOST -")
+            window.dispatchEvent(
+                new Event("ghostDown")
+            );
+
+
+
+        if(item==="GHOST DELAY +")
+            window.dispatchEvent(
+                new Event("ghostDelayUp")
+            );
+
+
+
+        if(item==="GHOST DELAY -")
+            window.dispatchEvent(
+                new Event("ghostDelayDown")
+            );
+
+
+
+        if(item==="TEXT SIZE +")
+            window.dispatchEvent(
+                new Event("textSizeUp")
+            );
+
+
+
+        if(item==="TEXT SIZE -")
+            window.dispatchEvent(
+                new Event("textSizeDown")
             );
 
 

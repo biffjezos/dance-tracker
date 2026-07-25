@@ -52,7 +52,7 @@ export class VideoLayer {
 
             enabled:true,
 
-            visible:true,
+            visibilityMode:"on",
 
             maskedBy:{source:"none", channel:"alpha"}
 
@@ -71,7 +71,7 @@ export class VideoLayer {
 
             enabled:true,
 
-            visible:true,
+            visibilityMode:"on",
 
             maskedBy:{source:"none", channel:"alpha"}
 

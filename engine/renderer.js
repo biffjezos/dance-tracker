@@ -594,6 +594,152 @@ export class Renderer {
 
 
 
+    /*
+    Visibility mode is a per-layer visual transform applied after
+    masking, on top of the enabled/off gate the caller already checked.
+    "on" passes the canvas through untouched. "maskWhite" flattens the
+    shape to solid white RGB (keeping the existing alpha as the shape) -
+    both a clean visual silhouette and, by construction, a correct mask
+    source for any channel a downstream MASKED BY picks. "alpha"
+    visualizes the raw alpha channel as an opaque greyscale image, since
+    alpha alone isn't otherwise visible on screen.
+    */
+    applyVisibilityMode(canvas, mode){
+
+
+        if(!mode || mode === "on")
+            return canvas;
+
+
+        const width =
+            canvas.width;
+
+        const height =
+            canvas.height;
+
+
+        if(!this.visibilityScratch){
+
+            this.visibilityScratch =
+                document.createElement(
+                    "canvas"
+                );
+
+        }
+
+
+        this.visibilityScratch.width = width;
+
+        this.visibilityScratch.height = height;
+
+
+        const scratchCtx =
+            this.visibilityScratch.getContext(
+                "2d"
+            );
+
+
+        scratchCtx.clearRect(
+            0,
+            0,
+            width,
+            height
+        );
+
+        scratchCtx.drawImage(
+            canvas,
+            0,
+            0
+        );
+
+
+        const frame =
+            scratchCtx.getImageData(
+                0,
+                0,
+                width,
+                height
+            );
+
+
+        const pixels =
+            frame.data;
+
+
+        if(mode === "maskWhite"){
+
+            for(
+                let i=0;
+                i<pixels.length;
+                i+=4
+            ){
+
+                pixels[i] = 255;
+
+                pixels[i+1] = 255;
+
+                pixels[i+2] = 255;
+
+            }
+
+        }
+        else if(mode === "alpha"){
+
+            for(
+                let i=0;
+                i<pixels.length;
+                i+=4
+            ){
+
+                const a =
+                    pixels[i+3];
+
+                pixels[i] = a;
+
+                pixels[i+1] = a;
+
+                pixels[i+2] = a;
+
+                pixels[i+3] = 255;
+
+            }
+
+        }
+
+
+        scratchCtx.putImageData(
+            frame,
+            0,
+            0
+        );
+
+
+        return this.visibilityScratch;
+
+    }
+
+
+
+
+    visualizeLayer(canvas, maskedBy, mode){
+
+
+        return this.applyVisibilityMode(
+
+            this.resolveMaskedLayer(
+                canvas,
+                maskedBy
+            ),
+
+            mode
+
+        );
+
+    }
+
+
+
+
     compose(){
 
 
@@ -625,14 +771,15 @@ export class Renderer {
 
         if(
             this.settings.video.enabled &&
-            this.settings.video.visible
+            this.settings.video.visibilityMode !== "off"
         ){
 
             ctx.drawImage(
 
-                this.resolveMaskedLayer(
+                this.visualizeLayer(
                     this.layers.effects,
-                    this.settings.video.maskedBy
+                    this.settings.video.maskedBy,
+                    this.settings.video.visibilityMode
                 ),
 
                 0,
@@ -648,14 +795,15 @@ export class Renderer {
 
         if(
             this.settings.layers.body &&
-            this.settings.body.visible
+            this.settings.body.visibilityMode !== "off"
         ){
 
             ctx.drawImage(
 
-                this.resolveMaskedLayer(
+                this.visualizeLayer(
                     this.layers.body,
-                    this.settings.body.maskedBy
+                    this.settings.body.maskedBy,
+                    this.settings.body.visibilityMode
                 ),
 
                 0,
@@ -675,14 +823,15 @@ export class Renderer {
 
 
         if(
-            this.settings.amiga.rings.visible
+            this.settings.amiga.rings.visibilityMode !== "off"
         ){
 
             ctx.drawImage(
 
-                this.resolveMaskedLayer(
+                this.visualizeLayer(
                     this.layers.rings,
-                    this.settings.amiga.rings.maskedBy
+                    this.settings.amiga.rings.maskedBy,
+                    this.settings.amiga.rings.visibilityMode
                 ),
 
                 0,
@@ -698,15 +847,25 @@ export class Renderer {
 
 
 
-        ctx.drawImage(
+        if(
+            this.settings.amiga.ghost.visibilityMode !== "off"
+        ){
 
-            this.layers.ghost,
+            ctx.drawImage(
 
-            0,
+                this.visualizeLayer(
+                    this.layers.ghost,
+                    this.settings.amiga.ghost.maskedBy,
+                    this.settings.amiga.ghost.visibilityMode
+                ),
 
-            0
+                0,
 
-        );
+                0
+
+            );
+
+        }
 
 
 
@@ -716,14 +875,15 @@ export class Renderer {
 
 
         if(
-            this.settings.amiga.text.visible
+            this.settings.amiga.text.visibilityMode !== "off"
         ){
 
             ctx.drawImage(
 
-                this.resolveMaskedLayer(
+                this.visualizeLayer(
                     this.layers.text,
-                    this.settings.amiga.text.maskedBy
+                    this.settings.amiga.text.maskedBy,
+                    this.settings.amiga.text.visibilityMode
                 ),
 
                 0,
@@ -764,14 +924,15 @@ export class Renderer {
 
             if(
                 layer.videoSettings.enabled &&
-                layer.videoSettings.visible
+                layer.videoSettings.visibilityMode !== "off"
             ){
 
                 ctx.drawImage(
 
-                    this.resolveMaskedLayer(
+                    this.visualizeLayer(
                         layer.rawCanvas,
-                        layer.videoSettings.maskedBy
+                        layer.videoSettings.maskedBy,
+                        layer.videoSettings.visibilityMode
                     ),
 
                     0,
@@ -786,14 +947,15 @@ export class Renderer {
 
             if(
                 layer.bodySettings.enabled &&
-                layer.bodySettings.visible
+                layer.bodySettings.visibilityMode !== "off"
             ){
 
                 ctx.drawImage(
 
-                    this.resolveMaskedLayer(
+                    this.visualizeLayer(
                         layer.bodyCanvas,
-                        layer.bodySettings.maskedBy
+                        layer.bodySettings.maskedBy,
+                        layer.bodySettings.visibilityMode
                     ),
 
                     0,
@@ -823,13 +985,14 @@ export class Renderer {
         this.extraRingsLayers.forEach(layer=>{
 
 
-            if(layer.ringsSettings.visible){
+            if(layer.ringsSettings.visibilityMode !== "off"){
 
                 ctx.drawImage(
 
-                    this.resolveMaskedLayer(
+                    this.visualizeLayer(
                         layer.canvas,
-                        layer.ringsSettings.maskedBy
+                        layer.ringsSettings.maskedBy,
+                        layer.ringsSettings.visibilityMode
                     ),
 
                     0,
