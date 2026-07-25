@@ -105,6 +105,44 @@ export class MenuManager {
         );
 
 
+        this.maskState = {
+
+            body:{source:"none", channel:"alpha"},
+
+            rings:{source:"none", channel:"alpha"},
+
+            text:{source:"none", channel:"alpha"}
+
+        };
+
+
+        window.addEventListener(
+            "maskSettingsChanged",
+            e=>{
+
+                this.maskState[e.detail.layer] = {
+                    source:e.detail.source,
+                    channel:e.detail.channel
+                };
+
+
+                let node =
+                    this.node();
+
+                if(
+                    node &&
+                    node.type==="maskPicker" &&
+                    node.layer===e.detail.layer
+                ){
+
+                    this.render();
+
+                }
+
+            }
+        );
+
+
 
         this.menus = {
 
@@ -241,6 +279,15 @@ export class MenuManager {
                     },
 
 
+                    "MASKED BY":{
+
+                        type:"maskPicker",
+
+                        layer:"body"
+
+                    },
+
+
 
                     GHOST:[
 
@@ -292,6 +339,15 @@ export class MenuManager {
 
                         type:"ringColourPicker"
 
+                    },
+
+
+                    "MASKED BY":{
+
+                        type:"maskPicker",
+
+                        layer:"rings"
+
                     }
 
                 },
@@ -318,7 +374,16 @@ export class MenuManager {
 
                     COLOUR:colourMenu(
                         "setTextColour"
-                    )
+                    ),
+
+
+                    "MASKED BY":{
+
+                        type:"maskPicker",
+
+                        layer:"text"
+
+                    }
 
                 }
 
@@ -509,6 +574,21 @@ export class MenuManager {
         ){
 
             this.renderKeyColourPicker();
+
+            return;
+
+        }
+
+
+
+        if(
+            node &&
+            node.type==="maskPicker"
+        ){
+
+            this.renderMaskPicker(
+                node.layer
+            );
 
             return;
 
@@ -1105,6 +1185,172 @@ export class MenuManager {
 
 
         });
+
+
+    }
+
+
+
+
+    renderMaskPicker(layerName){
+
+
+        const state =
+            this.maskState[layerName];
+
+
+        let sourceMinus =
+        document.createElement(
+            "button"
+        );
+
+        sourceMinus.innerText=
+            "SOURCE -";
+
+        sourceMinus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "maskSourceStep",
+                    {
+                        detail:{
+                            layer:layerName,
+                            direction:-1
+                        }
+                    }
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            sourceMinus
+        );
+
+
+
+        let sourceDisplay =
+        document.createElement(
+            "span"
+        );
+
+        sourceDisplay.innerText=
+            state.source.toUpperCase();
+
+        sourceDisplay.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            sourceDisplay
+        );
+
+
+
+        let sourcePlus =
+        document.createElement(
+            "button"
+        );
+
+        sourcePlus.innerText=
+            "SOURCE +";
+
+        sourcePlus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "maskSourceStep",
+                    {
+                        detail:{
+                            layer:layerName,
+                            direction:1
+                        }
+                    }
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            sourcePlus
+        );
+
+
+
+
+        let channelMinus =
+        document.createElement(
+            "button"
+        );
+
+        channelMinus.innerText=
+            "CHANNEL -";
+
+        channelMinus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "maskChannelStep",
+                    {
+                        detail:{
+                            layer:layerName,
+                            direction:-1
+                        }
+                    }
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            channelMinus
+        );
+
+
+
+        let channelDisplay =
+        document.createElement(
+            "span"
+        );
+
+        channelDisplay.innerText=
+            state.channel.toUpperCase();
+
+        channelDisplay.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            channelDisplay
+        );
+
+
+
+        let channelPlus =
+        document.createElement(
+            "button"
+        );
+
+        channelPlus.innerText=
+            "CHANNEL +";
+
+        channelPlus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "maskChannelStep",
+                    {
+                        detail:{
+                            layer:layerName,
+                            direction:1
+                        }
+                    }
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            channelPlus
+        );
 
 
     }
