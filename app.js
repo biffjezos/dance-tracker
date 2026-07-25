@@ -445,6 +445,23 @@ window.addEventListener(
 
 
 window.addEventListener(
+    "toggleVideoVisible",
+    ()=>{
+
+        settings.video.visible =
+        !settings.video.visible;
+
+        console.log(
+            "Video visible:",
+            settings.video.visible
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
     "videoBackgroundColour",
     e=>{
 
@@ -511,6 +528,23 @@ window.addEventListener(
                 "OFF"
             );
 
+
+    }
+);
+
+
+
+window.addEventListener(
+    "toggleBodyVisible",
+    ()=>{
+
+        settings.body.visible =
+        !settings.body.visible;
+
+        console.log(
+            "Body visible:",
+            settings.body.visible
+        );
 
     }
 );
@@ -833,6 +867,23 @@ window.addEventListener(
         console.log(
             "Rings:",
             settings.amiga.rings.enabled
+        );
+
+    }
+);
+
+
+
+window.addEventListener(
+    "toggleRingsVisible",
+    ()=>{
+
+        settings.amiga.rings.visible =
+        !settings.amiga.rings.visible;
+
+        console.log(
+            "Rings visible:",
+            settings.amiga.rings.visible
         );
 
     }
@@ -1737,6 +1788,9 @@ const MASK_CHANNELS = [
 
 
 function maskedBySettingsFor(layer){
+
+    if(layer === "video")
+        return settings.video.maskedBy;
 
     if(layer === "body")
         return settings.body.maskedBy;

@@ -107,6 +107,8 @@ export class MenuManager {
 
         this.maskState = {
 
+            video:{source:"none", channel:"alpha"},
+
             body:{source:"none", channel:"alpha"},
 
             rings:{source:"none", channel:"alpha"},
@@ -237,6 +239,8 @@ export class MenuManager {
 
                 "VIDEO ON/OFF":null,
 
+                "VIDEO VISIBLE ON/OFF":null,
+
 
 
                 BACKGROUND:{
@@ -244,6 +248,15 @@ export class MenuManager {
                     COLOUR:colourMenu(
                         "videoBackgroundColour"
                     )
+
+                },
+
+
+                "MASKED BY":{
+
+                    type:"maskPicker",
+
+                    layer:"video"
 
                 }
 
@@ -256,6 +269,8 @@ export class MenuManager {
                 BODY:{
 
                     "BODY ON/OFF":null,
+
+                    "BODY VISIBLE ON/OFF":null,
 
                     "THRESHOLD +":null,
 
@@ -308,6 +323,8 @@ export class MenuManager {
                 RINGS:{
 
                     "RINGS ON/OFF":null,
+
+                    "RINGS VISIBLE ON/OFF":null,
 
                     "RING COUNT +":null,
 
@@ -1396,9 +1413,23 @@ export class MenuManager {
 
 
 
+        if(item==="VIDEO VISIBLE ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleVideoVisible")
+            );
+
+
+
         if(item==="BODY ON/OFF")
             window.dispatchEvent(
                 new Event("toggleBody")
+            );
+
+
+
+        if(item==="BODY VISIBLE ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleBodyVisible")
             );
 
 
@@ -1434,6 +1465,13 @@ export class MenuManager {
         if(item==="RINGS ON/OFF")
             window.dispatchEvent(
                 new Event("toggleRings")
+            );
+
+
+
+        if(item==="RINGS VISIBLE ON/OFF")
+            window.dispatchEvent(
+                new Event("toggleRingsVisible")
             );
 
 
