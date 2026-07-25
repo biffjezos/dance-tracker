@@ -378,6 +378,36 @@ export class Renderer {
             return this.layers.text;
 
 
+        if(
+            name &&
+            name.indexOf("videoLayer:") === 0
+        ){
+
+            const layer =
+                this.extraVideoLayers.find(
+                    l=>l.id === name.slice(11)
+                );
+
+            return layer ? layer.rawCanvas : null;
+
+        }
+
+
+        if(
+            name &&
+            name.indexOf("bodyLayer:") === 0
+        ){
+
+            const layer =
+                this.extraVideoLayers.find(
+                    l=>l.id === name.slice(10)
+                );
+
+            return layer ? layer.bodyCanvas : null;
+
+        }
+
+
         return null;
 
     }

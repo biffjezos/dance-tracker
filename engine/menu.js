@@ -107,13 +107,13 @@ export class MenuManager {
 
         this.maskState = {
 
-            video:{source:"none", channel:"alpha"},
+            video:{source:"none", sourceLabel:"NONE", channel:"alpha"},
 
-            body:{source:"none", channel:"alpha"},
+            body:{source:"none", sourceLabel:"NONE", channel:"alpha"},
 
-            rings:{source:"none", channel:"alpha"},
+            rings:{source:"none", sourceLabel:"NONE", channel:"alpha"},
 
-            text:{source:"none", channel:"alpha"}
+            text:{source:"none", sourceLabel:"NONE", channel:"alpha"}
 
         };
 
@@ -124,6 +124,7 @@ export class MenuManager {
 
                 this.maskState[e.detail.layer] = {
                     source:e.detail.source,
+                    sourceLabel:e.detail.sourceLabel,
                     channel:e.detail.channel
                 };
 
@@ -1262,7 +1263,7 @@ export class MenuManager {
         );
 
         sourceDisplay.innerText=
-            state.source.toUpperCase();
+            state.sourceLabel;
 
         sourceDisplay.className=
             "ring-id-display";
