@@ -25,6 +25,9 @@ export class Renderer {
             );
 
 
+        this.extraVideoLayers = [];
+
+
 
         this.layers = {
 
@@ -677,7 +680,76 @@ export class Renderer {
 
 
 
+        this.composeExtraVideoLayers();
+
+
+
         ctx.restore();
+
+
+    }
+
+
+
+
+    composeExtraVideoLayers(){
+
+
+        let ctx =
+            this.contexts.master;
+
+
+        this.extraVideoLayers.forEach(layer=>{
+
+
+            ctx.globalCompositeOperation =
+                "source-over";
+
+
+            if(
+                layer.videoSettings.enabled &&
+                layer.videoSettings.visible
+            ){
+
+                ctx.drawImage(
+
+                    this.resolveMaskedLayer(
+                        layer.rawCanvas,
+                        layer.videoSettings.maskedBy
+                    ),
+
+                    0,
+
+                    0
+
+                );
+
+            }
+
+
+
+            if(
+                layer.bodySettings.enabled &&
+                layer.bodySettings.visible
+            ){
+
+                ctx.drawImage(
+
+                    this.resolveMaskedLayer(
+                        layer.bodyCanvas,
+                        layer.bodySettings.maskedBy
+                    ),
+
+                    0,
+
+                    0
+
+                );
+
+            }
+
+
+        });
 
 
     }

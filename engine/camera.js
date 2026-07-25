@@ -8,13 +8,14 @@ CAMERA ENGINE
 export class Camera {
 
 
-    constructor(settings){
+    constructor(settings, video){
 
 
         this.settings = settings;
 
 
         this.video =
+        video ||
         document.getElementById("camera");
 
 

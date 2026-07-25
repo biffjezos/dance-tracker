@@ -16,6 +16,7 @@ import { Rings } from "./effects/rings.js";
 import { Text } from "./effects/text.js";
 import { Recorder } from "./engine/recorder.js";
 import { containFit } from "./engine/fit.js";
+import { VideoLayer } from "./engine/videoLayer.js";
 
 
 
@@ -53,6 +54,11 @@ const renderer =
     new Renderer({
         settings:settings
     });
+
+
+const videoLayers = [];
+
+renderer.extraVideoLayers = videoLayers;
 
 
 
@@ -165,6 +171,13 @@ function processBody(){
     segmentation.process(
         camera.getVideo()
     );
+
+
+    videoLayers.forEach(layer=>{
+
+        layer.update();
+
+    });
 
 
     ghost.update();
@@ -318,6 +331,35 @@ window.addEventListener(
 
 
 
+window.addEventListener(
+    "addVideoLayer",
+    e=>{
+
+        const layer =
+            new VideoLayer(
+                settings
+            );
+
+        videoLayers.push(
+            layer
+        );
+
+        layer.loadVideoFile(
+            e.detail.file
+        );
+
+        console.log(
+            "Added",
+            layer.name,
+            "- total video layers:",
+            videoLayers.length
+        );
+
+    }
+);
+
+
+
 
 /*
 ==================================================
@@ -356,6 +398,13 @@ function applyResolution(){
     segmentation.resize();
 
     background.resize();
+
+
+    videoLayers.forEach(layer=>{
+
+        layer.resize();
+
+    });
 
 
     document
