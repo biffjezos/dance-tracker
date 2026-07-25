@@ -105,6 +105,35 @@ export class MenuManager {
         );
 
 
+        this.layerSelection = {index:0, name:"VIDEO 1"};
+
+
+        window.addEventListener(
+            "layerSelectionChanged",
+            e=>{
+
+                this.layerSelection = {
+                    index:e.detail.index,
+                    name:e.detail.name
+                };
+
+                this.keyColour = {
+                    r:e.detail.keyColour.r,
+                    g:e.detail.keyColour.g,
+                    b:e.detail.keyColour.b
+                };
+
+
+                if(this.path[0] === "key"){
+
+                    this.render();
+
+                }
+
+            }
+        );
+
+
         this.maskState = {
 
             video:{source:"none", sourceLabel:"NONE", channel:"alpha"},
@@ -154,9 +183,7 @@ export class MenuManager {
 
                 CAMERA:{
 
-                    "CAMERA ON/OFF":null,
-
-                    "CAPTURE BACKGROUND":null
+                    "CAMERA ON/OFF":null
 
                 },
 
@@ -275,6 +302,38 @@ export class MenuManager {
 
 
 
+            key:{
+
+                LAYER:{
+
+                    type:"layerStepper"
+
+                },
+
+                "CAPTURE BACKGROUND":null,
+
+                "THRESHOLD +":null,
+
+                "THRESHOLD -":null,
+
+                "DIFFERENCE/CHROMA":null,
+
+                "SOLID/VIDEO":null,
+
+                COLOUR:colourMenu(
+                    "bodyColour"
+                ),
+
+                "KEY COLOUR":{
+
+                    type:"keyColourPicker"
+
+                }
+
+            },
+
+
+
             amiga:{
 
                 BODY:{
@@ -282,27 +341,6 @@ export class MenuManager {
                     "BODY ON/OFF":null,
 
                     "BODY VISIBLE ON/OFF":null,
-
-                    "THRESHOLD +":null,
-
-                    "THRESHOLD -":null,
-
-                    "DIFFERENCE/CHROMA":null,
-
-                    "SOLID/VIDEO":null,
-
-
-
-                    COLOUR:colourMenu(
-                        "bodyColour"
-                    ),
-
-
-                    "KEY COLOUR":{
-
-                        type:"keyColourPicker"
-
-                    },
 
 
                     "MASKED BY":{
@@ -864,6 +902,79 @@ export class MenuManager {
                 }
                 else if(
                     value &&
+                    value.type==="layerStepper"
+                ){
+
+
+                    let minus =
+                    document.createElement(
+                        "button"
+                    );
+
+                    minus.innerText=
+                        "LAYER -";
+
+                    minus.onclick=()=>{
+
+                        window.dispatchEvent(
+                            new CustomEvent(
+                                "layerIndexStep",
+                                {detail:{direction:-1}}
+                            )
+                        );
+
+                    };
+
+                    this.subMenu.appendChild(
+                        minus
+                    );
+
+
+
+                    let display =
+                    document.createElement(
+                        "span"
+                    );
+
+                    display.innerText=
+                        this.layerSelection.name;
+
+                    display.className=
+                        "ring-id-display";
+
+                    this.subMenu.appendChild(
+                        display
+                    );
+
+
+
+                    let plus =
+                    document.createElement(
+                        "button"
+                    );
+
+                    plus.innerText=
+                        "LAYER +";
+
+                    plus.onclick=()=>{
+
+                        window.dispatchEvent(
+                            new CustomEvent(
+                                "layerIndexStep",
+                                {detail:{direction:1}}
+                            )
+                        );
+
+                    };
+
+                    this.subMenu.appendChild(
+                        plus
+                    );
+
+
+                }
+                else if(
+                    value &&
                     typeof value === "object"
                 ){
 
@@ -1113,6 +1224,23 @@ export class MenuManager {
 
 
     renderKeyColourPicker(){
+
+
+        let layerLabel =
+        document.createElement(
+            "span"
+        );
+
+        layerLabel.innerText=
+            this.layerSelection.name;
+
+        layerLabel.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            layerLabel
+        );
+
 
 
         let current =

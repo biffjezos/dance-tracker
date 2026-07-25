@@ -89,7 +89,13 @@ const originalLayerAdapter = {
 
     bodyCanvas:renderer.layers.body,
 
-    video:camera.getVideo()
+    video:camera.getVideo(),
+
+    camera:camera,
+
+    background:background,
+
+    segmentation:segmentation
 
 };
 
@@ -99,6 +105,69 @@ function allVideoLayers(){
     return [originalLayerAdapter, ...videoLayers];
 
 }
+
+
+let selectedLayerIndex = 0;
+
+
+function selectedLayer(){
+
+    const layers =
+        allVideoLayers();
+
+    return (
+        layers[selectedLayerIndex] ||
+        layers[0]
+    );
+
+}
+
+
+function reportLayerSelection(){
+
+    const layer =
+        selectedLayer();
+
+    updateMatteStatusDisplay(
+        layer.bodySettings.mode
+    );
+
+    window.dispatchEvent(
+        new CustomEvent(
+            "layerSelectionChanged",
+            {
+                detail:{
+                    index:selectedLayerIndex,
+                    name:layer.name,
+                    keyColour:layer.bodySettings.keyColour
+                }
+            }
+        )
+    );
+
+}
+
+
+window.addEventListener(
+    "layerIndexStep",
+    e=>{
+
+        const count =
+            allVideoLayers().length;
+
+        selectedLayerIndex =
+            Math.min(
+                Math.max(
+                    selectedLayerIndex + e.detail.direction,
+                    0
+                ),
+                count - 1
+            );
+
+        reportLayerSelection();
+
+    }
+);
 
 
 
@@ -645,8 +714,11 @@ window.addEventListener(
     "captureBackground",
     ()=>{
 
-        background.capture(
-            camera.getVideo()
+        const layer =
+            selectedLayer();
+
+        layer.background.capture(
+            layer.video
         );
 
     }
@@ -667,12 +739,15 @@ window.addEventListener(
     ()=>{
 
 
-        settings.body.threshold += 5;
+        const bodySettings =
+            selectedLayer().bodySettings;
+
+        bodySettings.threshold += 5;
 
 
         console.log(
             "Threshold:",
-            settings.body.threshold
+            bodySettings.threshold
         );
 
 
@@ -686,17 +761,20 @@ window.addEventListener(
     ()=>{
 
 
-        settings.body.threshold -= 5;
+        const bodySettings =
+            selectedLayer().bodySettings;
+
+        bodySettings.threshold -= 5;
 
 
-        if(settings.body.threshold < 0)
-            settings.body.threshold = 0;
+        if(bodySettings.threshold < 0)
+            bodySettings.threshold = 0;
 
 
 
         console.log(
             "Threshold:",
-            settings.body.threshold
+            bodySettings.threshold
         );
 
 
@@ -705,12 +783,33 @@ window.addEventListener(
 
 
 
+function updateMatteStatusDisplay(mode){
+
+    document
+    .querySelector(".statusbar")
+    .children[3]
+    .innerText =
+        "MATTE: " +
+        (
+            mode === "keying"
+            ?
+            "CHROMA"
+            :
+            "DIFFERENCE"
+        );
+
+}
+
+
 window.addEventListener(
     "toggleMatteMode",
     ()=>{
 
-        settings.body.mode =
-            settings.body.mode === "difference"
+        const bodySettings =
+            selectedLayer().bodySettings;
+
+        bodySettings.mode =
+            bodySettings.mode === "difference"
             ?
             "keying"
             :
@@ -719,22 +818,13 @@ window.addEventListener(
 
         console.log(
             "Body matte mode:",
-            settings.body.mode
+            bodySettings.mode
         );
 
 
-        document
-        .querySelector(".statusbar")
-        .children[3]
-        .innerText =
-            "MATTE: " +
-            (
-                settings.body.mode === "keying"
-                ?
-                "CHROMA"
-                :
-                "DIFFERENCE"
-            );
+        updateMatteStatusDisplay(
+            bodySettings.mode
+        );
 
     }
 );
@@ -745,8 +835,11 @@ window.addEventListener(
     "toggleBodyFill",
     ()=>{
 
-        settings.body.fill =
-            settings.body.fill === "solid"
+        const bodySettings =
+            selectedLayer().bodySettings;
+
+        bodySettings.fill =
+            bodySettings.fill === "solid"
             ?
             "video"
             :
@@ -755,7 +848,7 @@ window.addEventListener(
 
         console.log(
             "Body fill:",
-            settings.body.fill
+            bodySettings.fill
         );
 
     }
@@ -776,7 +869,7 @@ window.addEventListener(
     e=>{
 
 
-        segmentation.setColour(
+        selectedLayer().segmentation.setColour(
             e.detail.r,
             e.detail.g,
             e.detail.b
@@ -792,7 +885,10 @@ window.addEventListener(
     "bodyKeyColour",
     e=>{
 
-        settings.body.keyColour = {
+        const bodySettings =
+            selectedLayer().bodySettings;
+
+        bodySettings.keyColour = {
 
             r:e.detail.r,
 
@@ -805,7 +901,7 @@ window.addEventListener(
 
         console.log(
             "Body key colour:",
-            settings.body.keyColour
+            bodySettings.keyColour
         );
 
     }
