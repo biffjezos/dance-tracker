@@ -725,40 +725,46 @@ const cameraPreviewCtx =
 
 
 /*
-The CAMERA INPUT panel used to just be the base camera's own <video>
-element, so an added video source (its own offscreen <video>, never
-attached to the DOM) or a standalone mask's chosen source was never
-visible anywhere - impossible to key against something you can't
-see. This resolves whichever video is relevant to whatever was most
-recently navigated: the selected mask's source when working in KEY
-(its own owning video for an auto mask, its SOURCE pick for a
-standalone one), otherwise the selected VIDEO entry's own feed (a
-rings/ghost/text selection has no video of its own, so that falls
-through to the base camera).
+The CAMERA INPUT panel shows whichever node is currently being
+worked on - LIVE OUTPUT is the composition, this is the one thing
+selected right now. Resolves via whatever was most recently
+navigated: the selected mask's source when working in KEY (its own
+owning video for an auto mask, its SOURCE pick for a standalone
+one), otherwise the selected VIDEO entry's own previewSource.
+
+previewSource isn't necessarily a <video> - a rings/ghost/text
+instance has no camera feed of its own, but it does have its own
+rendered canvas (the same one compose() reads), and that's just as
+valid a thing to preview. Every registry entry carries its own
+previewSource for exactly this reason: whatever kind gets added next
+(a static image, some other future node) just needs to set that
+field to whatever it draws into, and shows up here for free.
 */
-function resolvePreviewVideo(){
+function resolvePreviewSource(){
 
     if(lastPreviewScope === "mask"){
 
         const entry =
             selectedMaskEntry();
 
-        if(entry.kind === "standaloneMask"){
+        /*
+        Every other kind's previewSource is fixed for its whole
+        lifetime (set once in the registry), but a standalone mask's
+        source is a live pick the user can repoint at any time, so
+        it's resolved fresh here instead of carrying its own fixed
+        previewSource.
+        */
+        const source =
+            entry.kind === "standaloneMask"
+            ?
+            resolveMaskSourceVideo(
+                entry.settings.source
+            )
+            :
+            entry.previewSource;
 
-            const source =
-                resolveMaskSourceVideo(
-                    entry.settings.source
-                );
-
-            if(source)
-                return source;
-
-        }
-        else if(entry.video){
-
-            return entry.video;
-
-        }
+        if(source)
+            return source;
 
     }
     else {
@@ -766,11 +772,8 @@ function resolvePreviewVideo(){
         const entry =
             selectedVideoEntry();
 
-        if(
-            entry.kind === "video" &&
-            entry.video
-        )
-            return entry.video;
+        if(entry.previewSource)
+            return entry.previewSource;
 
     }
 
@@ -796,25 +799,41 @@ function drawCameraPreview(){
     );
 
 
-    const video =
-        resolvePreviewVideo();
+    const source =
+        resolvePreviewSource();
+
+    if(!source)
+        return;
 
 
-    if(!video || video.readyState < 2)
+    const isVideo =
+        source.tagName === "VIDEO";
+
+    if(isVideo && source.readyState < 2)
+        return;
+
+
+    const sourceWidth =
+        isVideo ? source.videoWidth : source.width;
+
+    const sourceHeight =
+        isVideo ? source.videoHeight : source.height;
+
+    if(!sourceWidth || !sourceHeight)
         return;
 
 
     const rect =
         containFit(
-            video.videoWidth,
-            video.videoHeight,
+            sourceWidth,
+            sourceHeight,
             width,
             height
         );
 
 
     cameraPreviewCtx.drawImage(
-        video,
+        source,
         rect.x,
         rect.y,
         rect.width,
@@ -901,9 +920,6 @@ function processBody(){
     );
 
 
-    drawCameraPreview();
-
-
     videoLayers.forEach(layer=>{
 
         layer.update();
@@ -973,6 +989,15 @@ function processBody(){
         layer.draw();
 
     });
+
+
+    /*
+    Runs last, after every kind's own draw() for this frame has
+    already happened - whichever canvas resolvePreviewSource() picks
+    (a generator's own canvas included) needs to already have this
+    frame's content in it, not last frame's or a just-cleared blank.
+    */
+    drawCameraPreview();
 
 
     updateTransportDisplay();
@@ -1663,19 +1688,26 @@ window.addEventListener(
 let armedKeyColourPick = false;
 
 
+/*
+Samples from cameraPreviewCanvas, not any one fixed video - that
+canvas already shows whatever's currently relevant (see
+resolvePreviewSource), so picking a colour from what you're actually
+looking at is both simpler and more correct than hardcoding one
+particular video regardless of what the panel is showing.
+*/
 window.addEventListener(
     "armKeyColourPicker",
     ()=>{
 
         armedKeyColourPick = true;
 
-        camera.getVideo()
+        cameraPreviewCanvas
         .classList.add(
             "sampling"
         );
 
         console.log(
-            "Click the CAMERA INPUT video to pick a key colour"
+            "Click the CAMERA INPUT panel to pick a key colour"
         );
 
     }
@@ -1683,7 +1715,7 @@ window.addEventListener(
 
 
 
-camera.getVideo().addEventListener(
+cameraPreviewCanvas.addEventListener(
     "click",
     e=>{
 
@@ -1692,21 +1724,21 @@ camera.getVideo().addEventListener(
 
         armedKeyColourPick = false;
 
-        const video = e.target;
+        const source = e.target;
 
-        video.classList.remove(
+        source.classList.remove(
             "sampling"
         );
 
 
         const rect =
-            video.getBoundingClientRect();
+            source.getBoundingClientRect();
 
 
         const fit =
             containFit(
-                video.videoWidth,
-                video.videoHeight,
+                source.width,
+                source.height,
                 rect.width,
                 rect.height
             );
@@ -1714,20 +1746,20 @@ camera.getVideo().addEventListener(
 
         const x =
             Math.floor(
-                (e.clientX - rect.left - fit.x) / fit.width * video.videoWidth
+                (e.clientX - rect.left - fit.x) / fit.width * source.width
             );
 
         const y =
             Math.floor(
-                (e.clientY - rect.top - fit.y) / fit.height * video.videoHeight
+                (e.clientY - rect.top - fit.y) / fit.height * source.height
             );
 
 
         if(
             x < 0 ||
             y < 0 ||
-            x >= video.videoWidth ||
-            y >= video.videoHeight
+            x >= source.width ||
+            y >= source.height
         ){
 
             console.warn(
@@ -1739,27 +1771,10 @@ camera.getVideo().addEventListener(
         }
 
 
-        const temp =
-            document.createElement(
-                "canvas"
-            );
-
-        temp.width = video.videoWidth;
-
-        temp.height = video.videoHeight;
-
-        const tempCtx =
-            temp.getContext("2d");
-
-        tempCtx.drawImage(
-            video,
-            0,
-            0
-        );
-
-
         const pixel =
-            tempCtx.getImageData(
+            source
+            .getContext("2d")
+            .getImageData(
                 x,
                 y,
                 1,
@@ -2865,7 +2880,8 @@ function getVideoRegistry(){
                 "video"
                 :
                 ("videoLayer:" + layer.id),
-            video:layer.video
+            video:layer.video,
+            previewSource:layer.video
         });
 
     });
@@ -2878,7 +2894,8 @@ function getVideoRegistry(){
             kind:"rings",
             settings:layer.ringsSettings,
             maskSourceId:"ringsLayer:" + layer.id,
-            instance:layer
+            instance:layer,
+            previewSource:layer.canvas
         });
 
     });
@@ -2891,7 +2908,8 @@ function getVideoRegistry(){
             kind:"text",
             settings:layer.textSettings,
             maskSourceId:"textLayer:" + layer.id,
-            instance:layer
+            instance:layer,
+            previewSource:layer.canvas
         });
 
     });
@@ -2904,7 +2922,8 @@ function getVideoRegistry(){
             kind:"ghost",
             settings:layer.ghostSettings,
             maskSourceId:"ghostLayer:" + layer.id,
-            instance:layer
+            instance:layer,
+            previewSource:layer.canvas
         });
 
     });
@@ -2938,7 +2957,8 @@ function getMaskRegistry(){
                 ("bodyLayer:" + layer.id),
             segmentation:layer.segmentation,
             background:layer.background,
-            video:layer.video
+            video:layer.video,
+            previewSource:layer.video
         });
 
     });
@@ -2953,7 +2973,8 @@ function getMaskRegistry(){
             maskSourceId:"maskLayer:" + layer.id,
             segmentation:layer.segmentation,
             background:layer.background,
-            instance:layer
+            instance:layer,
+            previewSource:null
         });
 
     });
