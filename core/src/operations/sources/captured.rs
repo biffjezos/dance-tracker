@@ -1,0 +1,91 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::operations::Frame;
+
+/*
+A settable frame with no inputs of its own - backs "CAPTURE
+BACKGROUND" for Difference matting (wire this in as its reference
+input, then replace what it holds whenever the user re-captures)
+without Difference itself needing any internal state or the Operation
+trait needing an out-of-band "command" mechanism. Whoever constructs
+this node keeps the Rc from handle() (taken before the CapturedFrame
+is boxed into Box<dyn Operation> and erased) in its own side-table
+keyed by NodeId, and writes into it directly on capture.
+*/
+pub struct CapturedFrame {
+    frame: Rc<RefCell<Option<Frame>>>,
+}
+
+impl CapturedFrame {
+    pub fn new() -> Self {
+        CapturedFrame {
+            frame: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    pub fn handle(&self) -> Rc<RefCell<Option<Frame>>> {
+        self.frame.clone()
+    }
+}
+
+impl Default for CapturedFrame {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Operation for CapturedFrame {
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn execute(
+        &self,
+        _ctx: &Context,
+        _inputs: &[Box<dyn Value>],
+    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
+        let frame = self
+            .frame
+            .borrow()
+            .clone()
+            .ok_or_else(|| OperationError::SourceNotFound("not captured yet".to_string()))?;
+
+        Ok(vec![Box::new(frame)])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn errors_until_something_is_captured() {
+        let node = CapturedFrame::new();
+        let ctx = Context { data: Box::new(()) };
+
+        let result = node.execute(&ctx, &[]);
+
+        assert!(matches!(result, Err(OperationError::SourceNotFound(_))));
+    }
+
+    #[test]
+    fn returns_whatever_was_set_through_the_handle() {
+        let node = CapturedFrame::new();
+        let handle = node.handle();
+
+        *handle.borrow_mut() = Some(Frame {
+            pixels: vec![9, 9, 9, 255],
+            width: 1,
+            height: 1,
+            timestamp: 0.0,
+        });
+
+        let ctx = Context { data: Box::new(()) };
+        let mut outputs = node.execute(&ctx, &[]).expect("should succeed");
+        let any_box: Box<dyn std::any::Any> = outputs.remove(0);
+        let frame = any_box.downcast::<Frame>().expect("should be a Frame");
+
+        assert_eq!(frame.pixels, vec![9, 9, 9, 255]);
+    }
+}
