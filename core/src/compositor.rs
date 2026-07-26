@@ -32,6 +32,13 @@ pub enum OperationError {
     WrongValueType,
     DimensionMismatch,
     SourceNotFound(String),
+    /*
+    The offending cycle, node ids in traversal order (last id repeats
+    the first, closing the loop) - not crate::graph::NodeId, to avoid
+    graph.rs and compositor.rs importing each other; the two are the
+    same underlying usize.
+    */
+    Cycle(Vec<usize>),
 }
 
 /*

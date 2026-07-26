@@ -196,6 +196,8 @@ impl App {
     into its CapturedFrame reference node - "CAPTURE BACKGROUND".
     */
     pub fn capture_background(&mut self, difference_node: usize) -> Result<(), JsValue> {
+        self.graph.validate().map_err(js_err)?;
+
         let source_id = self.graph.nodes[difference_node].inputs[0];
 
         let ctx = Context { data: Box::new(()) };
@@ -355,6 +357,8 @@ impl App {
     */
 
     pub fn render_tick(&self, output_node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
+        self.graph.validate().map_err(js_err)?;
+
         let ctx = Context { data: Box::new(()) };
         let executor = RenderExecutor;
 
@@ -368,6 +372,8 @@ impl App {
     }
 
     pub fn preview_tick(&self, node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
+        self.graph.validate().map_err(js_err)?;
+
         let ctx = Context { data: Box::new(()) };
         let executor = PreviewExecutor;
 
