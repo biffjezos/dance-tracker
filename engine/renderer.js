@@ -1260,6 +1260,41 @@ export class Renderer {
 
 
 
+    /*
+    A layer's own kind has a default way it sits on the master -
+    source-over for video/body/text, screen for rings/ghost (their
+    glow). That default is only meant for the layer's OWN content
+    though. Once a BACKGROUND fill is added, visualizeLayer/
+    compositeWithBackground has already flattened that fill together
+    with the content into one canvas - if the kind's default then
+    still applied to the whole thing, a rings layer's flat green
+    background would screen-blend straight into whatever's already on
+    the master (e.g. another layer's own background colour beneath
+    it), mixing two unrelated flat fills into a third colour neither
+    one chose. Once a background is active, its own blendMode decides
+    how the whole flattened result sits on the master instead.
+    */
+    resolveCompositeOperation(defaultOperation, background){
+
+        if(
+            !background ||
+            background.source === "none"
+        )
+            return defaultOperation;
+
+        if(background.blendMode === "overlay")
+            return "overlay";
+
+        if(background.blendMode === "screen")
+            return "screen";
+
+        return "source-over";
+
+    }
+
+
+
+
     compose(){
 
 
@@ -1294,6 +1329,12 @@ export class Renderer {
             this.settings.video.visibilityMode !== "off"
         ){
 
+            ctx.globalCompositeOperation =
+                this.resolveCompositeOperation(
+                    "source-over",
+                    this.settings.video.background
+                );
+
             ctx.drawImage(
 
                 this.visualizeLayer(
@@ -1319,6 +1360,12 @@ export class Renderer {
             this.settings.body.visibilityMode !== "off"
         ){
 
+            ctx.globalCompositeOperation =
+                this.resolveCompositeOperation(
+                    "source-over",
+                    this.settings.body.background
+                );
+
             ctx.drawImage(
 
                 this.visualizeLayer(
@@ -1342,14 +1389,15 @@ export class Renderer {
 
 
 
-        ctx.globalCompositeOperation =
-            "screen";
-
-
-
         if(
             this.settings.amiga.rings.visibilityMode !== "off"
         ){
+
+            ctx.globalCompositeOperation =
+                this.resolveCompositeOperation(
+                    "screen",
+                    this.settings.amiga.rings.background
+                );
 
             ctx.drawImage(
 
@@ -1377,6 +1425,12 @@ export class Renderer {
             this.settings.amiga.ghost.visibilityMode !== "off"
         ){
 
+            ctx.globalCompositeOperation =
+                this.resolveCompositeOperation(
+                    "screen",
+                    this.settings.amiga.ghost.background
+                );
+
             ctx.drawImage(
 
                 this.visualizeLayer(
@@ -1399,14 +1453,15 @@ export class Renderer {
 
 
 
-        ctx.globalCompositeOperation =
-            "source-over";
-
-
-
         if(
             this.settings.amiga.text.visibilityMode !== "off"
         ){
+
+            ctx.globalCompositeOperation =
+                this.resolveCompositeOperation(
+                    "source-over",
+                    this.settings.amiga.text.background
+                );
 
             ctx.drawImage(
 
@@ -1452,14 +1507,16 @@ export class Renderer {
         this.extraVideoLayers.forEach(layer=>{
 
 
-            ctx.globalCompositeOperation =
-                "source-over";
-
-
             if(
                 layer.videoSettings.enabled &&
                 layer.videoSettings.visibilityMode !== "off"
             ){
+
+                ctx.globalCompositeOperation =
+                    this.resolveCompositeOperation(
+                        "source-over",
+                        layer.videoSettings.background
+                    );
 
                 ctx.drawImage(
 
@@ -1484,6 +1541,12 @@ export class Renderer {
                 layer.bodySettings.enabled &&
                 layer.bodySettings.visibilityMode !== "off"
             ){
+
+                ctx.globalCompositeOperation =
+                    this.resolveCompositeOperation(
+                        "source-over",
+                        layer.bodySettings.background
+                    );
 
                 ctx.drawImage(
 
@@ -1521,14 +1584,16 @@ export class Renderer {
         this.extraMaskLayers.forEach(layer=>{
 
 
-            ctx.globalCompositeOperation =
-                "source-over";
-
-
             if(
                 layer.bodySettings.enabled &&
                 layer.bodySettings.visibilityMode !== "off"
             ){
+
+                ctx.globalCompositeOperation =
+                    this.resolveCompositeOperation(
+                        "source-over",
+                        layer.bodySettings.background
+                    );
 
                 ctx.drawImage(
 
@@ -1568,6 +1633,12 @@ export class Renderer {
 
             if(layer.ringsSettings.visibilityMode !== "off"){
 
+                ctx.globalCompositeOperation =
+                    this.resolveCompositeOperation(
+                        "screen",
+                        layer.ringsSettings.background
+                    );
+
                 ctx.drawImage(
 
                     this.visualizeLayer(
@@ -1606,6 +1677,12 @@ export class Renderer {
 
             if(layer.ghostSettings.visibilityMode !== "off"){
 
+                ctx.globalCompositeOperation =
+                    this.resolveCompositeOperation(
+                        "screen",
+                        layer.ghostSettings.background
+                    );
+
                 ctx.drawImage(
 
                     this.visualizeLayer(
@@ -1643,6 +1720,12 @@ export class Renderer {
 
 
             if(layer.textSettings.visibilityMode !== "off"){
+
+                ctx.globalCompositeOperation =
+                    this.resolveCompositeOperation(
+                        "source-over",
+                        layer.textSettings.background
+                    );
 
                 ctx.drawImage(
 

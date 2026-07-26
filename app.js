@@ -318,7 +318,12 @@ function updateLayerStatusDisplay(entry){
 }
 
 
+let lastPreviewScope = "video";
+
+
 function reportSelection(scope){
+
+    lastPreviewScope = scope;
 
     const entry =
         scopedEntry(scope);
@@ -469,7 +474,7 @@ function addRingsLayer(){
 
         maskedBy:{source:"none", channel:"alpha"},
 
-        background:{source:"none", colour:{r:0, g:0, b:0}}
+        background:{source:"none", colour:{r:0, g:0, b:0}, blendMode:"normal"}
 
     };
 
@@ -547,7 +552,7 @@ function addGhostLayer(){
 
         maskedBy:{source:"none", channel:"alpha"},
 
-        background:{source:"none", colour:{r:0, g:0, b:0}}
+        background:{source:"none", colour:{r:0, g:0, b:0}, blendMode:"normal"}
 
     };
 
@@ -623,7 +628,7 @@ function addTextLayer(){
 
         maskedBy:{source:"none", channel:"alpha"},
 
-        background:{source:"none", colour:{r:0, g:0, b:0}}
+        background:{source:"none", colour:{r:0, g:0, b:0}, blendMode:"normal"}
 
     };
 
@@ -702,6 +707,125 @@ reportSelection("mask");
 
 
 
+const cameraPreviewCanvas =
+    document.getElementById(
+        "camera-preview"
+    );
+
+cameraPreviewCanvas.width =
+    settings.video.width;
+
+cameraPreviewCanvas.height =
+    settings.video.height;
+
+const cameraPreviewCtx =
+    cameraPreviewCanvas.getContext(
+        "2d"
+    );
+
+
+/*
+The CAMERA INPUT panel used to just be the base camera's own <video>
+element, so an added video source (its own offscreen <video>, never
+attached to the DOM) or a standalone mask's chosen source was never
+visible anywhere - impossible to key against something you can't
+see. This resolves whichever video is relevant to whatever was most
+recently navigated: the selected mask's source when working in KEY
+(its own owning video for an auto mask, its SOURCE pick for a
+standalone one), otherwise the selected VIDEO entry's own feed (a
+rings/ghost/text selection has no video of its own, so that falls
+through to the base camera).
+*/
+function resolvePreviewVideo(){
+
+    if(lastPreviewScope === "mask"){
+
+        const entry =
+            selectedMaskEntry();
+
+        if(entry.kind === "standaloneMask"){
+
+            const source =
+                resolveMaskSourceVideo(
+                    entry.settings.source
+                );
+
+            if(source)
+                return source;
+
+        }
+        else if(entry.video){
+
+            return entry.video;
+
+        }
+
+    }
+    else {
+
+        const entry =
+            selectedVideoEntry();
+
+        if(
+            entry.kind === "video" &&
+            entry.video
+        )
+            return entry.video;
+
+    }
+
+    return camera.getVideo();
+
+}
+
+
+function drawCameraPreview(){
+
+    const width =
+        settings.video.width;
+
+    const height =
+        settings.video.height;
+
+
+    cameraPreviewCtx.clearRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+
+    const video =
+        resolvePreviewVideo();
+
+
+    if(!video || video.readyState < 2)
+        return;
+
+
+    const rect =
+        containFit(
+            video.videoWidth,
+            video.videoHeight,
+            width,
+            height
+        );
+
+
+    cameraPreviewCtx.drawImage(
+        video,
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height
+    );
+
+}
+
+
+
+
 function processBody(){
 
 
@@ -775,6 +899,9 @@ function processBody(){
     segmentation.process(
         camera.getVideo()
     );
+
+
+    drawCameraPreview();
 
 
     videoLayers.forEach(layer=>{
@@ -1056,6 +1183,13 @@ function applyResolution(){
     segmentation.resize();
 
     background.resize();
+
+
+    cameraPreviewCanvas.width =
+        settings.video.width;
+
+    cameraPreviewCanvas.height =
+        settings.video.height;
 
 
     videoLayers.forEach(layer=>{
@@ -2730,7 +2864,8 @@ function getVideoRegistry(){
                 ?
                 "video"
                 :
-                ("videoLayer:" + layer.id)
+                ("videoLayer:" + layer.id),
+            video:layer.video
         });
 
     });
@@ -3080,13 +3215,72 @@ function reportBackgroundChanged(scope, target){
                         match.label
                         :
                         target.source.toUpperCase(),
-                    colour:target.colour
+                    colour:target.colour,
+                    blendMode:target.blendMode || "normal"
                 }
             }
         )
     );
 
 }
+
+
+const BACKGROUND_BLEND_MODES = [
+    "normal",
+    "overlay",
+    "screen"
+];
+
+
+window.addEventListener(
+    "backgroundBlendModeStep",
+    e=>{
+
+        const entry =
+            scopedEntry(e.detail.scope);
+
+        const target =
+            entry.settings.background;
+
+
+        let index =
+            BACKGROUND_BLEND_MODES.indexOf(
+                target.blendMode || "normal"
+            );
+
+        if(index < 0)
+            index = 0;
+
+
+        index =
+            Math.min(
+                Math.max(
+                    index + e.detail.direction,
+                    0
+                ),
+                BACKGROUND_BLEND_MODES.length - 1
+            );
+
+
+        target.blendMode =
+            BACKGROUND_BLEND_MODES[index];
+
+
+        console.log(
+            "Background blend mode:",
+            entry.label,
+            "<-",
+            target.blendMode
+        );
+
+
+        reportBackgroundChanged(
+            e.detail.scope,
+            target
+        );
+
+    }
+);
 
 
 window.addEventListener(

@@ -209,9 +209,9 @@ export class MenuManager {
 
         this.backgroundState = {
 
-            video:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}},
+            video:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}, blendMode:"normal"},
 
-            mask:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}}
+            mask:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}, blendMode:"normal"}
 
         };
 
@@ -223,7 +223,8 @@ export class MenuManager {
                 this.backgroundState[e.detail.scope] = {
                     source:e.detail.source,
                     sourceLabel:e.detail.sourceLabel,
-                    colour:e.detail.colour
+                    colour:e.detail.colour,
+                    blendMode:e.detail.blendMode
                 };
 
 
@@ -2190,6 +2191,84 @@ export class MenuManager {
 
 
         if(state.source === "colour"){
+
+            let blendMinus =
+            document.createElement(
+                "button"
+            );
+
+            blendMinus.innerText=
+                "BLEND -";
+
+            blendMinus.onclick=()=>{
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "backgroundBlendModeStep",
+                        {
+                            detail:{
+                                direction:-1,
+                                scope:scope
+                            }
+                        }
+                    )
+                );
+
+            };
+
+            this.subMenu.appendChild(
+                blendMinus
+            );
+
+
+
+            let blendDisplay =
+            document.createElement(
+                "span"
+            );
+
+            blendDisplay.innerText=
+                "BLEND: " +
+                (state.blendMode || "normal").toUpperCase();
+
+            blendDisplay.className=
+                "ring-id-display";
+
+            this.subMenu.appendChild(
+                blendDisplay
+            );
+
+
+
+            let blendPlus =
+            document.createElement(
+                "button"
+            );
+
+            blendPlus.innerText=
+                "BLEND +";
+
+            blendPlus.onclick=()=>{
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "backgroundBlendModeStep",
+                        {
+                            detail:{
+                                direction:1,
+                                scope:scope
+                            }
+                        }
+                    )
+                );
+
+            };
+
+            this.subMenu.appendChild(
+                blendPlus
+            );
+
+
 
             SWATCHES.forEach(swatch=>{
 
