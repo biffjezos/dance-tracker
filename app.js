@@ -95,6 +95,8 @@ window.addEventListener(
 
         addMaskLayer();
 
+        reportSelection("mask");
+
     }
 );
 
@@ -188,15 +190,23 @@ const originalBodySettings = new Proxy(settings.body, {
 });
 
 
+/*
+number/name/maskNumber are assigned dynamically the first time the
+camera is turned on (see toggleCamera) - not here, and not hardcoded
+to 1. The camera is just another video source; like everything else
+in this app, it doesn't exist as a real, addressable thing until the
+user actually creates it (turns it on), and whichever real thing
+gets created first is the one that becomes "1".
+*/
 const originalLayerAdapter = {
 
     id:"original",
 
-    number:1,
+    number:null,
 
-    name:"VIDEO 1",
+    name:null,
 
-    maskNumber:1,
+    maskNumber:null,
 
     videoSettings:settings.video,
 
@@ -225,15 +235,56 @@ in instead of sharing one global counter that leaves gaps whenever
 another kind was created in between. Masks are the one kind with no
 class of their own (a mask is just a video layer's bundled body
 settings, or a standalone MaskLayer) - this counter numbers all of
-them, auto or added, in one sequence. originalLayerAdapter's bundled
-mask is MASK 1 (set on the literal above); anything after starts at 2.
+them, auto or added, in one sequence, starting at 1 - whichever mask
+actually gets created first (the camera's or an added video's) earns
+MASK 1, nothing is reserved in advance.
+
+nextVideoNumber is the same idea for video-kind entries: the camera
+adapter and every VideoLayer draw from this one shared counter in
+whatever order they're actually created in (see toggleCamera and
+addVideoLayer), instead of the camera always being hardcoded first.
 */
-let nextMaskNumber = 2;
+let nextMaskNumber = 1;
+
+let nextVideoNumber = 1;
+
+let cameraActivated = false;
 
 
 let selectedVideoIndex = 0;
 
 let selectedMaskIndex = 0;
+
+
+/*
+Returned in place of a real entry when nothing real exists yet in
+that scope (nothing added, camera never turned on) - same shape as a
+real entry so every consumer (status display, universal row
+handlers) can keep reading .label/.kind/.settings without a null
+check at every call site. label/kind staying null is the signal
+menu.js uses to show an empty state instead of a fake node.
+*/
+const EMPTY_ENTRY = {
+
+    label:null,
+
+    kind:null,
+
+    maskSourceId:null,
+
+    settings:{
+
+        enabled:false,
+
+        visibilityMode:"on",
+
+        maskedBy:{source:"none", channel:"alpha"},
+
+        background:{source:"none", colour:{r:0, g:0, b:0}, blendMode:"normal"}
+
+    }
+
+};
 
 
 function selectedVideoEntry(){
@@ -243,7 +294,8 @@ function selectedVideoEntry(){
 
     return (
         registry[selectedVideoIndex] ||
-        registry[0]
+        registry[0] ||
+        EMPTY_ENTRY
     );
 
 }
@@ -256,7 +308,8 @@ function selectedMaskEntry(){
 
     return (
         registry[selectedMaskIndex] ||
-        registry[0]
+        registry[0] ||
+        EMPTY_ENTRY
     );
 
 }
@@ -289,7 +342,7 @@ function updateLayerStatusDisplay(entry){
 
         nodeDisplay.innerText =
             "NODE: " +
-            entry.label;
+            (entry.label || "NONE");
 
     }
 
@@ -313,7 +366,7 @@ function updateLayerStatusDisplay(entry){
     .children[3]
     .innerText =
         "TYPE: " +
-        entry.kind.toUpperCase();
+        (entry.kind ? entry.kind.toUpperCase() : "NONE");
 
 }
 
@@ -520,6 +573,8 @@ window.addEventListener(
 
         addRingsLayer();
 
+        reportSelection("video");
+
     }
 );
 
@@ -599,6 +654,8 @@ window.addEventListener(
 
         addGhostLayer();
 
+        reportSelection("video");
+
     }
 );
 
@@ -673,6 +730,8 @@ window.addEventListener(
     ()=>{
 
         addTextLayer();
+
+        reportSelection("video");
 
     }
 );
@@ -1037,6 +1096,25 @@ window.addEventListener(
 
         if(cameraOn){
 
+            if(!cameraActivated){
+
+                cameraActivated = true;
+
+                originalLayerAdapter.number =
+                    nextVideoNumber++;
+
+                originalLayerAdapter.name =
+                    "VIDEO " + originalLayerAdapter.number;
+
+                originalLayerAdapter.maskNumber =
+                    nextMaskNumber++;
+
+                reportSelection("video");
+
+                reportSelection("mask");
+
+            }
+
             fileSourceActive = false;
 
             transportPlaying = true;
@@ -1144,7 +1222,8 @@ window.addEventListener(
 
         const layer =
             new VideoLayer(
-                settings
+                settings,
+                {number:nextVideoNumber++}
             );
 
         layer.maskNumber =
@@ -1164,6 +1243,10 @@ window.addEventListener(
             "(mask", layer.maskNumber + ") - total video layers:",
             videoLayers.length
         );
+
+        reportSelection("video");
+
+        reportSelection("mask");
 
     }
 );
@@ -2859,12 +2942,32 @@ KEY steps over masks only, one per video layer.
 */
 
 
+/*
+The camera adapter only belongs in this list once it's actually been
+turned on (see toggleCamera) - before that it doesn't exist any more
+than an un-added video source does. Sorted by .number rather than
+assuming the camera comes first, since whichever video source was
+actually created first (camera activation or ADD VIDEO SOURCE) earns
+VIDEO 1 - order here just needs to match that, not hardcode it.
+*/
 function getVideoRegistry(){
 
     const registry = [];
 
 
-    [originalLayerAdapter, ...videoLayers].forEach(layer=>{
+    const videoSources =
+        (
+            cameraActivated
+            ?
+            [originalLayerAdapter]
+            :
+            []
+        )
+        .concat(videoLayers)
+        .sort((a,b)=>a.number - b.number);
+
+
+    videoSources.forEach(layer=>{
 
         const isOriginal =
             layer.id === "original";
@@ -2939,7 +3042,19 @@ function getMaskRegistry(){
     const registry = [];
 
 
-    [originalLayerAdapter, ...videoLayers].forEach(layer=>{
+    const videoSources =
+        (
+            cameraActivated
+            ?
+            [originalLayerAdapter]
+            :
+            []
+        )
+        .concat(videoLayers)
+        .sort((a,b)=>a.maskNumber - b.maskNumber);
+
+
+    videoSources.forEach(layer=>{
 
         const isOriginal =
             layer.id === "original";
@@ -2958,7 +3073,8 @@ function getMaskRegistry(){
             segmentation:layer.segmentation,
             background:layer.background,
             video:layer.video,
-            previewSource:layer.video
+            previewSource:layer.video,
+            maskNumber:layer.maskNumber
         });
 
     });
@@ -2974,10 +3090,20 @@ function getMaskRegistry(){
             segmentation:layer.segmentation,
             background:layer.background,
             instance:layer,
-            previewSource:null
+            previewSource:null,
+            maskNumber:layer.maskNumber
         });
 
     });
+
+
+    /*
+    Auto and standalone masks are pushed in two separate passes above,
+    but they share one numbering sequence - re-sort the combined list
+    by that number so the order shown always matches true creation
+    order regardless of which kind happened to be added when.
+    */
+    registry.sort((a,b)=>a.maskNumber - b.maskNumber);
 
 
     return registry;
