@@ -1,9 +1,10 @@
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 use crate::compositor::{Context, Operation, OperationError, Value};
 use crate::operations::composite::BlendMode;
-use crate::operations::{downcast_frame, Frame};
+use crate::operations::{expect_frame_arc, Frame};
 
 /*
 inputs[0] is whatever's trailing (usually a rings/shape node's output,
@@ -14,13 +15,14 @@ counting executor ticks rather than wall-clock milliseconds (Context
 doesn't carry a clock; this keeps Ghost pure Rust and natively
 testable instead of needing a wasm32-only timestamp source). A slightly
 different "how often" than the old delay setting, same "fading trail"
-result.
+result. History holds Arc<Frame> - capturing a tick is a refcount bump
+against whatever the source node already produced, never a pixel copy.
 */
 pub struct Ghost {
     pub count: usize,
     pub alpha: f32,
     pub delay_ticks: u32,
-    history: RefCell<VecDeque<Frame>>,
+    history: RefCell<VecDeque<Arc<Frame>>>,
     ticks_since_capture: Cell<u32>,
 }
 
@@ -43,9 +45,9 @@ impl Operation for Ghost {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
-        let source = downcast_frame(inputs.first())?;
+        inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
+        let source = expect_frame_arc(inputs.first())?;
 
         let ticks = self.ticks_since_capture.get() + 1;
 
@@ -74,7 +76,7 @@ impl Operation for Ghost {
             screen_blend_into(&mut result, past, weight);
         }
 
-        Ok(vec![Box::new(result)])
+        Ok(vec![Value::Frame(Arc::new(result))])
     }
 }
 
@@ -108,12 +110,14 @@ mod tests {
 
     fn tick(op: &Ghost, source: &Frame) -> Frame {
         let ctx = Context { data: Box::new(()) };
-        let inputs: Vec<Box<dyn Value>> = vec![Box::new(source.clone())];
+        let inputs = vec![Value::Frame(Arc::new(source.clone()))];
 
         let mut outputs = op.execute(&ctx, &inputs).expect("should succeed");
-        let any_box: Box<dyn std::any::Any> = outputs.remove(0);
 
-        *any_box.downcast::<Frame>().expect("should be a Frame")
+        match outputs.remove(0) {
+            Value::Frame(frame) => (*frame).clone(),
+            _ => panic!("should be a Frame"),
+        }
     }
 
     #[test]

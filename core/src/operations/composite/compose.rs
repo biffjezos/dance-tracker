@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::compositor::{Context, Operation, OperationError, Value};
 use crate::operations::composite::blend_mode::BlendMode;
-use crate::operations::{downcast_frame, Frame};
+use crate::operations::{expect_frame, Frame};
 
 /*
 inputs[0] is the foreground (drawn on top), inputs[1] is the
@@ -24,10 +26,10 @@ impl Operation for Compose {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
-        let fg = downcast_frame(inputs.first())?;
-        let bg = downcast_frame(inputs.get(1))?;
+        inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
+        let fg = expect_frame(inputs.first())?;
+        let bg = expect_frame(inputs.get(1))?;
 
         if !fg.same_dimensions(bg) {
             return Err(OperationError::DimensionMismatch);
@@ -67,14 +69,13 @@ impl Operation for Compose {
             timestamp: fg.timestamp,
         };
 
-        Ok(vec![Box::new(frame)])
+        Ok(vec![Value::Frame(Arc::new(frame))])
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::any::Any;
 
     fn frame(pixels: Vec<u8>) -> Frame {
         Frame {
@@ -88,15 +89,14 @@ mod tests {
     fn run(mode: BlendMode, fg: Frame, bg: Frame) -> Result<Frame, OperationError> {
         let compose = Compose { mode };
         let ctx = Context { data: Box::new(()) };
-        let inputs: Vec<Box<dyn Value>> = vec![Box::new(fg), Box::new(bg)];
+        let inputs = vec![Value::Frame(Arc::new(fg)), Value::Frame(Arc::new(bg))];
 
         let mut outputs = compose.execute(&ctx, &inputs)?;
 
-        let any_box: Box<dyn Any> = outputs.remove(0);
-
-        Ok(*any_box
-            .downcast::<Frame>()
-            .expect("compose should output a Frame"))
+        match outputs.remove(0) {
+            Value::Frame(frame) => Ok((*frame).clone()),
+            _ => panic!("compose should output a Frame"),
+        }
     }
 
     #[test]
@@ -148,7 +148,7 @@ mod tests {
     fn missing_input_errors_instead_of_panicking() {
         let compose = Compose { mode: BlendMode::Over };
         let ctx = Context { data: Box::new(()) };
-        let inputs: Vec<Box<dyn Value>> = vec![Box::new(frame(vec![255, 0, 0, 255]))];
+        let inputs = vec![Value::Frame(Arc::new(frame(vec![255, 0, 0, 255])))];
 
         let result = compose.execute(&ctx, &inputs);
 

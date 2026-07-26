@@ -18,7 +18,7 @@ impl Execute for SimpleExecutor {
         graph: &Graph,
         node: NodeId,
         ctx: &Context,
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
+    ) -> Result<Vec<Value>, OperationError> {
         let node = &graph.nodes[node];
 
         let mut input_values = Vec::new();

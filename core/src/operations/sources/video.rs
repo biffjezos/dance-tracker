@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::compositor::{Context, Operation, OperationError, Value};
 use crate::operations::sources::PixelSource;
 
@@ -12,11 +14,11 @@ impl Operation for VideoSource {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
+        _inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
         let frame = self.pixels.read()?;
 
-        Ok(vec![Box::new(frame)])
+        Ok(vec![Value::Frame(Arc::new(frame))])
     }
 }
 
@@ -24,7 +26,6 @@ impl Operation for VideoSource {
 mod tests {
     use super::*;
     use crate::operations::Frame;
-    use std::any::Any;
 
     struct FixedPixelSource(Frame);
 
@@ -56,8 +57,11 @@ mod tests {
         let ctx = Context { data: Box::new(()) };
 
         let mut outputs = node.execute(&ctx, &[]).expect("should succeed");
-        let any_box: Box<dyn Any> = outputs.remove(0);
-        let frame = any_box.downcast::<Frame>().expect("should be a Frame");
+
+        let frame = match outputs.remove(0) {
+            Value::Frame(frame) => frame,
+            _ => panic!("should be a Frame"),
+        };
 
         assert_eq!(frame.pixels, vec![1, 2, 3, 4]);
     }

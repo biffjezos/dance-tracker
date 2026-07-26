@@ -119,8 +119,8 @@ impl Operation for Rings {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
+        _inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
         let width = self.canvas.width();
         let height = self.canvas.height();
 
@@ -198,6 +198,6 @@ impl Operation for Rings {
             timestamp: time,
         };
 
-        Ok(vec![Box::new(frame)])
+        Ok(vec![Value::Frame(std::sync::Arc::new(frame))])
     }
 }

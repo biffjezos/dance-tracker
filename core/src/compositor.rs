@@ -1,18 +1,26 @@
 /*
-Core, kind-agnostic contract every concrete operation implements -
-unchanged from the stub. Value is a blanket-impl marker over any
-concrete type (Frame, a number, a control signal, ...) so the graph
-can carry more than pixels without every Operation agreeing on one
-payload type up front; a caller downcasts (std::any::Any, via trait
-upcasting: dyn Value -> dyn Any, since Value: Any) to whatever
-concrete type it actually expects from a given input.
+Core, kind-agnostic contract every concrete operation implements.
+
+Value is a closed enum, not a Box<dyn Value> trait object - every
+operation matches on it directly instead of downcasting, and the
+payload-carrying variants hold an Arc so passing a value to N
+consumers (or storing it - Ghost's history, CapturedFrame's captured
+background) is a refcount bump, never a deep pixel copy.
 */
 
 use std::any::Any;
+use std::sync::Arc;
 
-pub trait Value: Any + Send + Sync {}
+use crate::operations::{Frame, Image, Mask};
 
-impl<T: Any + Send + Sync> Value for T {}
+pub enum Value {
+    Frame(Arc<Frame>),
+    Mask(Arc<Mask>),
+    Image(Arc<Image>),
+    Number(f64),
+    Boolean(bool),
+    Text(String),
+}
 
 pub struct Context {
     pub data: Box<dyn Any + Send + Sync>,
@@ -34,16 +42,18 @@ concrete type (Text, Chroma, ...) to update live-editable parameters
 rather than needing every such edit to remove and recreate the node.
 Rust can't provide a generic default for these on a trait object (the
 classic object-safe "as_any" problem), so every impl repeats the same
-three-line body.
+three-line body. This is a different downcast from Value's - it's
+about reaching a concrete Operation, not about reading a graph value,
+so it stays even though Value itself no longer needs one.
 */
-pub trait Operation: std::any::Any {
+pub trait Operation: Any {
     fn execute(
         &self,
         ctx: &Context,
-        inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError>;
+        inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError>;
 
-    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any(&self) -> &dyn Any;
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }

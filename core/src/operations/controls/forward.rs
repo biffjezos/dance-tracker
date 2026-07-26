@@ -20,8 +20,8 @@ impl Operation for Forward {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
+        _inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
         let target = self.video.current_time() + self.seconds;
 
         self.video.set_current_time(target);

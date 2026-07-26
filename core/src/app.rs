@@ -14,6 +14,7 @@ written from the boundary inward instead of the graph outward.
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
@@ -29,7 +30,7 @@ use crate::operations::generators::{Ghost, Rings, Text};
 use crate::operations::masks::{Chroma, Difference, Fill};
 use crate::operations::sources::video::VideoSource;
 use crate::operations::sources::CapturedFrame;
-use crate::operations::{downcast_frame, Frame};
+use crate::operations::{expect_frame, expect_frame_arc, Frame};
 
 fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
@@ -63,7 +64,7 @@ fn parse_fill(fill_video: bool, r: u8, g: u8, b: u8) -> Fill {
 #[wasm_bindgen]
 pub struct App {
     graph: Graph,
-    captured: HashMap<NodeId, Rc<RefCell<Option<Frame>>>>,
+    captured: HashMap<NodeId, Rc<RefCell<Option<Arc<Frame>>>>>,
     difference_source: HashMap<NodeId, NodeId>,
     width: u32,
     height: u32,
@@ -204,7 +205,7 @@ impl App {
             .execute(&self.graph, source_id, &ctx)
             .map_err(js_err)?;
 
-        let frame = downcast_frame(values.first()).map_err(js_err)?.clone();
+        let frame = expect_frame_arc(values.first()).map_err(js_err)?;
 
         let captured_id = *self
             .difference_source
@@ -361,7 +362,7 @@ impl App {
             .execute(&self.graph, output_node, &ctx)
             .map_err(js_err)?;
 
-        let frame = downcast_frame(values.first()).map_err(js_err)?;
+        let frame = expect_frame(values.first()).map_err(js_err)?;
 
         write_frame_to_canvas(&canvas, frame)
     }
@@ -372,7 +373,7 @@ impl App {
 
         let values = executor.execute(&self.graph, node, &ctx).map_err(js_err)?;
 
-        let frame = downcast_frame(values.first()).map_err(js_err)?;
+        let frame = expect_frame(values.first()).map_err(js_err)?;
 
         write_frame_to_canvas(&canvas, frame)
     }

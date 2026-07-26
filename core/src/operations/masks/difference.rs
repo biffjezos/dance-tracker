@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::compositor::{Context, Operation, OperationError, Value};
 use crate::operations::masks::{key_pixel, Fill};
-use crate::operations::{downcast_frame, Frame};
+use crate::operations::{expect_frame, Frame};
 
 /*
 inputs[0] is the video being keyed, inputs[1] is the reference/
@@ -25,10 +27,10 @@ impl Operation for Difference {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
-        let video = downcast_frame(inputs.first())?;
-        let reference = downcast_frame(inputs.get(1))?;
+        inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
+        let video = expect_frame(inputs.first())?;
+        let reference = expect_frame(inputs.get(1))?;
 
         if !video.same_dimensions(reference) {
             return Err(OperationError::DimensionMismatch);
@@ -57,7 +59,7 @@ impl Operation for Difference {
             timestamp: video.timestamp,
         };
 
-        Ok(vec![Box::new(frame)])
+        Ok(vec![Value::Frame(Arc::new(frame))])
     }
 }
 
@@ -71,12 +73,14 @@ mod tests {
 
     fn run(op: &Difference, video: Frame, reference: Frame) -> Frame {
         let ctx = Context { data: Box::new(()) };
-        let inputs: Vec<Box<dyn Value>> = vec![Box::new(video), Box::new(reference)];
+        let inputs = vec![Value::Frame(Arc::new(video)), Value::Frame(Arc::new(reference))];
 
         let mut outputs = op.execute(&ctx, &inputs).expect("should succeed");
-        let any_box: Box<dyn std::any::Any> = outputs.remove(0);
 
-        *any_box.downcast::<Frame>().expect("should be a Frame")
+        match outputs.remove(0) {
+            Value::Frame(frame) => (*frame).clone(),
+            _ => panic!("should be a Frame"),
+        }
     }
 
     #[test]
@@ -108,7 +112,7 @@ mod tests {
             height: 1,
             timestamp: 0.0,
         };
-        let inputs: Vec<Box<dyn Value>> = vec![Box::new(video), Box::new(reference)];
+        let inputs = vec![Value::Frame(Arc::new(video)), Value::Frame(Arc::new(reference))];
 
         let result = op.execute(&ctx, &inputs);
 

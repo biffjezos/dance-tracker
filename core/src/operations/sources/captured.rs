@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::compositor::{Context, Operation, OperationError, Value};
 use crate::operations::Frame;
@@ -12,10 +13,13 @@ without Difference itself needing any internal state or the Operation
 trait needing an out-of-band "command" mechanism. Whoever constructs
 this node keeps the Rc from handle() (taken before the CapturedFrame
 is boxed into Box<dyn Operation> and erased) in its own side-table
-keyed by NodeId, and writes into it directly on capture.
+keyed by NodeId, and writes into it directly on capture. Holds an Arc
+so capturing is a refcount bump into place, not a pixel copy, and
+execute() below hands the same Arc back out rather than cloning pixels
+on every tick.
 */
 pub struct CapturedFrame {
-    frame: Rc<RefCell<Option<Frame>>>,
+    frame: Rc<RefCell<Option<Arc<Frame>>>>,
 }
 
 impl CapturedFrame {
@@ -25,7 +29,7 @@ impl CapturedFrame {
         }
     }
 
-    pub fn handle(&self) -> Rc<RefCell<Option<Frame>>> {
+    pub fn handle(&self) -> Rc<RefCell<Option<Arc<Frame>>>> {
         self.frame.clone()
     }
 }
@@ -43,15 +47,15 @@ impl Operation for CapturedFrame {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
+        _inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
         let frame = self
             .frame
             .borrow()
             .clone()
             .ok_or_else(|| OperationError::SourceNotFound("not captured yet".to_string()))?;
 
-        Ok(vec![Box::new(frame)])
+        Ok(vec![Value::Frame(frame)])
     }
 }
 
@@ -74,17 +78,20 @@ mod tests {
         let node = CapturedFrame::new();
         let handle = node.handle();
 
-        *handle.borrow_mut() = Some(Frame {
+        *handle.borrow_mut() = Some(Arc::new(Frame {
             pixels: vec![9, 9, 9, 255],
             width: 1,
             height: 1,
             timestamp: 0.0,
-        });
+        }));
 
         let ctx = Context { data: Box::new(()) };
         let mut outputs = node.execute(&ctx, &[]).expect("should succeed");
-        let any_box: Box<dyn std::any::Any> = outputs.remove(0);
-        let frame = any_box.downcast::<Frame>().expect("should be a Frame");
+
+        let frame = match outputs.remove(0) {
+            Value::Frame(frame) => frame,
+            _ => panic!("should be a Frame"),
+        };
 
         assert_eq!(frame.pixels, vec![9, 9, 9, 255]);
     }

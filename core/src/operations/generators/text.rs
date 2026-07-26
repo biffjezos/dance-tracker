@@ -83,8 +83,8 @@ impl Operation for Text {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
+        _inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
         let width = self.canvas.width();
         let height = self.canvas.height();
 
@@ -98,12 +98,12 @@ impl Operation for Text {
                 .get_image_data(0.0, 0.0, width as f64, height as f64)
                 .map_err(|_| OperationError::WrongValueType)?;
 
-            return Ok(vec![Box::new(Frame {
+            return Ok(vec![Value::Frame(std::sync::Arc::new(Frame {
                 pixels: image_data.data().0,
                 width,
                 height,
                 timestamp: 0.0,
-            })]);
+            }))]);
         }
 
         self.ctx.save();
@@ -139,11 +139,11 @@ impl Operation for Text {
             .get_image_data(0.0, 0.0, width as f64, height as f64)
             .map_err(|_| OperationError::WrongValueType)?;
 
-        Ok(vec![Box::new(Frame {
+        Ok(vec![Value::Frame(std::sync::Arc::new(Frame {
             pixels: image_data.data().0,
             width,
             height,
             timestamp: 0.0,
-        })])
+        }))])
     }
 }
