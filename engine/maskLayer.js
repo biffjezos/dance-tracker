@@ -3,12 +3,11 @@
 DANCE TRACKER 5000
 MASK LAYER
 
-A standalone, independently-addable mask. Every video
-layer still comes with its own bundled mask for free,
-but a MaskLayer is a second way to get one: not tied to
-any one video, pointed at whichever video's pixels it
-should key against via its own SOURCE stepper, same
-threshold/key colour/fill pipeline as a bundled mask.
+A standalone, independently-addable mask - the only way
+a mask ever exists (created solely via ADD MASK, never
+bundled with a video automatically). Not tied to any one
+video: pointed at whichever video's pixels it should key
+against via its own SOURCE stepper.
 ==================================================
 */
 
