@@ -267,18 +267,44 @@ function scopedEntry(scope){
 }
 
 
+/*
+The camera panel's own title doubles as the "what am I looking at"
+label, replacing the old fixed "CAMERA INPUT" text - CAMERA_PANEL_
+DEFAULT_TITLE is what it falls back to whenever nothing real is
+selected (EMPTY_ENTRY, label null), same as everywhere else that
+already has an empty-state fallback instead of a fake default node.
+*/
+const CAMERA_PANEL_DEFAULT_TITLE = "CAMERA INPUT";
+
+
+/*
+The only per-layer on/off state that actually exists is visibility
+mode - there is no separate "layer enabled" toggle anywhere in the UI
+(entry.settings.enabled is purely derived FROM visibility mode, set
+by cycleVisibilityMode - never an independent switch). The status bar
+shows that real, single state directly instead of collapsing it into
+a coarser ON/OFF that implies a control which doesn't exist.
+*/
+const VISIBILITY_STATUS_LABELS = {
+    on:"ON",
+    alpha:"ALPHA",
+    maskWhite:"MASK WHITE",
+    off:"OFF"
+};
+
+
 function updateLayerStatusDisplay(entry){
 
-    const nodeDisplay =
+    const panelTitle =
         document.getElementById(
-            "node-display"
+            "camera-panel-title"
         );
 
-    if(nodeDisplay){
+    if(panelTitle){
 
-        nodeDisplay.innerText =
-            "NODE: " +
-            (entry.label || "NONE");
+        panelTitle.innerText =
+            entry.label ||
+            CAMERA_PANEL_DEFAULT_TITLE;
 
     }
 
@@ -287,13 +313,12 @@ function updateLayerStatusDisplay(entry){
     .querySelector(".statusbar")
     .children[2]
     .innerText =
-        "LAYER: " +
+        "VISIBILITY: " +
         (
-            entry.settings.enabled
-            ?
+            VISIBILITY_STATUS_LABELS[
+                entry.settings.visibilityMode
+            ] ||
             "ON"
-            :
-            "OFF"
         );
 
 
@@ -345,6 +370,13 @@ function reportSelection(scope){
                         entry.kind === "standaloneMask"
                         ?
                         entry.settings.keyColour
+                        :
+                        null,
+                    mode:
+                        entry.kind === "mask" ||
+                        entry.kind === "standaloneMask"
+                        ?
+                        entry.settings.mode
                         :
                         null,
                     sourceLabel:
@@ -1593,6 +1625,8 @@ window.addEventListener(
             "Matte mode:",
             maskSettings.mode
         );
+
+        reportSelection("mask");
 
     }
 );

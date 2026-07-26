@@ -522,7 +522,8 @@ export class Renderer {
                 canvas:this.layers.ghost,
                 maskedBy:this.settings.amiga.ghost.maskedBy,
                 visibilityMode:this.settings.amiga.ghost.visibilityMode,
-                background:this.settings.amiga.ghost.background
+                background:this.settings.amiga.ghost.background,
+                applyToMask:this.settings.amiga.ghost.applyToMask
             };
 
         if(id === "text")
@@ -608,7 +609,8 @@ export class Renderer {
                 canvas:layer.canvas,
                 maskedBy:layer.ghostSettings.maskedBy,
                 visibilityMode:layer.ghostSettings.visibilityMode,
-                background:layer.ghostSettings.background
+                background:layer.ghostSettings.background,
+                applyToMask:layer.ghostSettings.applyToMask
             } : null;
 
         }
@@ -804,19 +806,23 @@ export class Renderer {
 
 
     /*
-    Visibility mode is a per-layer visual transform applied after
-    masking, on top of the enabled/off gate the caller already checked.
-    "on" passes the canvas through untouched. "maskWhite" flattens the
-    shape to solid white RGB (keeping the existing alpha as the shape) -
-    both a clean visual silhouette and, by construction, a correct mask
-    source for any channel a downstream MASKED BY picks. "alpha"
-    visualizes the raw alpha channel as an opaque greyscale image, since
-    alpha alone isn't otherwise visible on screen.
+    Every kind, everywhere, follows the same rule: "on" and "maskWhite"
+    independently draw themselves onto the master; "alpha" and "off"
+    don't - isIndependentlyVisible() is the one shared gate every draw
+    call site uses, so there's no per-kind special-casing to keep in
+    sync. "maskWhite" flattens the shape to solid white RGB (keeping
+    the existing alpha as the shape) here, purely a visual transform
+    for when it DOES draw itself. "alpha" and "off" never reach that
+    draw call at all (the gate stops them before this function is even
+    invoked for that purpose) - this function only still runs for them
+    when something else reads their canvas through a BACKGROUND chain
+    or MASKED BY, where they pass through untouched, same as "on":
+    not independently visible is not the same as not usable.
     */
     applyVisibilityMode(canvas, mode){
 
 
-        if(!mode || mode === "on")
+        if(!mode || mode === "on" || mode === "alpha" || mode === "off")
             return canvas;
 
 
@@ -892,28 +898,6 @@ export class Renderer {
             }
 
         }
-        else if(mode === "alpha"){
-
-            for(
-                let i=0;
-                i<pixels.length;
-                i+=4
-            ){
-
-                const a =
-                    pixels[i+3];
-
-                pixels[i] = a;
-
-                pixels[i+1] = a;
-
-                pixels[i+2] = a;
-
-                pixels[i+3] = 255;
-
-            }
-
-        }
 
 
         scratchCtx.putImageData(
@@ -927,6 +911,23 @@ export class Renderer {
 
     }
 
+
+
+    /*
+    The one shared gate for "does this draw itself onto the master" -
+    every draw call site in compose() uses this instead of its own
+    inline visibilityMode check, so on/alpha/maskWhite/off mean
+    exactly the same thing for every kind, with nowhere for that to
+    drift out of sync.
+    */
+    isIndependentlyVisible(mode){
+
+        return (
+            mode === "on" ||
+            mode === "maskWhite"
+        );
+
+    }
 
 
 
@@ -1335,14 +1336,18 @@ export class Renderer {
     is transparent) gets drawn, then X draws AGAIN on its own at its
     normal stack position, covering the composite that was just made.
 
-    Only background links suppress independent drawing - MASKED BY
-    doesn't (a mask being used as someone else's shape is still a
-    perfectly good thing to look at on its own, e.g. in MASK WHITE
-    mode). A cycle (A's background is B, B's background is A) simply
-    means both ask to suppress each other - resolveChainedLayer
-    already falls back safely when it hits that same cycle while
-    resolving actual pixel content, so this can't produce a case
-    where nothing draws at all only where content briefly looks odd.
+    Every kind of "someone reads my shape/content" link suppresses
+    independent drawing the same way - BACKGROUND, MASKED BY, and
+    GHOST's APPLY TO MASK all count. Feeding another node is enough
+    reason to stay off the master on your own; if you also want to
+    look at yourself directly, that's what ON is for on a second node,
+    or ALPHA if you want to feed something ELSE too without ever
+    showing your own colour. A cycle (A's background is B, B's
+    background is A) simply means both ask to suppress each other -
+    resolveChainedLayer already falls back safely when it hits that
+    same cycle while resolving actual pixel content, so this can't
+    produce a case where nothing draws at all, only where content
+    briefly looks odd.
     */
     computeConsumedIds(){
 
@@ -1359,18 +1364,39 @@ export class Renderer {
             if(entry.visibilityMode === "off")
                 return;
 
-            if(!entry.background)
-                return;
+            if(
+                entry.background &&
+                entry.background.source !== "none" &&
+                entry.background.source !== "colour"
+            ){
+
+                consumed.add(
+                    entry.background.source
+                );
+
+            }
 
             if(
-                entry.background.source === "none" ||
-                entry.background.source === "colour"
-            )
-                return;
+                entry.maskedBy &&
+                entry.maskedBy.source !== "none"
+            ){
 
-            consumed.add(
-                entry.background.source
-            );
+                consumed.add(
+                    entry.maskedBy.source
+                );
+
+            }
+
+            if(
+                entry.applyToMask &&
+                entry.applyToMask !== "none"
+            ){
+
+                consumed.add(
+                    entry.applyToMask
+                );
+
+            }
 
         });
 
@@ -1416,7 +1442,7 @@ export class Renderer {
 
         if(
             this.settings.video.enabled &&
-            this.settings.video.visibilityMode !== "off" &&
+            this.isIndependentlyVisible(this.settings.video.visibilityMode) &&
             !consumedIds.has("video")
         ){
 
@@ -1462,7 +1488,7 @@ export class Renderer {
 
         if(
             this.settings.layers.body &&
-            this.settings.body.visibilityMode !== "off" &&
+            this.isIndependentlyVisible(this.settings.body.visibilityMode) &&
             !consumedIds.has("body")
         ){
 
@@ -1496,13 +1522,13 @@ export class Renderer {
 
 
         if(
-            this.settings.amiga.rings.visibilityMode !== "off" &&
+            this.isIndependentlyVisible(this.settings.amiga.rings.visibilityMode) &&
             !consumedIds.has("rings")
         ){
 
             ctx.globalCompositeOperation =
                 this.resolveCompositeOperation(
-                    "screen",
+                    "source-over",
                     this.settings.amiga.rings.background
                 );
 
@@ -1529,13 +1555,13 @@ export class Renderer {
 
 
         if(
-            this.settings.amiga.ghost.visibilityMode !== "off" &&
+            this.isIndependentlyVisible(this.settings.amiga.ghost.visibilityMode) &&
             !consumedIds.has("ghost")
         ){
 
             ctx.globalCompositeOperation =
                 this.resolveCompositeOperation(
-                    "screen",
+                    "source-over",
                     this.settings.amiga.ghost.background
                 );
 
@@ -1562,7 +1588,7 @@ export class Renderer {
 
 
         if(
-            this.settings.amiga.text.visibilityMode !== "off" &&
+            this.isIndependentlyVisible(this.settings.amiga.text.visibilityMode) &&
             !consumedIds.has("text")
         ){
 
@@ -1614,7 +1640,7 @@ export class Renderer {
 
             if(
                 layer.videoSettings.enabled &&
-                layer.videoSettings.visibilityMode !== "off" &&
+                this.isIndependentlyVisible(layer.videoSettings.visibilityMode) &&
                 !consumedIds.has("videoLayer:" + layer.id)
             ){
 
@@ -1662,7 +1688,7 @@ export class Renderer {
 
             if(
                 layer.bodySettings.enabled &&
-                layer.bodySettings.visibilityMode !== "off" &&
+                this.isIndependentlyVisible(layer.bodySettings.visibilityMode) &&
                 !consumedIds.has("maskLayer:" + layer.id)
             ){
 
@@ -1709,13 +1735,13 @@ export class Renderer {
 
 
             if(
-                layer.ringsSettings.visibilityMode !== "off" &&
+                this.isIndependentlyVisible(layer.ringsSettings.visibilityMode) &&
                 !consumedIds.has("ringsLayer:" + layer.id)
             ){
 
                 ctx.globalCompositeOperation =
                     this.resolveCompositeOperation(
-                        "screen",
+                        "source-over",
                         layer.ringsSettings.background
                     );
 
@@ -1756,13 +1782,13 @@ export class Renderer {
 
 
             if(
-                layer.ghostSettings.visibilityMode !== "off" &&
+                this.isIndependentlyVisible(layer.ghostSettings.visibilityMode) &&
                 !consumedIds.has("ghostLayer:" + layer.id)
             ){
 
                 ctx.globalCompositeOperation =
                     this.resolveCompositeOperation(
-                        "screen",
+                        "source-over",
                         layer.ghostSettings.background
                     );
 
@@ -1803,7 +1829,7 @@ export class Renderer {
 
 
             if(
-                layer.textSettings.visibilityMode !== "off" &&
+                this.isIndependentlyVisible(layer.textSettings.visibilityMode) &&
                 !consumedIds.has("textLayer:" + layer.id)
             ){
 

@@ -134,7 +134,8 @@ export class MenuManager {
                     label:e.detail.label,
                     kind:e.detail.kind,
                     visibilityMode:e.detail.visibilityMode,
-                    sourceLabel:e.detail.sourceLabel
+                    sourceLabel:e.detail.sourceLabel,
+                    mode:e.detail.mode
                 };
 
 
@@ -1577,9 +1578,35 @@ export class MenuManager {
 
 
             this.addLayerButton(
-                "CAPTURE BACKGROUND",
-                "captureLayerBackground"
+                "SOLID/VIDEO",
+                "toggleLayerFill"
             );
+
+            this.addLayerScreenButton(
+                "COLOUR",
+                "COLOUR"
+            );
+
+
+            /*
+            CAPTURE BACKGROUND only means anything in difference mode
+            (Segmentation.process() keys off capturedBackground there,
+            keyColour in keying mode) and KEY COLOUR only means
+            anything in keying mode - each is hidden outside the mode
+            it actually affects instead of sitting there doing nothing.
+            */
+            const matteMode =
+                this.maskSelection.mode ||
+                "difference";
+
+            if(matteMode === "difference"){
+
+                this.addLayerButton(
+                    "CAPTURE BACKGROUND",
+                    "captureLayerBackground"
+                );
+
+            }
 
             this.addLayerButton(
                 "THRESHOLD +",
@@ -1591,25 +1618,47 @@ export class MenuManager {
                 "thresholdDown"
             );
 
-            this.addLayerButton(
-                "DIFFERENCE/CHROMA",
-                "toggleMatteMode"
+
+            let matteModeButton =
+            document.createElement(
+                "button"
             );
 
-            this.addLayerButton(
-                "SOLID/VIDEO",
-                "toggleLayerFill"
+            matteModeButton.innerText=
+                "MODE: " +
+                (
+                    matteMode === "difference"
+                    ?
+                    "DIFFERENCE"
+                    :
+                    "CHROMA"
+                );
+
+            matteModeButton.onclick=()=>{
+
+                window.dispatchEvent(
+                    new Event(
+                        "toggleMatteMode"
+                    )
+                );
+
+                this.render();
+
+            };
+
+            this.subMenu.appendChild(
+                matteModeButton
             );
 
-            this.addLayerScreenButton(
-                "COLOUR",
-                "COLOUR"
-            );
 
-            this.addLayerScreenButton(
-                "KEY COLOUR",
-                "KEY COLOUR"
-            );
+            if(matteMode === "keying"){
+
+                this.addLayerScreenButton(
+                    "KEY COLOUR",
+                    "KEY COLOUR"
+                );
+
+            }
 
         }
 
