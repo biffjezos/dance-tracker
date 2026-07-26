@@ -50,7 +50,7 @@ export class MaskLayer {
 
             maskedBy:{source:"none", channel:"alpha"},
 
-            background:{source:"none", colour:{r:0, g:0, b:0}}
+            background:{source:"none", colour:{r:0, g:0, b:0}, blendMode:"normal"}
 
         };
 
