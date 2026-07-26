@@ -368,6 +368,8 @@ export class MenuManager {
 
                     type:"instanceEditor",
 
+                    scope:"video",
+
                     "RING COLOUR":{
 
                         type:"ringColourPicker"
@@ -401,9 +403,14 @@ export class MenuManager {
 
 
             /*
-            KEY is its own selector, scoped to masks only - the same
-            minimal universal row as VIDEO, plus the actual chroma-key
-            deep settings, which live here and nowhere else.
+            KEY is its own selector, scoped to masks only - same
+            shape as VIDEO: a minimal top-level row (stepper,
+            VISIBILITY, MASK, ADD MASK) plus an EDIT bridge to the
+            actual chroma-key deep settings, instead of dumping both
+            onto one screen. No BACKGROUND or TRANSPORT here - both
+            are video-layer concepts, already set from VIDEO, and
+            having a second copy under KEY was confusing (which one's
+            real?), not useful.
             */
             key:{
 
@@ -419,49 +426,23 @@ export class MenuManager {
 
                 },
 
-                BACKGROUND:{
+                EDIT:{
 
-                    type:"backgroundPicker",
+                    type:"instanceEditor",
 
-                    scope:"mask"
+                    scope:"mask",
 
-                },
+                    "KEY COLOUR":{
 
-                TRANSPORT:{
-
-                    "PLAY/STOP":null,
-
-                    TIME:{
-
-                        type:"display",
-
-                        id:"transport-display"
+                        type:"keyColourPicker"
 
                     },
 
-                    "MINUTE +":null,
+                    COLOUR:colourMenu(
+                        "layerColour"
+                    )
 
-                    "MINUTE -":null,
-
-                    "SECOND +":null,
-
-                    "SECOND -":null,
-
-                    "FRAME +":null,
-
-                    "FRAME -":null
-
-                },
-
-                "KEY COLOUR":{
-
-                    type:"keyColourPicker"
-
-                },
-
-                COLOUR:colourMenu(
-                    "layerColour"
-                )
+                }
 
             },
 
@@ -1239,10 +1220,19 @@ export class MenuManager {
 
 
 
-        this.addLayerScreenButton(
-            "BACKGROUND",
-            "BACKGROUND"
-        );
+        if(scope === "video"){
+
+            this.addLayerScreenButton(
+                "BACKGROUND",
+                "BACKGROUND"
+            );
+
+            this.addLayerScreenButton(
+                "TRANSPORT",
+                "TRANSPORT"
+            );
+
+        }
 
 
         this.addLayerScreenButton(
@@ -1251,141 +1241,29 @@ export class MenuManager {
         );
 
 
-        this.addLayerScreenButton(
-            "TRANSPORT",
-            "TRANSPORT"
-        );
-
-
 
         if(scope === "mask"){
 
             this.addLayerButton(
-                "ADD KEY MASK",
+                "ADD MASK",
                 "addMaskLayer"
-            );
-
-
-            if(selection.kind === "standaloneMask"){
-
-                let sourceMinus =
-                document.createElement(
-                    "button"
-                );
-
-                sourceMinus.innerText=
-                    "SOURCE -";
-
-                sourceMinus.onclick=()=>{
-
-                    window.dispatchEvent(
-                        new CustomEvent(
-                            "maskVideoSourceStep",
-                            {detail:{direction:-1}}
-                        )
-                    );
-
-                    this.render();
-
-                };
-
-                this.subMenu.appendChild(
-                    sourceMinus
-                );
-
-
-
-                let sourceDisplay =
-                document.createElement(
-                    "span"
-                );
-
-                sourceDisplay.innerText=
-                    "SOURCE: " +
-                    (selection.sourceLabel || "NONE");
-
-                sourceDisplay.className=
-                    "ring-id-display";
-
-                this.subMenu.appendChild(
-                    sourceDisplay
-                );
-
-
-
-                let sourcePlus =
-                document.createElement(
-                    "button"
-                );
-
-                sourcePlus.innerText=
-                    "SOURCE +";
-
-                sourcePlus.onclick=()=>{
-
-                    window.dispatchEvent(
-                        new CustomEvent(
-                            "maskVideoSourceStep",
-                            {detail:{direction:1}}
-                        )
-                    );
-
-                    this.render();
-
-                };
-
-                this.subMenu.appendChild(
-                    sourcePlus
-                );
-
-            }
-
-
-            this.addLayerButton(
-                "CAPTURE BACKGROUND",
-                "captureLayerBackground"
-            );
-
-            this.addLayerButton(
-                "THRESHOLD +",
-                "thresholdUp"
-            );
-
-            this.addLayerButton(
-                "THRESHOLD -",
-                "thresholdDown"
-            );
-
-            this.addLayerButton(
-                "DIFFERENCE/CHROMA",
-                "toggleMatteMode"
-            );
-
-            this.addLayerButton(
-                "SOLID/VIDEO",
-                "toggleLayerFill"
-            );
-
-            this.addLayerScreenButton(
-                "COLOUR",
-                "COLOUR"
-            );
-
-            this.addLayerScreenButton(
-                "KEY COLOUR",
-                "KEY COLOUR"
             );
 
         }
 
 
+
         if(
-            scope === "video" &&
             (
-                selection.kind === "rings" ||
-                selection.kind === "ghost" ||
-                selection.kind === "text"
+                scope === "video" &&
+                (
+                    selection.kind === "rings" ||
+                    selection.kind === "ghost" ||
+                    selection.kind === "text"
+                )
             )
+            ||
+            scope === "mask"
         ){
 
             this.addLayerScreenButton(
@@ -1402,17 +1280,23 @@ export class MenuManager {
 
 
     /*
-    Reached via EDIT from VIDEO - the type-specific deep settings for
-    whichever generator instance is currently selected there
-    (this.videoSelection.kind says which shape to show). No stepper
-    of its own, no universal row duplicated here - just what's unique
-    to rings/ghost/text, operating on whichever instance VIDEO has
-    selected.
+    Reached via EDIT from either VIDEO or KEY (this.node().scope says
+    which) - the type-specific deep settings for whichever thing is
+    currently selected there. No stepper of its own, no universal row
+    duplicated here - just what's unique to that kind, operating on
+    whichever instance the calling scope has selected.
     */
     renderInstanceEditor(){
 
 
+        const scope =
+            this.node().scope || "video";
+
         const kind =
+            scope === "mask"
+            ?
+            this.maskSelection.kind
+            :
             this.videoSelection.kind;
 
 
@@ -1547,6 +1431,122 @@ export class MenuManager {
             this.addLayerScreenButton(
                 "COLOUR",
                 "TEXT COLOUR"
+            );
+
+        }
+        else if(
+            kind === "mask" ||
+            kind === "standaloneMask"
+        ){
+
+            if(kind === "standaloneMask"){
+
+                let sourceMinus =
+                document.createElement(
+                    "button"
+                );
+
+                sourceMinus.innerText=
+                    "SOURCE -";
+
+                sourceMinus.onclick=()=>{
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "maskVideoSourceStep",
+                            {detail:{direction:-1}}
+                        )
+                    );
+
+                    this.render();
+
+                };
+
+                this.subMenu.appendChild(
+                    sourceMinus
+                );
+
+
+
+                let sourceDisplay =
+                document.createElement(
+                    "span"
+                );
+
+                sourceDisplay.innerText=
+                    "SOURCE: " +
+                    (this.maskSelection.sourceLabel || "NONE");
+
+                sourceDisplay.className=
+                    "ring-id-display";
+
+                this.subMenu.appendChild(
+                    sourceDisplay
+                );
+
+
+
+                let sourcePlus =
+                document.createElement(
+                    "button"
+                );
+
+                sourcePlus.innerText=
+                    "SOURCE +";
+
+                sourcePlus.onclick=()=>{
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "maskVideoSourceStep",
+                            {detail:{direction:1}}
+                        )
+                    );
+
+                    this.render();
+
+                };
+
+                this.subMenu.appendChild(
+                    sourcePlus
+                );
+
+            }
+
+
+            this.addLayerButton(
+                "CAPTURE BACKGROUND",
+                "captureLayerBackground"
+            );
+
+            this.addLayerButton(
+                "THRESHOLD +",
+                "thresholdUp"
+            );
+
+            this.addLayerButton(
+                "THRESHOLD -",
+                "thresholdDown"
+            );
+
+            this.addLayerButton(
+                "DIFFERENCE/CHROMA",
+                "toggleMatteMode"
+            );
+
+            this.addLayerButton(
+                "SOLID/VIDEO",
+                "toggleLayerFill"
+            );
+
+            this.addLayerScreenButton(
+                "COLOUR",
+                "COLOUR"
+            );
+
+            this.addLayerScreenButton(
+                "KEY COLOUR",
+                "KEY COLOUR"
             );
 
         }
@@ -2454,12 +2454,6 @@ export class MenuManager {
                 new Event("addTextLayer")
             );
 
-
-
-        if(item==="ADD KEY MASK")
-            window.dispatchEvent(
-                new Event("addMaskLayer")
-            );
 
 
 
