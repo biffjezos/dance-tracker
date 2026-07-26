@@ -305,16 +305,16 @@ export class MenuManager {
 
 
             /*
-            VIDEO only lists things that really exist: video layers
-            you've actually added, plus every rings/ghost/text
-            instance you've actually added via GENERATE's ADD RINGS/
-            ADD GHOST/ADD TEXT (any number of each, same as video
-            layers). Every entry, whatever kind, gets the exact same
-            minimal row - VISIBILITY MODE, BACKGROUND, MASK,
-            TRANSPORT - plus, for a generator instance, EDIT: a
-            bridge to that specific instance's own deep settings
-            (ring/ghost/text kinds only - a plain video has nothing
-            more to configure beyond the universal row).
+            NODES only lists things that really exist: video layers
+            you've actually added, every rings/ghost/text instance
+            you've actually added via GENERATE's ADD RINGS/ADD GHOST/
+            ADD TEXT, and every mask you've actually added via KEY's
+            ADD MASK (any number of each, same list, no defaults).
+            Every entry, whatever kind, gets the exact same minimal
+            row - VISIBILITY MODE, BACKGROUND, MASK, TRANSPORT - plus
+            EDIT for anything with its own deep settings (rings/ghost/
+            text/mask kinds - a plain video has nothing more to
+            configure beyond the universal row).
             */
             video:{
 
@@ -394,7 +394,17 @@ export class MenuManager {
 
                         type:"applyToMaskPicker"
 
-                    }
+                    },
+
+                    "KEY COLOUR":{
+
+                        type:"keyColourPicker"
+
+                    },
+
+                    COLOUR:colourMenu(
+                        "layerColour"
+                    )
 
                 }
 
@@ -403,14 +413,18 @@ export class MenuManager {
 
 
             /*
-            KEY is its own selector, scoped to masks only - same
-            shape as VIDEO: a minimal top-level row (stepper,
-            VISIBILITY, MASK, ADD MASK) plus an EDIT bridge to the
-            actual chroma-key deep settings, instead of dumping both
-            onto one screen. No BACKGROUND or TRANSPORT here - both
-            are video-layer concepts, already set from VIDEO, and
-            having a second copy under KEY was confusing (which one's
-            real?), not useful.
+            KEY is its own selector, scoped to masks only - a filtered
+            view of the exact same mask entries NODES already lists
+            (see getMaskRegistry() in app.js), same shape as NODES: a
+            minimal top-level row (stepper, VISIBILITY, MASK, ADD
+            MASK) plus an EDIT bridge to the actual chroma-key deep
+            settings, instead of dumping both onto one screen. No
+            BACKGROUND or TRANSPORT button here specifically - not
+            because masks lack them (they don't - each mask has its
+            own BACKGROUND same as everything else), but because
+            they're already reachable for these same entries from
+            NODES, and a second copy under KEY was confusing (which
+            one's real?), not useful.
             */
             key:{
 
@@ -1134,7 +1148,7 @@ export class MenuManager {
                 ?
                 "NO MASKS YET"
                 :
-                "NO VIDEO SOURCES YET - SEE INPUT";
+                "NO NODES YET - SEE INPUT/KEY/GENERATE";
 
             empty.className=
                 "ring-id-display";
@@ -1306,7 +1320,8 @@ export class MenuManager {
                 (
                     selection.kind === "rings" ||
                     selection.kind === "ghost" ||
-                    selection.kind === "text"
+                    selection.kind === "text" ||
+                    selection.kind === "standaloneMask"
                 )
             )
             ||

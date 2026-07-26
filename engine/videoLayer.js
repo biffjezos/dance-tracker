@@ -3,17 +3,16 @@
 DANCE TRACKER 5000
 VIDEO LAYER
 
-A self-contained, pluggable video source + its own
-body-mask pipeline. Multiple instances can run side
-by side, each with its own file/camera, own threshold/
-key colour/fill, own visibility.
+A self-contained, pluggable video source. Multiple
+instances can run side by side, each with its own
+file/camera and own visibility. Carries no mask of
+its own - a mask only ever exists as a standalone
+MaskLayer, created solely via ADD MASK.
 ==================================================
 */
 
 
 import { Camera } from "./camera.js";
-import { BackgroundCapture } from "../body/background.js";
-import { Segmentation } from "../body/segmentation.js";
 import { containFit } from "./fit.js";
 
 
@@ -60,37 +59,10 @@ export class VideoLayer {
         };
 
 
-        this.bodySettings = {
-
-            mode:"difference",
-
-            threshold:100,
-
-            keyColour:{r:0, g:255, b:0},
-
-            fill:"solid",
-
-            enabled:true,
-
-            visibilityMode:"on",
-
-            maskedBy:{source:"none", channel:"alpha"},
-
-            background:{source:"none", colour:{r:0, g:0, b:0}, blendMode:"normal"}
-
-        };
-
-
         this.camera =
             new Camera(
                 settings,
                 this.video
-            );
-
-
-        this.background =
-            new BackgroundCapture(
-                settings
             );
 
 
@@ -106,27 +78,6 @@ export class VideoLayer {
         this.rawCtx =
             this.rawCanvas.getContext(
                 "2d"
-            );
-
-
-        this.bodyCanvas =
-            document.createElement(
-                "canvas"
-            );
-
-        this.bodyCanvas.width = settings.video.width;
-
-        this.bodyCanvas.height = settings.video.height;
-
-
-        this.segmentation =
-            new Segmentation(
-                this.background,
-                settings,
-                {
-                    bodySettings:this.bodySettings,
-                    outputCanvas:this.bodyCanvas
-                }
             );
 
 
@@ -182,18 +133,6 @@ export class VideoLayer {
 
 
 
-    captureBackground(){
-
-
-        this.background.capture(
-            this.video
-        );
-
-    }
-
-
-
-
     resize(){
 
 
@@ -202,11 +141,6 @@ export class VideoLayer {
 
         this.rawCanvas.height =
             this.settings.video.height;
-
-
-        this.background.resize();
-
-        this.segmentation.resize();
 
     }
 
@@ -265,10 +199,6 @@ export class VideoLayer {
 
 
         this.drawRawFrame();
-
-        this.segmentation.process(
-            this.video
-        );
 
     }
 
