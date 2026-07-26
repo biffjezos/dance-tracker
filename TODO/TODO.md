@@ -19,4 +19,5 @@ When done, check if the following bugs still exist. If yes. Fix them:
 9) Text renders on top of a video, although I have not told it do to it. There must be HARDWIRED COMPOSE operations.
 10) DO NOT FUCKING USE ANY DEFAULTS OPERATIONS ON APP START, NO DEFAULT NODES. NO MASKS NEVER NEVER NEVER! If there's no BACKGROUND (Compose Operation) DO NOT LAY ANYTHING OVER ANYTHING IF NOT FUCKING EXPLICITLY DONE BY THE USER! TAKE THIS AND WRITE IT INTO YOUR FUCKING CLAUDE.MD STUPID MOTHER FUCKER.
 11) Get rid of your stupid token wasting tests. Get rid of them. The app doesn't work, despite your testing crap.
+12) Commit, Push and merge. Shut up. 
 
