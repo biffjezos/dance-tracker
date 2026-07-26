@@ -1112,6 +1112,53 @@ export class MenuManager {
             this.videoSelection;
 
 
+        /*
+        selection.label is null when nothing real exists in this
+        scope yet (no video source ever added/camera never turned on,
+        or no mask ever added) - same "doesn't exist until created"
+        rule as everything else in this app. Nothing to step through
+        or operate on, so show that plainly instead of a stepper
+        pointed at a node that was never created. KEY still offers
+        ADD MASK here (masks can be added before any video exists -
+        they just won't have a real SOURCE to key yet).
+        */
+        if(!selection.label){
+
+            let empty =
+            document.createElement(
+                "span"
+            );
+
+            empty.innerText=
+                scope === "mask"
+                ?
+                "NO MASKS YET"
+                :
+                "NO VIDEO SOURCES YET - SEE INPUT";
+
+            empty.className=
+                "ring-id-display";
+
+            this.subMenu.appendChild(
+                empty
+            );
+
+
+            if(scope === "mask"){
+
+                this.addLayerButton(
+                    "ADD MASK",
+                    "addMaskLayer"
+                );
+
+            }
+
+
+            return;
+
+        }
+
+
         let minus =
         document.createElement(
             "button"
@@ -1236,7 +1283,7 @@ export class MenuManager {
 
 
         this.addLayerScreenButton(
-            "MASK",
+            "MASKED BY",
             "MASK"
         );
 

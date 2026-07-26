@@ -1295,11 +1295,123 @@ export class Renderer {
 
 
 
+    /*
+    Every id any real entry could currently have - used to ask each
+    one "is anything using you as its background right now?" so
+    computeConsumedIds can answer that without needing app.js's
+    registries (which renderer.js doesn't have access to).
+    */
+    allComposableIds(){
+
+        const ids = [
+            "video", "body", "rings", "ghost", "text"
+        ];
+
+        this.extraVideoLayers.forEach(layer=>{
+
+            ids.push(
+                "videoLayer:" + layer.id,
+                "bodyLayer:" + layer.id
+            );
+
+        });
+
+        this.extraMaskLayers.forEach(layer=>{
+
+            ids.push("maskLayer:" + layer.id);
+
+        });
+
+        this.extraRingsLayers.forEach(layer=>{
+
+            ids.push("ringsLayer:" + layer.id);
+
+        });
+
+        this.extraGhostLayers.forEach(layer=>{
+
+            ids.push("ghostLayer:" + layer.id);
+
+        });
+
+        this.extraTextLayers.forEach(layer=>{
+
+            ids.push("textLayer:" + layer.id);
+
+        });
+
+        return ids;
+
+    }
+
+
+
+
+    /*
+    "I want layers only be in the background" - once node X is wired
+    as node Y's background, X should not also independently draw
+    itself into the master (that's the whole point of a node-based
+    background link: X's output routes into Y, it doesn't also fan
+    out to the final compositor unless nothing else uses it). Without
+    this, X's own composited appearance (correctly showing Y where X
+    is transparent) gets drawn, then X draws AGAIN on its own at its
+    normal stack position, covering the composite that was just made.
+
+    Only background links suppress independent drawing - MASKED BY
+    doesn't (a mask being used as someone else's shape is still a
+    perfectly good thing to look at on its own, e.g. in MASK WHITE
+    mode). A cycle (A's background is B, B's background is A) simply
+    means both ask to suppress each other - resolveChainedLayer
+    already falls back safely when it hits that same cycle while
+    resolving actual pixel content, so this can't produce a case
+    where nothing draws at all only where content briefly looks odd.
+    */
+    computeConsumedIds(){
+
+        const consumed = new Set();
+
+        this.allComposableIds().forEach(id=>{
+
+            const entry =
+                this.resolveEntryByMaskSourceId(id);
+
+            if(!entry)
+                return;
+
+            if(entry.visibilityMode === "off")
+                return;
+
+            if(!entry.background)
+                return;
+
+            if(
+                entry.background.source === "none" ||
+                entry.background.source === "colour"
+            )
+                return;
+
+            consumed.add(
+                entry.background.source
+            );
+
+        });
+
+        return consumed;
+
+    }
+
+
+
+
     compose(){
 
 
         let ctx =
             this.contexts.master;
+
+
+        const consumedIds =
+            this.computeConsumedIds();
 
 
 
@@ -1326,7 +1438,8 @@ export class Renderer {
 
         if(
             this.settings.video.enabled &&
-            this.settings.video.visibilityMode !== "off"
+            this.settings.video.visibilityMode !== "off" &&
+            !consumedIds.has("video")
         ){
 
             ctx.globalCompositeOperation =
@@ -1357,7 +1470,8 @@ export class Renderer {
 
         if(
             this.settings.layers.body &&
-            this.settings.body.visibilityMode !== "off"
+            this.settings.body.visibilityMode !== "off" &&
+            !consumedIds.has("body")
         ){
 
             ctx.globalCompositeOperation =
@@ -1384,13 +1498,14 @@ export class Renderer {
         }
 
 
-        this.composeExtraMaskLayers();
+        this.composeExtraMaskLayers(consumedIds);
 
 
 
 
         if(
-            this.settings.amiga.rings.visibilityMode !== "off"
+            this.settings.amiga.rings.visibilityMode !== "off" &&
+            !consumedIds.has("rings")
         ){
 
             ctx.globalCompositeOperation =
@@ -1417,12 +1532,13 @@ export class Renderer {
         }
 
 
-        this.composeExtraRingsLayers();
+        this.composeExtraRingsLayers(consumedIds);
 
 
 
         if(
-            this.settings.amiga.ghost.visibilityMode !== "off"
+            this.settings.amiga.ghost.visibilityMode !== "off" &&
+            !consumedIds.has("ghost")
         ){
 
             ctx.globalCompositeOperation =
@@ -1449,12 +1565,13 @@ export class Renderer {
         }
 
 
-        this.composeExtraGhostLayers();
+        this.composeExtraGhostLayers(consumedIds);
 
 
 
         if(
-            this.settings.amiga.text.visibilityMode !== "off"
+            this.settings.amiga.text.visibilityMode !== "off" &&
+            !consumedIds.has("text")
         ){
 
             ctx.globalCompositeOperation =
@@ -1481,11 +1598,11 @@ export class Renderer {
         }
 
 
-        this.composeExtraTextLayers();
+        this.composeExtraTextLayers(consumedIds);
 
 
 
-        this.composeExtraVideoLayers();
+        this.composeExtraVideoLayers(consumedIds);
 
 
 
@@ -1497,7 +1614,7 @@ export class Renderer {
 
 
 
-    composeExtraVideoLayers(){
+    composeExtraVideoLayers(consumedIds){
 
 
         let ctx =
@@ -1509,7 +1626,8 @@ export class Renderer {
 
             if(
                 layer.videoSettings.enabled &&
-                layer.videoSettings.visibilityMode !== "off"
+                layer.videoSettings.visibilityMode !== "off" &&
+                !consumedIds.has("videoLayer:" + layer.id)
             ){
 
                 ctx.globalCompositeOperation =
@@ -1539,7 +1657,8 @@ export class Renderer {
 
             if(
                 layer.bodySettings.enabled &&
-                layer.bodySettings.visibilityMode !== "off"
+                layer.bodySettings.visibilityMode !== "off" &&
+                !consumedIds.has("bodyLayer:" + layer.id)
             ){
 
                 ctx.globalCompositeOperation =
@@ -1574,7 +1693,7 @@ export class Renderer {
 
 
 
-    composeExtraMaskLayers(){
+    composeExtraMaskLayers(consumedIds){
 
 
         let ctx =
@@ -1586,7 +1705,8 @@ export class Renderer {
 
             if(
                 layer.bodySettings.enabled &&
-                layer.bodySettings.visibilityMode !== "off"
+                layer.bodySettings.visibilityMode !== "off" &&
+                !consumedIds.has("maskLayer:" + layer.id)
             ){
 
                 ctx.globalCompositeOperation =
@@ -1621,7 +1741,7 @@ export class Renderer {
 
 
 
-    composeExtraRingsLayers(){
+    composeExtraRingsLayers(consumedIds){
 
 
         let ctx =
@@ -1631,7 +1751,10 @@ export class Renderer {
         this.extraRingsLayers.forEach(layer=>{
 
 
-            if(layer.ringsSettings.visibilityMode !== "off"){
+            if(
+                layer.ringsSettings.visibilityMode !== "off" &&
+                !consumedIds.has("ringsLayer:" + layer.id)
+            ){
 
                 ctx.globalCompositeOperation =
                     this.resolveCompositeOperation(
@@ -1665,7 +1788,7 @@ export class Renderer {
 
 
 
-    composeExtraGhostLayers(){
+    composeExtraGhostLayers(consumedIds){
 
 
         let ctx =
@@ -1675,7 +1798,10 @@ export class Renderer {
         this.extraGhostLayers.forEach(layer=>{
 
 
-            if(layer.ghostSettings.visibilityMode !== "off"){
+            if(
+                layer.ghostSettings.visibilityMode !== "off" &&
+                !consumedIds.has("ghostLayer:" + layer.id)
+            ){
 
                 ctx.globalCompositeOperation =
                     this.resolveCompositeOperation(
@@ -1709,7 +1835,7 @@ export class Renderer {
 
 
 
-    composeExtraTextLayers(){
+    composeExtraTextLayers(consumedIds){
 
 
         let ctx =
@@ -1719,7 +1845,10 @@ export class Renderer {
         this.extraTextLayers.forEach(layer=>{
 
 
-            if(layer.textSettings.visibilityMode !== "off"){
+            if(
+                layer.textSettings.visibilityMode !== "off" &&
+                !consumedIds.has("textLayer:" + layer.id)
+            ){
 
                 ctx.globalCompositeOperation =
                     this.resolveCompositeOperation(
