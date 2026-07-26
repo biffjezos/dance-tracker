@@ -6,7 +6,7 @@ BOLD OVERLAY TEXT
 */
 
 
-let nextTextNumber = 2;
+let nextTextNumber = 1;
 
 
 export class Text {

@@ -17,6 +17,7 @@ import { Text } from "./effects/text.js";
 import { Recorder } from "./engine/recorder.js";
 import { containFit } from "./engine/fit.js";
 import { VideoLayer } from "./engine/videoLayer.js";
+import { MaskLayer } from "./engine/maskLayer.js";
 
 
 
@@ -59,6 +60,81 @@ const renderer =
 const videoLayers = [];
 
 renderer.extraVideoLayers = videoLayers;
+
+
+const maskLayers = [];
+
+renderer.extraMaskLayers = maskLayers;
+
+
+function addMaskLayer(){
+
+    const layer =
+        new MaskLayer(
+            settings,
+            {maskNumber:nextMaskNumber++}
+        );
+
+    maskLayers.push(layer);
+
+    console.log(
+        "Added",
+        layer.name,
+        "- total standalone masks:",
+        maskLayers.length
+    );
+
+    return layer;
+
+}
+
+
+window.addEventListener(
+    "addMaskLayer",
+    ()=>{
+
+        addMaskLayer();
+
+    }
+);
+
+
+function resolveMaskSourceVideo(sourceId){
+
+    if(!sourceId || sourceId === "none")
+        return null;
+
+    const match =
+        [originalLayerAdapter, ...videoLayers].find(layer=>
+            (
+                layer.id === "original"
+                ?
+                "video"
+                :
+                ("videoLayer:" + layer.id)
+            )
+            === sourceId
+        );
+
+    return match ? match.video : null;
+
+}
+
+
+function resolveMaskSourceLabel(sourceId){
+
+    if(!sourceId || sourceId === "none")
+        return "NONE";
+
+    const match =
+        getVideoRegistry().find(entry=>
+            entry.kind === "video" &&
+            entry.maskSourceId === sourceId
+        );
+
+    return match ? match.label : "NONE";
+
+}
 
 
 /*
@@ -120,6 +196,8 @@ const originalLayerAdapter = {
 
     name:"VIDEO 1",
 
+    maskNumber:1,
+
     videoSettings:settings.video,
 
     bodySettings:originalBodySettings,
@@ -140,30 +218,17 @@ const originalLayerAdapter = {
 
 
 /*
-Every addressable thing in the app - a video feed, its derived mask,
-a rings/text/ghost generator - gets one number from this single
-counter, assigned once at creation and never recomputed, so numbers
-stay stable as more layers are added regardless of type. 1-4 are
-reserved for what exists from page load (video+mask share 1, rings
-original is 2, text is 3, ghost is 4); anything added by the user
-starts at 5.
+Every kind numbers its own instances from 1 (VIDEO 1/2/3, RINGS 1/2,
+GHOST 1/2, TEXT 1/2 - each via its own class's self-numbering), so
+labels stay small and sequential within whatever list they're shown
+in instead of sharing one global counter that leaves gaps whenever
+another kind was created in between. Masks are the one kind with no
+class of their own (a mask is just a video layer's bundled body
+settings, or a standalone MaskLayer) - this counter numbers all of
+them, auto or added, in one sequence. originalLayerAdapter's bundled
+mask is MASK 1 (set on the literal above); anything after starts at 2.
 */
-let nextGlobalLayerNumber = 1;
-
-
-function assignGlobalLayerNumber(target){
-
-    target.globalLayerNumber =
-        nextGlobalLayerNumber++;
-
-    return target.globalLayerNumber;
-
-}
-
-
-assignGlobalLayerNumber(
-    originalLayerAdapter
-);
+let nextMaskNumber = 2;
 
 
 let selectedVideoIndex = 0;
@@ -282,9 +347,16 @@ function reportSelection(scope){
                     kind:entry.kind,
                     visibilityMode:entry.settings.visibilityMode,
                     keyColour:
-                        entry.kind === "mask"
+                        entry.kind === "mask" ||
+                        entry.kind === "standaloneMask"
                         ?
                         entry.settings.keyColour
+                        :
+                        null,
+                    sourceLabel:
+                        entry.kind === "standaloneMask"
+                        ?
+                        resolveMaskSourceLabel(entry.settings.source)
                         :
                         null
                 }
@@ -348,11 +420,6 @@ const rings =
     new Rings(
         settings
     );
-
-assignGlobalLayerNumber(
-    rings
-);
-
 
 const ringsLayers = [];
 
@@ -426,17 +493,13 @@ function addRingsLayer(){
             }
         );
 
-    assignGlobalLayerNumber(
-        layer
-    );
-
     ringsLayers.push(layer);
 
 
     console.log(
-        "Added LAYER",
-        layer.globalLayerNumber,
-        "(rings) - total rings layers:",
+        "Added",
+        layer.name,
+        "- total rings layers:",
         ringsLayers.length
     );
 
@@ -462,11 +525,6 @@ const ghost =
         settings,
         renderer
     );
-
-assignGlobalLayerNumber(
-    ghost
-);
-
 
 const ghostLayers = [];
 
@@ -514,17 +572,13 @@ function addGhostLayer(){
             }
         );
 
-    assignGlobalLayerNumber(
-        layer
-    );
-
     ghostLayers.push(layer);
 
 
     console.log(
-        "Added LAYER",
-        layer.globalLayerNumber,
-        "(ghost) - total ghost layers:",
+        "Added",
+        layer.name,
+        "- total ghost layers:",
         ghostLayers.length
     );
 
@@ -549,11 +603,6 @@ const text =
     new Text(
         settings
     );
-
-assignGlobalLayerNumber(
-    text
-);
-
 
 const textLayers = [];
 
@@ -598,17 +647,13 @@ function addTextLayer(){
             }
         );
 
-    assignGlobalLayerNumber(
-        layer
-    );
-
     textLayers.push(layer);
 
 
     console.log(
-        "Added LAYER",
-        layer.globalLayerNumber,
-        "(text) - total text layers:",
+        "Added",
+        layer.name,
+        "- total text layers:",
         textLayers.length
     );
 
@@ -650,9 +695,9 @@ menu.init();
 renderer.start();
 
 
-updateLayerStatusDisplay(
-    selectedVideoEntry()
-);
+reportSelection("video");
+
+reportSelection("mask");
 
 
 
@@ -735,6 +780,27 @@ function processBody(){
     videoLayers.forEach(layer=>{
 
         layer.update();
+
+    });
+
+
+    /*
+    A standalone mask has no video of its own - it keys against
+    whichever real video its SOURCE currently points at, resolved
+    fresh every frame since the user can repoint it at any time.
+    Nothing to do if it's still set to NONE.
+    */
+    maskLayers.forEach(layer=>{
+
+        const video =
+            resolveMaskSourceVideo(
+                layer.bodySettings.source
+            );
+
+        if(video)
+            layer.segmentation.process(
+                video
+            );
 
     });
 
@@ -929,9 +995,8 @@ window.addEventListener(
                 settings
             );
 
-        assignGlobalLayerNumber(
-            layer
-        );
+        layer.maskNumber =
+            nextMaskNumber++;
 
         videoLayers.push(
             layer
@@ -942,9 +1007,9 @@ window.addEventListener(
         );
 
         console.log(
-            "Added LAYER",
-            layer.globalLayerNumber,
-            "(video) - total video layers:",
+            "Added",
+            layer.name,
+            "(mask", layer.maskNumber + ") - total video layers:",
             videoLayers.length
         );
 
@@ -994,6 +1059,13 @@ function applyResolution(){
 
 
     videoLayers.forEach(layer=>{
+
+        layer.resize();
+
+    });
+
+
+    maskLayers.forEach(layer=>{
 
         layer.resize();
 
@@ -1220,9 +1292,76 @@ window.addEventListener(
         if(!entry.background)
             return;
 
+        const video =
+            entry.kind === "standaloneMask"
+            ?
+            resolveMaskSourceVideo(entry.settings.source)
+            :
+            entry.video;
+
+        if(!video)
+            return;
+
         entry.background.capture(
-            entry.video
+            video
         );
+
+    }
+);
+
+
+/*
+Cycles a standalone mask's SOURCE (which video's pixels it keys
+against) through every real video-kind entry - "NONE" plus each one,
+in registry order. Only meaningful for kind "standaloneMask" (a
+video-bundled mask's source is always its own owning video); a no-op
+otherwise so the button is harmless if ever clicked while some other
+mask is selected.
+*/
+window.addEventListener(
+    "maskVideoSourceStep",
+    e=>{
+
+        const entry =
+            selectedMaskEntry();
+
+        if(entry.kind !== "standaloneMask")
+            return;
+
+        const ids =
+            [
+                "none",
+                ...getVideoRegistry()
+                    .filter(v=>v.kind === "video")
+                    .map(v=>v.maskSourceId)
+            ];
+
+        let index =
+            ids.indexOf(
+                entry.settings.source
+            );
+
+        if(index === -1)
+            index = 0;
+
+        index =
+            Math.min(
+                Math.max(
+                    index + e.detail.direction,
+                    0
+                ),
+                ids.length - 1
+            );
+
+        entry.settings.source =
+            ids[index];
+
+        console.log(
+            "Mask source:",
+            entry.settings.source
+        );
+
+        reportSelection("mask");
 
     }
 );
@@ -2583,7 +2722,7 @@ function getVideoRegistry(){
 
 
         registry.push({
-            label:"LAYER " + layer.globalLayerNumber,
+            label:layer.name,
             kind:"video",
             settings:layer.videoSettings,
             maskSourceId:
@@ -2600,7 +2739,7 @@ function getVideoRegistry(){
     ringsLayers.forEach(layer=>{
 
         registry.push({
-            label:"LAYER " + layer.globalLayerNumber,
+            label:layer.name,
             kind:"rings",
             settings:layer.ringsSettings,
             maskSourceId:"ringsLayer:" + layer.id,
@@ -2613,7 +2752,7 @@ function getVideoRegistry(){
     textLayers.forEach(layer=>{
 
         registry.push({
-            label:"LAYER " + layer.globalLayerNumber,
+            label:layer.name,
             kind:"text",
             settings:layer.textSettings,
             maskSourceId:"textLayer:" + layer.id,
@@ -2626,7 +2765,7 @@ function getVideoRegistry(){
     ghostLayers.forEach(layer=>{
 
         registry.push({
-            label:"LAYER " + layer.globalLayerNumber,
+            label:layer.name,
             kind:"ghost",
             settings:layer.ghostSettings,
             maskSourceId:"ghostLayer:" + layer.id,
@@ -2653,7 +2792,7 @@ function getMaskRegistry(){
 
 
         registry.push({
-            label:"MASK " + layer.globalLayerNumber,
+            label:"MASK " + layer.maskNumber,
             kind:"mask",
             settings:layer.bodySettings,
             maskSourceId:
@@ -2665,6 +2804,21 @@ function getMaskRegistry(){
             segmentation:layer.segmentation,
             background:layer.background,
             video:layer.video
+        });
+
+    });
+
+
+    maskLayers.forEach(layer=>{
+
+        registry.push({
+            label:"MASK " + layer.maskNumber,
+            kind:"standaloneMask",
+            settings:layer.bodySettings,
+            maskSourceId:"maskLayer:" + layer.id,
+            segmentation:layer.segmentation,
+            background:layer.background,
+            instance:layer
         });
 
     });
@@ -2869,13 +3023,15 @@ BACKGROUND
 
 Per-layer, not scene-wide: what shows through wherever a layer's own
 content is transparent - either a flat colour or another real
-layer's own raw content (one level - a layer whose background is set
-to something that itself has a background won't show that second
-layer's own backdrop, just its plain content). Shares the scoped
-selector/stepper pattern with MASKED BY (scope "video" or "mask"; a
-rings/ghost/text instance's background is also reached this way,
-through the video scope, since that's where those instances live in
-the registry).
+layer's own fully-resolved appearance, following that layer's own
+background if it has one too (renderer.js's resolveChainedLayer does
+the recursion, with cycle detection - A's background can be B, B's
+background can be C, and a chain that loops back on itself falls back
+to the cyclic layer's own un-backgrounded appearance instead of
+hanging). Shares the scoped selector/stepper pattern with MASKED BY
+(scope "video" or "mask"; a rings/ghost/text instance's background is
+also reached this way, through the video scope, since that's where
+those instances live in the registry).
 ==================================================
 */
 

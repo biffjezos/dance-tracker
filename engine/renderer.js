@@ -33,6 +33,8 @@ export class Renderer {
 
         this.extraTextLayers = [];
 
+        this.extraMaskLayers = [];
+
 
 
         this.layers = {
@@ -416,6 +418,21 @@ export class Renderer {
 
         if(
             name &&
+            name.indexOf("maskLayer:") === 0
+        ){
+
+            const layer =
+                this.extraMaskLayers.find(
+                    l=>l.id === name.slice(10)
+                );
+
+            return layer ? layer.canvas : null;
+
+        }
+
+
+        if(
+            name &&
             name.indexOf("ringsLayer:") === 0
         ){
 
@@ -455,6 +472,186 @@ export class Renderer {
                 );
 
             return layer ? layer.canvas : null;
+
+        }
+
+
+        return null;
+
+    }
+
+
+
+
+    /*
+    Same ids as layerByName, but returns the whole settings bundle
+    (canvas + maskedBy + visibilityMode + background) instead of just
+    the canvas - resolveChainedLayer needs this to keep following a
+    background chain (a layer's background can itself have a
+    background), which layerByName's plain-canvas lookups don't
+    support and shouldn't have to (MASKED BY only ever needs a shape,
+    never the source's own background chain).
+    */
+    resolveEntryByMaskSourceId(id){
+
+
+        if(id === "video")
+            return {
+                canvas:this.layers.effects,
+                maskedBy:this.settings.video.maskedBy,
+                visibilityMode:this.settings.video.visibilityMode,
+                background:this.settings.video.background
+            };
+
+        if(id === "body")
+            return {
+                canvas:this.layers.body,
+                maskedBy:this.settings.body.maskedBy,
+                visibilityMode:this.settings.body.visibilityMode,
+                background:this.settings.body.background
+            };
+
+        if(id === "rings")
+            return {
+                canvas:this.layers.rings,
+                maskedBy:this.settings.amiga.rings.maskedBy,
+                visibilityMode:this.settings.amiga.rings.visibilityMode,
+                background:this.settings.amiga.rings.background
+            };
+
+        if(id === "ghost")
+            return {
+                canvas:this.layers.ghost,
+                maskedBy:this.settings.amiga.ghost.maskedBy,
+                visibilityMode:this.settings.amiga.ghost.visibilityMode,
+                background:this.settings.amiga.ghost.background
+            };
+
+        if(id === "text")
+            return {
+                canvas:this.layers.text,
+                maskedBy:this.settings.amiga.text.maskedBy,
+                visibilityMode:this.settings.amiga.text.visibilityMode,
+                background:this.settings.amiga.text.background
+            };
+
+
+        if(
+            id &&
+            id.indexOf("videoLayer:") === 0
+        ){
+
+            const layer =
+                this.extraVideoLayers.find(
+                    l=>l.id === id.slice(11)
+                );
+
+            return layer ? {
+                canvas:layer.rawCanvas,
+                maskedBy:layer.videoSettings.maskedBy,
+                visibilityMode:layer.videoSettings.visibilityMode,
+                background:layer.videoSettings.background
+            } : null;
+
+        }
+
+
+        if(
+            id &&
+            id.indexOf("bodyLayer:") === 0
+        ){
+
+            const layer =
+                this.extraVideoLayers.find(
+                    l=>l.id === id.slice(10)
+                );
+
+            return layer ? {
+                canvas:layer.bodyCanvas,
+                maskedBy:layer.bodySettings.maskedBy,
+                visibilityMode:layer.bodySettings.visibilityMode,
+                background:layer.bodySettings.background
+            } : null;
+
+        }
+
+
+        if(
+            id &&
+            id.indexOf("maskLayer:") === 0
+        ){
+
+            const layer =
+                this.extraMaskLayers.find(
+                    l=>l.id === id.slice(10)
+                );
+
+            return layer ? {
+                canvas:layer.canvas,
+                maskedBy:layer.bodySettings.maskedBy,
+                visibilityMode:layer.bodySettings.visibilityMode,
+                background:layer.bodySettings.background
+            } : null;
+
+        }
+
+
+        if(
+            id &&
+            id.indexOf("ringsLayer:") === 0
+        ){
+
+            const layer =
+                this.extraRingsLayers.find(
+                    l=>l.id === id.slice(11)
+                );
+
+            return layer ? {
+                canvas:layer.canvas,
+                maskedBy:layer.ringsSettings.maskedBy,
+                visibilityMode:layer.ringsSettings.visibilityMode,
+                background:layer.ringsSettings.background
+            } : null;
+
+        }
+
+
+        if(
+            id &&
+            id.indexOf("ghostLayer:") === 0
+        ){
+
+            const layer =
+                this.extraGhostLayers.find(
+                    l=>l.id === id.slice(11)
+                );
+
+            return layer ? {
+                canvas:layer.canvas,
+                maskedBy:layer.ghostSettings.maskedBy,
+                visibilityMode:layer.ghostSettings.visibilityMode,
+                background:layer.ghostSettings.background
+            } : null;
+
+        }
+
+
+        if(
+            id &&
+            id.indexOf("textLayer:") === 0
+        ){
+
+            const layer =
+                this.extraTextLayers.find(
+                    l=>l.id === id.slice(10)
+                );
+
+            return layer ? {
+                canvas:layer.canvas,
+                maskedBy:layer.textSettings.maskedBy,
+                visibilityMode:layer.textSettings.visibilityMode,
+                background:layer.textSettings.background
+            } : null;
 
         }
 
@@ -778,9 +975,18 @@ export class Renderer {
             return visualized;
 
 
+        /*
+        compositeWithBackground may recurse into resolveChainedLayer,
+        which reuses these exact same shared scratch canvases
+        (maskScratch/visibilityScratch) for whatever it's resolving
+        further down the chain - snapshot our own result into a
+        canvas nothing else touches before that happens, or the
+        recursive call would stomp it before we get to use it.
+        */
         return this.compositeWithBackground(
-            visualized,
-            background
+            this.snapshotCanvas(visualized),
+            background,
+            new Set()
         );
 
     }
@@ -789,26 +995,151 @@ export class Renderer {
 
 
     /*
-    Resolves a background spec to a fillable canvas: another layer's
-    own raw content if it points at one (falling back to the flat
-    colour if that source doesn't resolve), otherwise the flat colour
-    itself. Note this reads the OTHER layer's raw canvas, not its own
-    fully-composited-with-its-own-background appearance - chaining
-    backgrounds one level deep (A's background is B) works correctly;
-    B's own background (if it has one) won't show through into A yet.
+    Copies a canvas's current pixels into a freshly-allocated canvas.
+    Needed whenever a result from a shared scratch canvas
+    (maskScratch/visibilityScratch/backgroundFillScratch) has to stay
+    valid across a call that might reuse those same scratches -
+    recursive chain resolution does exactly that.
     */
-    resolveBackgroundFill(background){
+    snapshotCanvas(source){
+
+
+        const copy =
+            document.createElement(
+                "canvas"
+            );
+
+        copy.width = source.width;
+
+        copy.height = source.height;
+
+        copy.getContext("2d").drawImage(
+            source,
+            0,
+            0
+        );
+
+        return copy;
+
+    }
+
+
+
+
+    /*
+    Follows a background chain to whichever real layer it points at,
+    resolving THAT layer's own fully-composited appearance (its own
+    mask+visibility+background, all the way down) rather than just
+    its plain raw content - this is what actually makes chaining work
+    (A's background is B, B's background is C, ...). visiting is the
+    set of maskSourceIds already being resolved in this call stack;
+    hitting one again means a cycle, and we fall back to that layer's
+    own un-backgrounded appearance instead of recursing forever.
+    */
+    resolveChainedLayer(id, visiting){
+
+
+        if(!id || id === "none")
+            return null;
+
+
+        const entry =
+            this.resolveEntryByMaskSourceId(
+                id
+            );
+
+        if(!entry)
+            return null;
+
+
+        if(visiting.has(id)){
+
+            return this.snapshotCanvas(
+
+                this.applyVisibilityMode(
+
+                    this.resolveMaskedLayer(
+                        entry.canvas,
+                        entry.maskedBy
+                    ),
+
+                    entry.visibilityMode
+
+                )
+
+            );
+
+        }
+
+
+        visiting.add(id);
+
+
+        const ownAppearance =
+            this.snapshotCanvas(
+
+                this.applyVisibilityMode(
+
+                    this.resolveMaskedLayer(
+                        entry.canvas,
+                        entry.maskedBy
+                    ),
+
+                    entry.visibilityMode
+
+                )
+
+            );
+
+
+        let result =
+            ownAppearance;
+
+
+        if(
+            entry.background &&
+            entry.background.source !== "none"
+        ){
+
+            result =
+                this.compositeWithBackground(
+                    ownAppearance,
+                    entry.background,
+                    visiting
+                );
+
+        }
+
+
+        visiting.delete(id);
+
+
+        return result;
+
+    }
+
+
+
+
+    /*
+    Resolves a background spec to a fillable canvas: another layer's
+    fully-chained appearance if it points at one (falling back to the
+    flat colour if that source doesn't resolve or the chain cycles
+    back here), otherwise the flat colour itself.
+    */
+    resolveBackgroundFill(background, visiting){
 
 
         if(background.source !== "colour"){
 
-            const sourceCanvas =
-                this.layerByName(
-                    background.source
+            const resolved =
+                this.resolveChainedLayer(
+                    background.source,
+                    visiting
                 );
 
-            if(sourceCanvas)
-                return sourceCanvas;
+            if(resolved)
+                return resolved;
 
         }
 
@@ -872,7 +1203,14 @@ export class Renderer {
 
 
 
-    compositeWithBackground(contentCanvas, background){
+    /*
+    Output is a freshly-allocated canvas, not a shared scratch - this
+    can be called re-entrantly (resolveBackgroundFill below may
+    recurse back into this same method for a deeper link in the
+    chain), and a shared scratch would get overwritten by the inner
+    call before the outer call finishes drawing into it.
+    */
+    compositeWithBackground(contentCanvas, background, visiting){
 
 
         const width =
@@ -882,38 +1220,26 @@ export class Renderer {
             contentCanvas.height;
 
 
-        if(!this.layerCompositeScratch){
+        const result =
+            document.createElement(
+                "canvas"
+            );
 
-            this.layerCompositeScratch =
-                document.createElement(
-                    "canvas"
-                );
+        result.width = width;
 
-        }
-
-
-        this.layerCompositeScratch.width = width;
-
-        this.layerCompositeScratch.height = height;
+        result.height = height;
 
 
         const ctx =
-            this.layerCompositeScratch.getContext(
+            result.getContext(
                 "2d"
             );
 
 
-        ctx.clearRect(
-            0,
-            0,
-            width,
-            height
-        );
-
-
         ctx.drawImage(
             this.resolveBackgroundFill(
-                background
+                background,
+                visiting
             ),
             0,
             0
@@ -927,7 +1253,7 @@ export class Renderer {
         );
 
 
-        return this.layerCompositeScratch;
+        return result;
 
     }
 
@@ -1009,6 +1335,9 @@ export class Renderer {
             );
 
         }
+
+
+        this.composeExtraMaskLayers();
 
 
 
@@ -1160,6 +1489,51 @@ export class Renderer {
 
                     this.visualizeLayer(
                         layer.bodyCanvas,
+                        layer.bodySettings.maskedBy,
+                        layer.bodySettings.visibilityMode,
+                        layer.bodySettings.background
+                    ),
+
+                    0,
+
+                    0
+
+                );
+
+            }
+
+
+        });
+
+
+    }
+
+
+
+
+    composeExtraMaskLayers(){
+
+
+        let ctx =
+            this.contexts.master;
+
+
+        this.extraMaskLayers.forEach(layer=>{
+
+
+            ctx.globalCompositeOperation =
+                "source-over";
+
+
+            if(
+                layer.bodySettings.enabled &&
+                layer.bodySettings.visibilityMode !== "off"
+            ){
+
+                ctx.drawImage(
+
+                    this.visualizeLayer(
+                        layer.canvas,
                         layer.bodySettings.maskedBy,
                         layer.bodySettings.visibilityMode,
                         layer.bodySettings.background
