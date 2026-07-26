@@ -104,7 +104,6 @@ export class Ghost {
                 ghost.applyToMask
             );
 
-
         if(!source)
             return;
 

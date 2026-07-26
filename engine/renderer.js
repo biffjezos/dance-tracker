@@ -9,6 +9,19 @@ RENDER ENGINE
 import { containFit } from "./fit.js";
 
 
+/*
+Every one of these is a real Canvas2D globalCompositeOperation value,
+so a background's blendMode can be used directly with no per-mode
+translation - "normal" is the one exception (mapped to "source-over"
+below), kept as the neutral, no-mixing default a user would expect.
+*/
+const BLEND_COMPOSITE_OPERATIONS = new Set([
+    "multiply", "screen", "overlay", "darken", "lighten",
+    "color-dodge", "color-burn", "hard-light", "soft-light",
+    "difference", "exclusion"
+]);
+
+
 export class Renderer {
 
 
@@ -1247,11 +1260,12 @@ export class Renderer {
         )
             return defaultOperation;
 
-        if(background.blendMode === "overlay")
-            return "overlay";
-
-        if(background.blendMode === "screen")
-            return "screen";
+        if(
+            BLEND_COMPOSITE_OPERATIONS.has(
+                background.blendMode
+            )
+        )
+            return background.blendMode;
 
         return "source-over";
 
@@ -1430,6 +1444,20 @@ export class Renderer {
         }
 
 
+        /*
+        Added videos sit right next to the fixed video singleton, same
+        as every other kind's extra group sits next to its own fixed
+        singleton - not drawn dead last. An added video is often the
+        thing other effects (a ghost trail, rings, text) are reading
+        from via APPLY TO MASK or MASKED BY while ALSO staying
+        independently visible; since it's fully opaque with no
+        transparency of its own, drawing it after those effects would
+        silently paint over everything they drew, however correctly
+        they rendered onto their own canvas.
+        */
+        this.composeExtraVideoLayers(consumedIds);
+
+
 
 
         if(
@@ -1563,10 +1591,6 @@ export class Renderer {
 
 
         this.composeExtraTextLayers(consumedIds);
-
-
-
-        this.composeExtraVideoLayers(consumedIds);
 
 
 

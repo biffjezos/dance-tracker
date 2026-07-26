@@ -737,40 +737,32 @@ field to whatever it draws into, and shows up here for free.
 */
 function resolvePreviewSource(){
 
-    if(lastPreviewScope === "mask"){
+    /*
+    Whatever is currently selected shows on the left - NODES and KEY
+    are just two different steppers over overlapping parts of the same
+    real entries, so this reads whichever one last reported a
+    selection instead of assuming only KEY can land on a mask.
+    */
+    const entry =
+        scopedEntry(lastPreviewScope);
 
-        const entry =
-            selectedMaskEntry();
+    /*
+    Every other kind's previewSource is fixed for its whole lifetime
+    (set once in the registry), but a standalone mask's source is a
+    live pick the user can repoint at any time, so it's resolved fresh
+    here instead of carrying its own fixed previewSource.
+    */
+    const source =
+        entry.kind === "standaloneMask"
+        ?
+        resolveMaskSourceVideo(
+            entry.settings.source
+        )
+        :
+        entry.previewSource;
 
-        /*
-        Every other kind's previewSource is fixed for its whole
-        lifetime (set once in the registry), but a standalone mask's
-        source is a live pick the user can repoint at any time, so
-        it's resolved fresh here instead of carrying its own fixed
-        previewSource.
-        */
-        const source =
-            entry.kind === "standaloneMask"
-            ?
-            resolveMaskSourceVideo(
-                entry.settings.source
-            )
-            :
-            entry.previewSource;
-
-        if(source)
-            return source;
-
-    }
-    else {
-
-        const entry =
-            selectedVideoEntry();
-
-        if(entry.previewSource)
-            return entry.previewSource;
-
-    }
+    if(source)
+        return source;
 
     return camera.getVideo();
 
@@ -1208,10 +1200,6 @@ function applyResolution(){
 
 
     renderer.resize();
-
-    segmentation.resize();
-
-    background.resize();
 
 
     cameraPreviewCanvas.width =
@@ -2141,10 +2129,17 @@ window.addEventListener(
 
 
 
-function eligibleMaskTargets(){
+/*
+Every real node except the ghost instance asking (excludeId) is a
+valid APPLY TO MASK target - same "any node feeds any node" rule as
+BACKGROUND and MASKED BY, no hidden precondition like a required
+visibility mode first. Excluding the asker itself just avoids a ghost
+feeding its own accumulated trail back into itself every frame.
+*/
+function eligibleMaskTargets(excludeId){
 
     return getAllRealEntries().filter(
-        entry=>entry.settings.visibilityMode === "maskWhite"
+        entry=>entry.maskSourceId !== excludeId
     );
 
 }
@@ -2174,7 +2169,9 @@ window.addEventListener(
             entry.settings;
 
         const eligible =
-            eligibleMaskTargets();
+            eligibleMaskTargets(
+                entry.maskSourceId
+            );
 
         const match =
             eligible.find(
@@ -2200,10 +2197,9 @@ window.addEventListener(
 
 
 /*
-A direct selector, not a stepper - pick one of the masks currently
-in MASK WHITE mode by name. Ignores anything that isn't actually
-eligible right now (e.g. a stale id from a screen that's been open
-since before a mask's mode changed).
+A direct selector, not a stepper - pick any other real node by name.
+Ignores anything that isn't actually eligible right now (e.g. a stale
+id from a screen that's been open since the target was removed).
 */
 window.addEventListener(
     "setApplyToMask",
@@ -2217,7 +2213,9 @@ window.addEventListener(
 
 
         const eligible =
-            eligibleMaskTargets();
+            eligibleMaskTargets(
+                entry.maskSourceId
+            );
 
         const match =
             eligible.find(
@@ -2503,9 +2501,35 @@ let fileSourceActive = false;
 let transportPlaying = false;
 
 
+/*
+TRANSPORT is reachable from any real NODES entry, but only ever
+actually drives whichever one is currently selected there - camera.
+getVideo() is just the fallback when nothing selected has a video of
+its own (a generator, or nothing added yet). Whether that video counts
+as "a file" is read from the video element itself (a finite duration)
+rather than a separate tracked flag, so this stays correct no matter
+which entry - the original camera slot or any added VideoLayer - is
+selected, without needing every add-path to remember to set a flag.
+*/
+function currentTransportVideo(){
+
+    const entry =
+        selectedVideoEntry();
+
+    return entry.video || camera.getVideo();
+
+}
+
+
 function hasVideoFile(){
 
-    return fileSourceActive;
+    const video =
+        currentTransportVideo();
+
+    return (
+        isFinite(video.duration) &&
+        video.duration > 0
+    );
 
 }
 
@@ -2514,7 +2538,7 @@ function getPlayheadTime(){
 
     if(hasVideoFile()){
 
-        return camera.getVideo().currentTime;
+        return currentTransportVideo().currentTime;
 
     }
 
@@ -2586,7 +2610,7 @@ function updateTransportDisplay(){
 function seekBy(deltaSeconds){
 
     const video =
-        camera.getVideo();
+        currentTransportVideo();
 
 
     if(
@@ -2634,16 +2658,31 @@ window.addEventListener(
     ()=>{
 
         const video =
-            camera.getVideo();
+            currentTransportVideo();
+
+        const hasFile =
+            hasVideoFile();
 
 
+        /*
+        A newly-loaded or newly-selected video autoplays on its own,
+        independent of this toggle - reading its real .paused state
+        (when there is a real video) instead of just flipping the old
+        flag means the very first click always does the right thing,
+        even if transportPlaying never got a chance to track that this
+        particular video was already playing.
+        */
         transportPlaying =
+            hasFile
+            ?
+            video.paused
+            :
             !transportPlaying;
 
 
         if(transportPlaying){
 
-            if(hasVideoFile())
+            if(hasFile)
                 video.play();
 
             if(currentAudioBuffer)
@@ -2654,7 +2693,7 @@ window.addEventListener(
         }
         else {
 
-            if(hasVideoFile())
+            if(hasFile)
                 video.pause();
 
             if(currentAudioBuffer){
@@ -2731,7 +2770,7 @@ function getAudioTargetTime(){
     if(hasVideoFile()){
 
         return (
-            camera.getVideo().currentTime +
+            currentTransportVideo().currentTime +
             audioSyncOffset
         );
 
@@ -3257,8 +3296,17 @@ function reportBackgroundChanged(scope, target){
 
 const BACKGROUND_BLEND_MODES = [
     "normal",
+    "multiply",
+    "screen",
     "overlay",
-    "screen"
+    "darken",
+    "lighten",
+    "color-dodge",
+    "color-burn",
+    "hard-light",
+    "soft-light",
+    "difference",
+    "exclusion"
 ];
 
 

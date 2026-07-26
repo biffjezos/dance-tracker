@@ -1682,6 +1682,14 @@ export class MenuManager {
 
 
 
+    /*
+    This picks one of the (up to) 8 individual concentric ring strokes
+    drawn inside a single RINGS instance's own animation - a much more
+    granular thing than the RINGS 1/2/3 node-level numbering shown
+    elsewhere, hence "STROKE" here rather than "RING", so the two
+    can't be misread as the same count (one RINGS node here still
+    means exactly one node, however many strokes it draws).
+    */
     renderRingColourPicker(){
 
 
@@ -1692,7 +1700,7 @@ export class MenuManager {
 
 
         minus.innerText=
-            "RING ID -";
+            "STROKE -";
 
 
         minus.onclick=()=>{
@@ -1718,7 +1726,7 @@ export class MenuManager {
 
 
         display.innerText=
-            "RING " +
+            "STROKE " +
             this.ringId;
 
 
@@ -1739,7 +1747,7 @@ export class MenuManager {
 
 
         plus.innerText=
-            "RING ID +";
+            "STROKE +";
 
 
         plus.onclick=()=>{
@@ -1783,7 +1791,7 @@ export class MenuManager {
 
                 console.log(
                     "MENU SELECTED:",
-                    "RING",
+                    "STROKE",
                     this.ringId,
                     swatch.label
                 );
@@ -2252,7 +2260,12 @@ export class MenuManager {
 
 
 
-        if(state.source === "colour"){
+        /*
+        BLEND applies to whatever the background is - a flat colour or
+        another node's output alike, same as any other per-layer
+        setting. Only the swatch list below is colour-specific.
+        */
+        if(state.source !== "none"){
 
             let blendMinus =
             document.createElement(
@@ -2330,7 +2343,10 @@ export class MenuManager {
                 blendPlus
             );
 
+        }
 
+
+        if(state.source === "colour"){
 
             SWATCHES.forEach(swatch=>{
 
@@ -2384,12 +2400,13 @@ export class MenuManager {
 
 
     /*
-    Ghost's own effect input - which mask's shape feeds the trail
-    history. A direct selector, not a stepper: one button per mask
-    currently in MASK WHITE visibility mode, no NONE fallback
-    (app.js's eligibleMaskTargets enforces that - the list is simply
-    empty if nothing qualifies yet). Different from MASKED BY, which
-    masks Ghost's composited output and lives under VIDEO instead.
+    Ghost's own effect input - which node's appearance feeds the
+    trail history. A direct selector, not a stepper: one button per
+    other real node that exists (any kind - video, mask, rings, text,
+    another ghost), no hidden precondition like a required visibility
+    mode first. Empty only when nothing else has been added yet.
+    Different from MASKED BY, which masks Ghost's composited output
+    and lives under VIDEO instead.
 
     Fetches fresh data every time it renders, synchronously, via a
     request object app.js mutates in place rather than a broadcast
