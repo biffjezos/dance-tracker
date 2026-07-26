@@ -54,7 +54,7 @@ mod tests {
             })),
         };
 
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
 
         let mut outputs = node.execute(&ctx, &[]).expect("should succeed");
 
@@ -72,7 +72,7 @@ mod tests {
             pixels: Box::new(FailingPixelSource),
         };
 
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
 
         let result = node.execute(&ctx, &[]);
 

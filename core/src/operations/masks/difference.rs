@@ -72,7 +72,7 @@ mod tests {
     }
 
     fn run(op: &Difference, video: Frame, reference: Frame) -> Frame {
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
         let inputs = vec![Value::Frame(Arc::new(video)), Value::Frame(Arc::new(reference))];
 
         let mut outputs = op.execute(&ctx, &inputs).expect("should succeed");
@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn mismatched_dimensions_error_instead_of_panicking() {
         let op = Difference { threshold: 30, fill: Fill::Video };
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
         let video = frame(vec![1, 2, 3, 255]);
         let reference = Frame {
             pixels: vec![0, 0, 0, 255, 0, 0, 0, 255],

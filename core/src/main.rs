@@ -64,7 +64,7 @@ fn main() {
 
     println!("Graph contains {:?} nodes", graph.nodes.len());
 
-    let ctx = Context { data: Box::new(()) };
+    let ctx = Context::default();
 
     let executor = SimpleExecutor;
     let values = executor

@@ -80,7 +80,7 @@ mod tests {
 
     fn run(channel: Channel, content: Frame, mask: Frame) -> Result<Frame, OperationError> {
         let op = ApplyMask { channel };
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
         let inputs = vec![Value::Frame(Arc::new(content)), Value::Frame(Arc::new(mask))];
 
         let mut outputs = op.execute(&ctx, &inputs)?;

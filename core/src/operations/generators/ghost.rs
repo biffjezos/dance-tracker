@@ -109,7 +109,7 @@ mod tests {
     }
 
     fn tick(op: &Ghost, source: &Frame) -> Frame {
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
         let inputs = vec![Value::Frame(Arc::new(source.clone()))];
 
         let mut outputs = op.execute(&ctx, &inputs).expect("should succeed");

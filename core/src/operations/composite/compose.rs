@@ -88,7 +88,7 @@ mod tests {
 
     fn run(mode: BlendMode, fg: Frame, bg: Frame) -> Result<Frame, OperationError> {
         let compose = Compose { mode };
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
         let inputs = vec![Value::Frame(Arc::new(fg)), Value::Frame(Arc::new(bg))];
 
         let mut outputs = compose.execute(&ctx, &inputs)?;
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn missing_input_errors_instead_of_panicking() {
         let compose = Compose { mode: BlendMode::Over };
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
         let inputs = vec![Value::Frame(Arc::new(frame(vec![255, 0, 0, 255])))];
 
         let result = compose.execute(&ctx, &inputs);

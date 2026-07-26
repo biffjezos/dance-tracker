@@ -11,7 +11,7 @@ written from the boundary inward instead of the graph outward.
 */
 #![cfg(target_arch = "wasm32")]
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -19,7 +19,7 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
 
-use crate::compositor::{Context, Operation, OperationError};
+use crate::compositor::{Context, Meta, Operation, OperationError};
 use crate::dom::{write_frame_to_canvas, VideoElementPixelSource};
 use crate::graph::{Graph, Node, NodeId};
 use crate::operations::composite::apply_mask::Channel as MaskChannel;
@@ -31,6 +31,7 @@ use crate::operations::masks::{Chroma, Difference, Fill};
 use crate::operations::sources::video::VideoSource;
 use crate::operations::sources::CapturedFrame;
 use crate::operations::{expect_frame, expect_frame_arc, Frame};
+use crate::resource_manager::ResourceManager;
 
 fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
@@ -68,6 +69,13 @@ pub struct App {
     difference_source: HashMap<NodeId, NodeId>,
     width: u32,
     height: u32,
+    resources: ResourceManager,
+    /*
+    Only render_tick advances this - preview_tick and
+    capture_background read the current value rather than each
+    keeping their own notion of "which frame is this".
+    */
+    frame_counter: Cell<u64>,
 }
 
 #[wasm_bindgen]
@@ -80,6 +88,25 @@ impl App {
             difference_source: HashMap::new(),
             width,
             height,
+            resources: ResourceManager::new(),
+            frame_counter: Cell::new(0),
+        }
+    }
+
+    /*
+    A fresh Context sharing the persistent ResourceManager (a clone is
+    just another handle to the same cache, not a new one) plus a Meta
+    stamped with the current frame count and which pass this is for -
+    fps/time stay at Meta's defaults, nothing reads them yet.
+    */
+    fn context(&self, preview: bool) -> Context {
+        Context {
+            meta: Meta {
+                frame: self.frame_counter.get(),
+                preview,
+                ..Meta::default()
+            },
+            resources: self.resources.clone(),
         }
     }
 
@@ -95,14 +122,12 @@ impl App {
     resolution almost never matches it.
     */
     pub fn add_video_source(&mut self, video: HtmlVideoElement) -> Result<usize, JsValue> {
-        let document = web_sys::window()
-            .ok_or_else(|| JsValue::from_str("no window"))?
-            .document()
-            .ok_or_else(|| JsValue::from_str("no document"))?;
-
-        let scratch = document
-            .create_element("canvas")?
-            .dyn_into::<HtmlCanvasElement>()?;
+        // rebuildGraph() re-adds a source for the same HtmlVideoElement
+        // on every settings change anywhere in the app, not just video
+        // ones - reusing the scratch canvas here (instead of minting a
+        // fresh one every time) is exactly the redundant-reload the
+        // ResourceManager exists to avoid.
+        let scratch = self.resources.scratch_canvas_for(&video)?;
 
         let pixels = VideoElementPixelSource {
             video,
@@ -200,7 +225,7 @@ impl App {
 
         let source_id = self.graph.nodes[difference_node].inputs[0];
 
-        let ctx = Context { data: Box::new(()) };
+        let ctx = self.context(false);
         let executor = SimpleExecutor;
 
         let values = executor
@@ -327,25 +352,25 @@ impl App {
     */
 
     pub fn play(&self, video: HtmlVideoElement) -> Result<(), JsValue> {
-        let ctx = Context { data: Box::new(()) };
+        let ctx = self.context(false);
         Play { video }.execute(&ctx, &[]).map_err(js_err)?;
         Ok(())
     }
 
     pub fn stop(&self, video: HtmlVideoElement) -> Result<(), JsValue> {
-        let ctx = Context { data: Box::new(()) };
+        let ctx = self.context(false);
         Stop { video }.execute(&ctx, &[]).map_err(js_err)?;
         Ok(())
     }
 
     pub fn forward(&self, video: HtmlVideoElement, seconds: f64) -> Result<(), JsValue> {
-        let ctx = Context { data: Box::new(()) };
+        let ctx = self.context(false);
         Forward { video, seconds }.execute(&ctx, &[]).map_err(js_err)?;
         Ok(())
     }
 
     pub fn rewind(&self, video: HtmlVideoElement, seconds: f64) -> Result<(), JsValue> {
-        let ctx = Context { data: Box::new(()) };
+        let ctx = self.context(false);
         Rewind { video, seconds }.execute(&ctx, &[]).map_err(js_err)?;
         Ok(())
     }
@@ -359,7 +384,8 @@ impl App {
     pub fn render_tick(&self, output_node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
 
-        let ctx = Context { data: Box::new(()) };
+        self.frame_counter.set(self.frame_counter.get() + 1);
+        let ctx = self.context(false);
         let executor = RenderExecutor;
 
         let values = executor
@@ -374,7 +400,7 @@ impl App {
     pub fn preview_tick(&self, node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
 
-        let ctx = Context { data: Box::new(()) };
+        let ctx = self.context(true);
         let executor = PreviewExecutor;
 
         let values = executor.execute(&self.graph, node, &ctx).map_err(js_err)?;

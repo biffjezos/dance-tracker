@@ -296,6 +296,10 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
+        __wbg_is_7b9d0b289033c7de: function(arg0, arg1) {
+            const ret = Object.is(arg0, arg1);
+            return ret;
+        },
         __wbg_measureText_c54a480a20a73a31: function() { return handleError(function (arg0, arg1, arg2) {
             const ret = arg0.measureText(getStringFromWasm0(arg1, arg2));
             return ret;

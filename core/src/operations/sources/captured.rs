@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn errors_until_something_is_captured() {
         let node = CapturedFrame::new();
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
 
         let result = node.execute(&ctx, &[]);
 
@@ -85,7 +85,7 @@ mod tests {
             timestamp: 0.0,
         }));
 
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
         let mut outputs = node.execute(&ctx, &[]).expect("should succeed");
 
         let frame = match outputs.remove(0) {

@@ -63,7 +63,7 @@ mod tests {
     }
 
     fn run(op: &Chroma, video: Frame) -> Frame {
-        let ctx = Context { data: Box::new(()) };
+        let ctx = Context::default();
         let inputs = vec![Value::Frame(Arc::new(video))];
 
         let mut outputs = op.execute(&ctx, &inputs).expect("should succeed");
