@@ -5,12 +5,10 @@ APPLICATION CORE
 ==================================================
 */
 
-import { BackgroundCapture } from "./body/background.js";
 import { Camera } from "./engine/camera.js";
 import { MenuManager } from "./engine/menu.js";
 import { Settings } from "./engine/settings.js";
 import { Renderer } from "./engine/renderer.js";
-import { Segmentation } from "./body/segmentation.js";
 import { Ghost } from "./effects/ghost.js";
 import { Rings } from "./effects/rings.js";
 import { Text } from "./effects/text.js";
@@ -29,21 +27,6 @@ const camera =
     new Camera(
         settings
     );
-
-
-const background =
-    new BackgroundCapture(
-        settings
-    );
-
-
-
-const segmentation =
-    new Segmentation(
-        background,
-        settings
-    );
-
 
 
 const menu =
@@ -140,63 +123,26 @@ function resolveMaskSourceLabel(sourceId){
 
 
 /*
-The original camera/video/body pair, wrapped in the same shape as a
-VideoLayer instance (id/number/name/videoSettings/bodySettings/
-rawCanvas/bodyCanvas/video) so future layer-selector code can treat
-it uniformly with added layers. videoSettings/bodySettings/rawCanvas/
-bodyCanvas/video are direct references to the same live settings
-objects and DOM canvases the existing render loop already reads and
-writes - not copies - so this stays in sync automatically and changes
-nothing about how the original is rendered, toggled, keyed or masked.
-Its mask-source id intentionally stays "video"/"body" (not derived
-from .id) to match the existing MASKED BY entries from phase 1.
+The original camera/video pair, wrapped in the same shape as a
+VideoLayer instance (id/number/name/videoSettings/rawCanvas/video) so
+future layer-selector code can treat it uniformly with added layers.
+videoSettings/rawCanvas/video are direct references to the same live
+settings objects and DOM canvases the existing render loop already
+reads and writes - not copies - so this stays in sync automatically
+and changes nothing about how the original is rendered or toggled.
+Its mask-source id intentionally stays "video" (not derived from .id)
+to match the existing MASKED BY entries from phase 1. It no longer
+carries any mask/body fields - masks only ever exist as standalone
+MaskLayer instances, created solely via ADD MASK, never bundled with
+a video just because the video exists.
 */
 /*
-settings.body has no "enabled" field - the original mask's segmentation
-is (and always was) gated by the separate settings.layers.body flag,
-read directly by both Segmentation.process() and Renderer.compose().
-This proxy makes bodySettings.enabled transparently read/write that
-same flag so the visibility-mode sync (see cycleVisibilityMode) can
-treat every layer uniformly, without actually restructuring that
-pre-existing gate.
-*/
-const originalBodySettings = new Proxy(settings.body, {
-
-    get(target, prop){
-
-        if(prop === "enabled")
-            return settings.layers.body;
-
-        return target[prop];
-
-    },
-
-    set(target, prop, value){
-
-        if(prop === "enabled"){
-
-            settings.layers.body = value;
-
-            return true;
-
-        }
-
-        target[prop] = value;
-
-        return true;
-
-    }
-
-});
-
-
-/*
-number/name/maskNumber are assigned dynamically the first time the
-camera is turned on (see toggleCamera) - not here, and not hardcoded
-to 1. The camera is just another video source; like everything else
-in this app, it doesn't exist as a real, addressable thing until the
-user actually creates it (turns it on), and whichever real thing
-gets created first is the one that becomes "1".
+number/name are assigned dynamically the first time the camera is
+turned on (see toggleCamera) - not here, and not hardcoded to 1. The
+camera is just another video source; like everything else in this
+app, it doesn't exist as a real, addressable thing until the user
+actually creates it (turns it on), and whichever real thing gets
+created first is the one that becomes "1".
 */
 const originalLayerAdapter = {
 
@@ -206,23 +152,13 @@ const originalLayerAdapter = {
 
     name:null,
 
-    maskNumber:null,
-
     videoSettings:settings.video,
-
-    bodySettings:originalBodySettings,
 
     rawCanvas:renderer.layers.effects,
 
-    bodyCanvas:renderer.layers.body,
-
     video:camera.getVideo(),
 
-    camera:camera,
-
-    background:background,
-
-    segmentation:segmentation
+    camera:camera
 
 };
 
@@ -974,11 +910,6 @@ function processBody(){
 
 
 
-    segmentation.process(
-        camera.getVideo()
-    );
-
-
     videoLayers.forEach(layer=>{
 
         layer.update();
@@ -1106,12 +1037,7 @@ window.addEventListener(
                 originalLayerAdapter.name =
                     "VIDEO " + originalLayerAdapter.number;
 
-                originalLayerAdapter.maskNumber =
-                    nextMaskNumber++;
-
                 reportSelection("video");
-
-                reportSelection("mask");
 
             }
 
@@ -1226,9 +1152,6 @@ window.addEventListener(
                 {number:nextVideoNumber++}
             );
 
-        layer.maskNumber =
-            nextMaskNumber++;
-
         videoLayers.push(
             layer
         );
@@ -1240,13 +1163,11 @@ window.addEventListener(
         console.log(
             "Added",
             layer.name,
-            "(mask", layer.maskNumber + ") - total video layers:",
+            "- total video layers:",
             videoLayers.length
         );
 
         reportSelection("video");
-
-        reportSelection("mask");
 
     }
 );
@@ -1535,11 +1456,9 @@ window.addEventListener(
             return;
 
         const video =
-            entry.kind === "standaloneMask"
-            ?
-            resolveMaskSourceVideo(entry.settings.source)
-            :
-            entry.video;
+            resolveMaskSourceVideo(
+                entry.settings.source
+            );
 
         if(!video)
             return;
@@ -2925,19 +2844,23 @@ window.addEventListener(
 ==================================================
 LAYER REGISTRY
 
-Two independent lists, not one. VIDEO steps over real things only:
-every video layer you've actually added, and every generator instance
-you've actually added via GENERATE's ADD RINGS/ADD GHOST/ADD TEXT -
-the original singleton of each generator kind is deliberately never
-listed here (it exists only so renderer.js's fixed-canvas compositing
-still has something to read; nothing ever makes it "real" now that
-adding is the only way generators come into being, matching "no
-default crap"). Once added, an instance stays in the registry for
-its whole lifetime regardless of its own visibility mode or enabled
-state - those are just properties of a real thing, not a second gate
-on top of "does it exist" (a rings instance you've switched to
-VISIBILITY: OFF must stay selectable so you can switch it back).
-KEY steps over masks only, one per video layer.
+Two independent lists, not one. NODES (formerly VIDEO) steps over
+every real node that exists: every video layer you've actually added,
+every generator instance you've actually added via GENERATE's ADD
+RINGS/ADD GHOST/ADD TEXT, and every mask you've actually added via
+KEY's ADD MASK - the original singleton of each generator kind is
+deliberately never listed here (it exists only so renderer.js's
+fixed-canvas compositing still has something to read; nothing ever
+makes it "real" now that adding is the only way generators come into
+being, matching "no default crap"). Once added, an instance stays in
+the registry for its whole lifetime regardless of its own visibility
+mode or enabled state - those are just properties of a real thing,
+not a second gate on top of "does it exist" (a rings instance you've
+switched to VISIBILITY: OFF must stay selectable so you can switch it
+back). Adding a video (or turning on the camera) never creates a mask
+- a mask only ever exists because ADD MASK was actually clicked. KEY
+steps over the exact same mask entries, filtered out of this same
+registry below, so the two lists can never drift apart.
 ==================================================
 */
 
@@ -3032,54 +2955,13 @@ function getVideoRegistry(){
     });
 
 
-    return registry;
-
-}
-
-
-function getMaskRegistry(){
-
-    const registry = [];
-
-
-    const videoSources =
-        (
-            cameraActivated
-            ?
-            [originalLayerAdapter]
-            :
-            []
-        )
-        .concat(videoLayers)
-        .sort((a,b)=>a.maskNumber - b.maskNumber);
-
-
-    videoSources.forEach(layer=>{
-
-        const isOriginal =
-            layer.id === "original";
-
-
-        registry.push({
-            label:"MASK " + layer.maskNumber,
-            kind:"mask",
-            settings:layer.bodySettings,
-            maskSourceId:
-                isOriginal
-                ?
-                "body"
-                :
-                ("bodyLayer:" + layer.id),
-            segmentation:layer.segmentation,
-            background:layer.background,
-            video:layer.video,
-            previewSource:layer.video,
-            maskNumber:layer.maskNumber
-        });
-
-    });
-
-
+    /*
+    Masks are nodes too - they belong in this same list, sorted into
+    it by number just like every other kind, not off in a list of
+    their own that VIDEO/NODES never shows. A mask exists here (and
+    anywhere) only because ADD MASK was clicked - never bundled onto
+    a video automatically.
+    */
     maskLayers.forEach(layer=>{
 
         registry.push({
@@ -3097,34 +2979,35 @@ function getMaskRegistry(){
     });
 
 
-    /*
-    Auto and standalone masks are pushed in two separate passes above,
-    but they share one numbering sequence - re-sort the combined list
-    by that number so the order shown always matches true creation
-    order regardless of which kind happened to be added when.
-    */
-    registry.sort((a,b)=>a.maskNumber - b.maskNumber);
-
-
     return registry;
 
 }
 
 
 /*
-Everything real, video and mask alike, in one list - used only for
-mask-source ELIGIBILITY (MASKED BY pickers, Ghost's APPLY TO MASK),
-never for stepper navigation. ringsLayers/addRingsLayer still exist
-and still render/mask correctly if ever populated, they're just not
-reachable from any menu right now ("only Ghost, Rings, Text for
-now"), so they're intentionally left out here too.
+KEY steps over masks only - just the standalone-mask entries, filtered
+straight out of getVideoRegistry() so there is exactly one place that
+knows what a mask is. Nothing here re-derives or duplicates that list.
+*/
+function getMaskRegistry(){
+
+    return getVideoRegistry().filter(entry=>
+        entry.kind === "standaloneMask"
+    );
+
+}
+
+
+/*
+Everything real, every kind, in one list - used for mask-source
+ELIGIBILITY (MASKED BY pickers, Ghost's APPLY TO MASK) and stepper
+navigation alike. Masks now live inside getVideoRegistry() itself, so
+returning that alone (rather than concatenating getMaskRegistry() on
+top) is what keeps every eligibility list from double-listing them.
 */
 function getAllRealEntries(){
 
-    return [
-        ...getVideoRegistry(),
-        ...getMaskRegistry()
-    ];
+    return getVideoRegistry();
 
 }
 

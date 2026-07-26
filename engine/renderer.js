@@ -403,21 +403,6 @@ export class Renderer {
 
         if(
             name &&
-            name.indexOf("bodyLayer:") === 0
-        ){
-
-            const layer =
-                this.extraVideoLayers.find(
-                    l=>l.id === name.slice(10)
-                );
-
-            return layer ? layer.bodyCanvas : null;
-
-        }
-
-
-        if(
-            name &&
             name.indexOf("maskLayer:") === 0
         ){
 
@@ -551,26 +536,6 @@ export class Renderer {
                 maskedBy:layer.videoSettings.maskedBy,
                 visibilityMode:layer.videoSettings.visibilityMode,
                 background:layer.videoSettings.background
-            } : null;
-
-        }
-
-
-        if(
-            id &&
-            id.indexOf("bodyLayer:") === 0
-        ){
-
-            const layer =
-                this.extraVideoLayers.find(
-                    l=>l.id === id.slice(10)
-                );
-
-            return layer ? {
-                canvas:layer.bodyCanvas,
-                maskedBy:layer.bodySettings.maskedBy,
-                visibilityMode:layer.bodySettings.visibilityMode,
-                background:layer.bodySettings.background
             } : null;
 
         }
@@ -1310,8 +1275,7 @@ export class Renderer {
         this.extraVideoLayers.forEach(layer=>{
 
             ids.push(
-                "videoLayer:" + layer.id,
-                "bodyLayer:" + layer.id
+                "videoLayer:" + layer.id
             );
 
         });
@@ -1643,37 +1607,6 @@ export class Renderer {
                         layer.videoSettings.maskedBy,
                         layer.videoSettings.visibilityMode,
                         layer.videoSettings.background
-                    ),
-
-                    0,
-
-                    0
-
-                );
-
-            }
-
-
-
-            if(
-                layer.bodySettings.enabled &&
-                layer.bodySettings.visibilityMode !== "off" &&
-                !consumedIds.has("bodyLayer:" + layer.id)
-            ){
-
-                ctx.globalCompositeOperation =
-                    this.resolveCompositeOperation(
-                        "source-over",
-                        layer.bodySettings.background
-                    );
-
-                ctx.drawImage(
-
-                    this.visualizeLayer(
-                        layer.bodyCanvas,
-                        layer.bodySettings.maskedBy,
-                        layer.bodySettings.visibilityMode,
-                        layer.bodySettings.background
                     ),
 
                     0,
