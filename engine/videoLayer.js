@@ -17,19 +17,18 @@ import { Segmentation } from "../body/segmentation.js";
 import { containFit } from "./fit.js";
 
 
-let nextLayerNumber = 2;
-
-
 export class VideoLayer {
 
 
-    constructor(settings){
+    constructor(settings, options){
 
+
+        options = options || {};
 
         this.settings = settings;
 
 
-        this.number = nextLayerNumber++;
+        this.number = options.number;
 
         this.id = "video-layer-" + this.number;
 
