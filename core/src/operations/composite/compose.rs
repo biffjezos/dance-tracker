@@ -1,8 +1,6 @@
-use std::any::Any;
-
 use crate::compositor::{Context, Operation, OperationError, Value};
 use crate::operations::composite::blend_mode::BlendMode;
-use crate::operations::Frame;
+use crate::operations::{downcast_frame, Frame};
 
 /*
 inputs[0] is the foreground (drawn on top), inputs[1] is the
@@ -20,12 +18,15 @@ pub struct Compose {
 }
 
 impl Operation for Compose {
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
     fn execute(
         &self,
         _ctx: &Context,
         inputs: &[Box<dyn Value>],
     ) -> Result<Vec<Box<dyn Value>>, OperationError> {
-        let fg = downcast_frame(inputs.get(0))?;
+        let fg = downcast_frame(inputs.first())?;
         let bg = downcast_frame(inputs.get(1))?;
 
         if !fg.same_dimensions(bg) {
@@ -70,19 +71,10 @@ impl Operation for Compose {
     }
 }
 
-fn downcast_frame(value: Option<&Box<dyn Value>>) -> Result<&Frame, OperationError> {
-    let value = value.ok_or(OperationError::MissingInput)?;
-
-    let any_ref: &dyn Any = value.as_ref();
-
-    any_ref
-        .downcast_ref::<Frame>()
-        .ok_or(OperationError::WrongValueType)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::any::Any;
 
     fn frame(pixels: Vec<u8>) -> Frame {
         Frame {

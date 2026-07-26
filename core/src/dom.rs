@@ -31,31 +31,57 @@ fn canvas_2d(canvas: &HtmlCanvasElement) -> Result<CanvasRenderingContext2d, Ope
 }
 
 /*
+Letterboxed fit, same math as the old JS engine/fit.js containFit -
+scale to fit inside target_width/height preserving aspect ratio,
+centered, rather than stretching or cropping.
+*/
+fn contain_fit(source_w: f64, source_h: f64, target_w: f64, target_h: f64) -> (f64, f64, f64, f64) {
+    if source_w <= 0.0 || source_h <= 0.0 {
+        return (0.0, 0.0, target_w, target_h);
+    }
+
+    let scale = (target_w / source_w).min(target_h / source_h);
+    let width = source_w * scale;
+    let height = source_h * scale;
+
+    ((target_w - width) / 2.0, (target_h - height) / 2.0, width, height)
+}
+
+/*
 A video/camera source: draws the live <video> element's current frame
-onto its own scratch canvas, then reads that canvas's pixels back -
-the canvas here is Rust's own working buffer, not something JS has to
-keep refreshing.
+onto its own scratch canvas (letterboxed to target_width/height, same
+as every other node's fixed frame size - a video's native resolution
+almost never matches the project's output size), then reads that
+canvas's pixels back - the canvas here is Rust's own working buffer,
+not something JS has to keep refreshing.
 */
 pub struct VideoElementPixelSource {
     pub video: HtmlVideoElement,
     pub scratch_canvas: HtmlCanvasElement,
+    pub target_width: u32,
+    pub target_height: u32,
 }
 
 impl PixelSource for VideoElementPixelSource {
     fn read(&self) -> Result<Frame, OperationError> {
-        let width = self.video.video_width();
-        let height = self.video.video_height();
-
-        if width == 0 || height == 0 {
-            return Err(OperationError::WrongValueType);
-        }
+        let width = self.target_width;
+        let height = self.target_height;
 
         self.scratch_canvas.set_width(width);
         self.scratch_canvas.set_height(height);
 
         let ctx = canvas_2d(&self.scratch_canvas)?;
 
-        ctx.draw_image_with_html_video_element(&self.video, 0.0, 0.0)
+        ctx.clear_rect(0.0, 0.0, width as f64, height as f64);
+
+        let (x, y, w, h) = contain_fit(
+            self.video.video_width() as f64,
+            self.video.video_height() as f64,
+            width as f64,
+            height as f64,
+        );
+
+        ctx.draw_image_with_html_video_element_and_dw_and_dh(&self.video, x, y, w, h)
             .map_err(|_| OperationError::WrongValueType)?;
 
         let image_data: ImageData = ctx

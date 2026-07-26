@@ -17,3 +17,6 @@ pub trait PixelSource {
 }
 
 pub mod video;
+pub mod captured;
+
+pub use captured::CapturedFrame;
