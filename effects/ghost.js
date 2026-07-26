@@ -6,7 +6,7 @@ BODY GHOST TRAIL EFFECT
 */
 
 
-let nextGhostNumber = 2;
+let nextGhostNumber = 1;
 
 
 export class Ghost {

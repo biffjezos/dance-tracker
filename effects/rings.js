@@ -6,7 +6,7 @@ AMIGA CONCENTRIC RING GENERATOR
 */
 
 
-let nextRingsNumber = 2;
+let nextRingsNumber = 1;
 
 
 export class Rings {

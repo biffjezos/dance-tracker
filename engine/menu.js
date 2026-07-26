@@ -121,7 +121,7 @@ export class MenuManager {
         renderLayerEditor() - only which selection object it reads
         differs.
         */
-        this.videoSelection = {label:"LAYER 1", kind:"video", visibilityMode:"on"};
+        this.videoSelection = {label:"VIDEO 1", kind:"video", visibilityMode:"on"};
 
         this.maskSelection = {label:"MASK 1", kind:"mask", visibilityMode:"on"};
 
@@ -133,7 +133,8 @@ export class MenuManager {
                 const selection = {
                     label:e.detail.label,
                     kind:e.detail.kind,
-                    visibilityMode:e.detail.visibilityMode
+                    visibilityMode:e.detail.visibilityMode,
+                    sourceLabel:e.detail.sourceLabel
                 };
 
 
@@ -1259,6 +1260,87 @@ export class MenuManager {
         if(scope === "mask"){
 
             this.addLayerButton(
+                "ADD KEY MASK",
+                "addMaskLayer"
+            );
+
+
+            if(selection.kind === "standaloneMask"){
+
+                let sourceMinus =
+                document.createElement(
+                    "button"
+                );
+
+                sourceMinus.innerText=
+                    "SOURCE -";
+
+                sourceMinus.onclick=()=>{
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "maskVideoSourceStep",
+                            {detail:{direction:-1}}
+                        )
+                    );
+
+                    this.render();
+
+                };
+
+                this.subMenu.appendChild(
+                    sourceMinus
+                );
+
+
+
+                let sourceDisplay =
+                document.createElement(
+                    "span"
+                );
+
+                sourceDisplay.innerText=
+                    "SOURCE: " +
+                    (selection.sourceLabel || "NONE");
+
+                sourceDisplay.className=
+                    "ring-id-display";
+
+                this.subMenu.appendChild(
+                    sourceDisplay
+                );
+
+
+
+                let sourcePlus =
+                document.createElement(
+                    "button"
+                );
+
+                sourcePlus.innerText=
+                    "SOURCE +";
+
+                sourcePlus.onclick=()=>{
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "maskVideoSourceStep",
+                            {detail:{direction:1}}
+                        )
+                    );
+
+                    this.render();
+
+                };
+
+                this.subMenu.appendChild(
+                    sourcePlus
+                );
+
+            }
+
+
+            this.addLayerButton(
                 "CAPTURE BACKGROUND",
                 "captureLayerBackground"
             );
@@ -2291,6 +2373,13 @@ export class MenuManager {
         if(item==="ADD TEXT")
             window.dispatchEvent(
                 new Event("addTextLayer")
+            );
+
+
+
+        if(item==="ADD KEY MASK")
+            window.dispatchEvent(
+                new Event("addMaskLayer")
             );
 
 
