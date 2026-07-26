@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use crate::compositor::{Context, Operation, OperationError, Value};
-use crate::operations::{downcast_frame, Frame};
+use crate::operations::{expect_frame, Frame};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Channel {
@@ -39,10 +41,10 @@ impl Operation for ApplyMask {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
-        let content = downcast_frame(inputs.first())?;
-        let mask = downcast_frame(inputs.get(1))?;
+        inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
+        let content = expect_frame(inputs.first())?;
+        let mask = expect_frame(inputs.get(1))?;
 
         if !content.same_dimensions(mask) {
             return Err(OperationError::DimensionMismatch);
@@ -64,7 +66,7 @@ impl Operation for ApplyMask {
             timestamp: content.timestamp,
         };
 
-        Ok(vec![Box::new(frame)])
+        Ok(vec![Value::Frame(Arc::new(frame))])
     }
 }
 
@@ -78,13 +80,15 @@ mod tests {
 
     fn run(channel: Channel, content: Frame, mask: Frame) -> Result<Frame, OperationError> {
         let op = ApplyMask { channel };
-        let ctx = Context { data: Box::new(()) };
-        let inputs: Vec<Box<dyn Value>> = vec![Box::new(content), Box::new(mask)];
+        let ctx = Context::default();
+        let inputs = vec![Value::Frame(Arc::new(content)), Value::Frame(Arc::new(mask))];
 
         let mut outputs = op.execute(&ctx, &inputs)?;
-        let any_box: Box<dyn std::any::Any> = outputs.remove(0);
 
-        Ok(*any_box.downcast::<Frame>().expect("should be a Frame"))
+        match outputs.remove(0) {
+            Value::Frame(frame) => Ok((*frame).clone()),
+            _ => panic!("should be a Frame"),
+        }
     }
 
     #[test]

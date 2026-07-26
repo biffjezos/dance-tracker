@@ -15,8 +15,8 @@ impl Operation for Stop {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
+        _inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
         self.video.pause().map_err(|_| OperationError::WrongValueType)?;
 
         Ok(vec![])

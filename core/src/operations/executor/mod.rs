@@ -7,7 +7,7 @@ pub trait Execute {
         graph: &Graph,
         node: NodeId,
         ctx: &Context,
-    ) -> Result<Vec<Box<dyn Value>>, OperationError>;
+    ) -> Result<Vec<Value>, OperationError>;
 }
 
 pub mod simple;

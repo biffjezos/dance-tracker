@@ -1,16 +1,15 @@
 /*
-The one payload type every pixel-producing operation deals in - RGBA8,
-straight (non-premultiplied) alpha, row-major, matching Canvas
-ImageData's byte layout so the eventual JS/WASM boundary is a direct
-copy with no repacking.
+The payload types every operation deals in - RGBA8, straight
+(non-premultiplied) alpha, row-major, matching Canvas ImageData's byte
+layout so the JS/WASM boundary is a direct copy with no repacking.
 
 Only the categories actually implemented so far are declared here.
-generators/masks/transforms/controls/outputs land the same way as
-sources and composite did, one at a time.
+transforms/outputs land the same way as everything else did, one at a
+time.
 */
 
 use crate::compositor::{OperationError, Value};
-use std::any::Any;
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct Frame {
@@ -36,18 +35,55 @@ impl Frame {
 }
 
 /*
-Every operation that reads a Frame input needs this exact downcast -
-factored out once here instead of copy-pasted in compose/apply_mask/
-chroma/difference/rings/ghost/text.
+A single-channel occupancy/alpha buffer - not produced by any operation
+yet (chroma/difference still produce a full Frame, matching their
+existing fill:solid/video behaviour), but part of the Value enum so a
+future pure-mask-producing operation has somewhere to live without
+another Value variant needing to be added.
 */
-pub fn downcast_frame(value: Option<&Box<dyn Value>>) -> Result<&Frame, OperationError> {
-    let value = value.ok_or(OperationError::MissingInput)?;
+#[derive(Clone, Debug)]
+pub struct Mask {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
 
-    let any_ref: &dyn Any = value.as_ref();
+/*
+A static image - same byte layout as Frame, minus a timestamp (nothing
+plays back). Not produced by any operation yet (sources::image is
+still future work), included so Value's shape is already correct for
+it.
+*/
+#[derive(Clone, Debug)]
+pub struct Image {
+    pub pixels: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
 
-    any_ref
-        .downcast_ref::<Frame>()
-        .ok_or(OperationError::WrongValueType)
+/*
+Every operation that reads a Frame input needs this exact match -
+factored out once here instead of copy-pasted in compose/apply_mask/
+chroma/difference/rings/ghost/text. Returns a plain &Frame for the
+common "just read it this call" case; expect_frame_arc below is for
+the rarer "I need to keep this around" case (Ghost's history,
+CapturedFrame's captured background), where cloning the Arc instead of
+the pixels is the entire point of Value carrying one.
+*/
+pub fn expect_frame(value: Option<&Value>) -> Result<&Frame, OperationError> {
+    match value {
+        Some(Value::Frame(frame)) => Ok(frame.as_ref()),
+        Some(_) => Err(OperationError::WrongValueType),
+        None => Err(OperationError::MissingInput),
+    }
+}
+
+pub fn expect_frame_arc(value: Option<&Value>) -> Result<Arc<Frame>, OperationError> {
+    match value {
+        Some(Value::Frame(frame)) => Ok(frame.clone()),
+        Some(_) => Err(OperationError::WrongValueType),
+        None => Err(OperationError::MissingInput),
+    }
 }
 
 pub mod sources;

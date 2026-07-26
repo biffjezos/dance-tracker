@@ -12,8 +12,7 @@ use dance_tracker_core::operations::composite::{BlendMode, Compose};
 use dance_tracker_core::operations::executor::{Execute, SimpleExecutor};
 use dance_tracker_core::operations::sources::video::VideoSource;
 use dance_tracker_core::operations::sources::PixelSource;
-use dance_tracker_core::operations::Frame;
-use std::any::Any;
+use dance_tracker_core::operations::{expect_frame, Frame};
 
 struct FixedPixelSource(Frame);
 
@@ -65,18 +64,14 @@ fn main() {
 
     println!("Graph contains {:?} nodes", graph.nodes.len());
 
-    let ctx = Context { data: Box::new(()) };
+    let ctx = Context::default();
 
     let executor = SimpleExecutor;
     let values = executor
         .execute(&graph, compose_id, &ctx)
         .expect("compose should succeed");
 
-    let any_ref: &dyn Any = values[0].as_ref();
-
-    let frame = any_ref
-        .downcast_ref::<Frame>()
-        .expect("compose should output a Frame");
+    let frame = expect_frame(values.first()).expect("compose should output a Frame");
 
     println!(
         "Composed 1x1 pixel: rgba({}, {}, {}, {})",

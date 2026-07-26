@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::compositor::{Context, Operation, OperationError, Value};
 use crate::operations::masks::{key_pixel, Fill};
-use crate::operations::{downcast_frame, Frame};
+use crate::operations::{expect_frame, Frame};
 
 /*
 inputs[0] is the video being keyed. Every pixel close enough to
@@ -21,9 +23,9 @@ impl Operation for Chroma {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Box<dyn Value>],
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
-        let video = downcast_frame(inputs.first())?;
+        inputs: &[Value],
+    ) -> Result<Vec<Value>, OperationError> {
+        let video = expect_frame(inputs.first())?;
 
         let mut pixels = Vec::with_capacity(video.pixels.len());
 
@@ -48,7 +50,7 @@ impl Operation for Chroma {
             timestamp: video.timestamp,
         };
 
-        Ok(vec![Box::new(frame)])
+        Ok(vec![Value::Frame(Arc::new(frame))])
     }
 }
 
@@ -61,13 +63,15 @@ mod tests {
     }
 
     fn run(op: &Chroma, video: Frame) -> Frame {
-        let ctx = Context { data: Box::new(()) };
-        let inputs: Vec<Box<dyn Value>> = vec![Box::new(video)];
+        let ctx = Context::default();
+        let inputs = vec![Value::Frame(Arc::new(video))];
 
         let mut outputs = op.execute(&ctx, &inputs).expect("should succeed");
-        let any_box: Box<dyn std::any::Any> = outputs.remove(0);
 
-        *any_box.downcast::<Frame>().expect("should be a Frame")
+        match outputs.remove(0) {
+            Value::Frame(frame) => (*frame).clone(),
+            _ => panic!("should be a Frame"),
+        }
     }
 
     #[test]

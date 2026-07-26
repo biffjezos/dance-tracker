@@ -22,7 +22,7 @@ impl Execute for PreviewExecutor {
         graph: &Graph,
         node: NodeId,
         ctx: &Context,
-    ) -> Result<Vec<Box<dyn Value>>, OperationError> {
+    ) -> Result<Vec<Value>, OperationError> {
         let node_data = &graph.nodes[node];
 
         let mut input_values = Vec::new();
