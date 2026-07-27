@@ -79,15 +79,33 @@ const ringsLayers = [];
 const ghostLayers = [];
 const textLayers = [];
 
-let selectedVideoIndex = 0;
-let selectedMaskIndex = 0;
+// Which entry NODES/KEY's stepper is currently pointed at, by stable
+// id - not a numeric index. getAllRealEntries() groups entries by
+// kind, so adding something of an earlier kind (e.g. RINGS, which
+// sorts before TEXT) shifts what a given *position* means; a numeric
+// "index 1" could silently start pointing at a different node than
+// the one the user was actually looking at. An id can't drift like
+// that - it either still refers to the same real node, or (if that's
+// somehow gone) selectedVideoEntry()/selectedMaskEntry() fall back to
+// the first real entry same as an out-of-range index used to.
+let selectedVideoId = null;
+let selectedMaskId = null;
+
+// Which single entry is actually live on the master output, by stable
+// id - completely independent of the above. Merely stepping through
+// NODES/KEY to look at something (or adding a new node elsewhere)
+// must never change what's on air; only an explicit VISIBILITY click
+// does that (see cycleVisibilityMode). Exclusive - turning one entry's
+// visibility on takes it off whatever was previously live, since
+// stacking only ever happens through an explicit BACKGROUND wire
+// (see CLAUDE.md), never by having two things simultaneously "on".
+let outputEntryId = null;
 
 let transportPlaying = false;
 
 
 function defaultUniversalSettings(){
     return {
-        enabled:true,
         maskedBy:{source:"none", channel:"alpha"},
         background:{source:"none", blendMode:"normal"}
     };
@@ -167,13 +185,13 @@ const EMPTY_ENTRY = {
 
 function selectedVideoEntry(){
     const registry = getVideoRegistry();
-    return registry[selectedVideoIndex] || registry[0] || EMPTY_ENTRY;
+    return registry.find(entry=>entry.id === selectedVideoId) || registry[0] || EMPTY_ENTRY;
 }
 
 
 function selectedMaskEntry(){
     const registry = getMaskRegistry();
-    return registry[selectedMaskIndex] || registry[0] || EMPTY_ENTRY;
+    return registry.find(entry=>entry.id === selectedMaskId) || registry[0] || EMPTY_ENTRY;
 }
 
 
@@ -205,7 +223,7 @@ function updateLayerStatusDisplay(entry){
     }
 
     const bar = document.querySelector(".statusbar");
-    bar.children[2].innerText = "VISIBILITY: " + (entry.layer.settings.enabled ? "ON" : "OFF");
+    bar.children[2].innerText = "VISIBILITY: " + (entry.id !== null && entry.id === outputEntryId ? "ON" : "OFF");
     bar.children[3].innerText = "TYPE: " + (entry.kind ? entry.kind.toUpperCase() : "NONE");
 }
 
@@ -217,7 +235,6 @@ function reportSelection(scope){
     lastPreviewScope = scope;
     const entry = scopedEntry(scope);
 
-    updateOutputNodeId();
     updateLayerStatusDisplay(entry);
 
     window.dispatchEvent(new CustomEvent("maskSettingsChanged", {
@@ -244,7 +261,7 @@ function reportSelection(scope){
             scope,
             label:entry.label,
             kind:entry.kind,
-            visibilityMode:entry.layer.settings.enabled ? "on" : "off",
+            visibilityMode:entry.id !== null && entry.id === outputEntryId ? "on" : "off",
             keyColour:
                 entry.kind === "standaloneMask"
                 ? entry.layer.settings.keyColour
@@ -432,27 +449,30 @@ function rebuildGraph(){
 
 
 /*
-Output is exactly the currently selected entry's own fully-wired node
-(its own MASKED BY / BACKGROUND, if the user set them) - never an
-automatic merge with whatever else exists or is independently enabled
-elsewhere. Stacking happens only through an explicit BACKGROUND wire
-the user set themselves (see CLAUDE.md) - there is no fixed-order
-"everything visible" stack here. VISIBILITY: OFF on the selected entry
-blanks the output rather than showing it anyway.
+Output is exactly whichever single entry is currently marked live
+(outputEntryId), rendered through its own fully-wired node (its own
+MASKED BY / BACKGROUND, if the user set them) - never an automatic
+merge with anything else. Stacking happens only through an explicit
+BACKGROUND wire the user set themselves (see CLAUDE.md).
 
-Called from rebuildGraph() (wiring may have changed) and separately
-from reportSelection() (stepping to a different node changes what
-should be on the output even when nothing about the graph itself
-changed - see there).
+Deliberately NOT derived from "whatever NODES/KEY is currently
+scrolled to" - outputEntryId only changes via an explicit VISIBILITY
+click (cycleVisibilityMode). Merely stepping through the list to look
+at or prepare something else, or adding a new node elsewhere, must
+never disturb what's actually live - that's the whole point of
+separating "what am I looking at" from "what's on air".
+
+Called from rebuildGraph() (the live entry's own wiring may have
+changed) and from cycleVisibilityMode (outputEntryId itself changed).
 */
 function updateOutputNodeId(){
-    const current = scopedEntry(lastPreviewScope);
-    const currentId = cachedWiredIds.get(current.id);
+    if(outputEntryId === null){
+        outputNodeId = null;
+        return;
+    }
 
-    outputNodeId =
-        (current.layer.settings.enabled && currentId !== undefined)
-        ? currentId
-        : null;
+    const currentId = cachedWiredIds.get(outputEntryId);
+    outputNodeId = currentId !== undefined ? currentId : null;
 }
 
 
@@ -765,25 +785,36 @@ UNIVERSAL ROW: stepper / visibility / background / masked by
 ==================================================
 */
 
+function stepSelection(registry, currentId, direction){
+    const currentIndex = registry.findIndex(entry=>entry.id === currentId);
+    const nextIndex = Math.min(Math.max((currentIndex < 0 ? 0 : currentIndex) + direction, 0), registry.length - 1);
+    const next = registry[nextIndex];
+    return next ? next.id : null;
+}
+
+
 window.addEventListener("videoIndexStep", e=>{
-    const count = getVideoRegistry().length;
-    selectedVideoIndex = Math.min(Math.max(selectedVideoIndex + e.detail.direction, 0), count - 1);
+    selectedVideoId = stepSelection(getVideoRegistry(), selectedVideoId, e.detail.direction);
     reportSelection("video");
 });
 
 
 window.addEventListener("maskIndexStep", e=>{
-    const count = getMaskRegistry().length;
-    selectedMaskIndex = Math.min(Math.max(selectedMaskIndex + e.detail.direction, 0), count - 1);
+    selectedMaskId = stepSelection(getMaskRegistry(), selectedMaskId, e.detail.direction);
     reportSelection("mask");
 });
 
 
 window.addEventListener("cycleVisibilityMode", e=>{
     const entry = scopedEntry(e.detail.scope);
-    if(!entry.layer.settings) return;
-    entry.layer.settings.enabled = !entry.layer.settings.enabled;
-    rebuildGraph();
+    if(!entry.id) return;
+
+    // Exclusive: making this entry live takes any other entry off air
+    // - there is no implicit multi-thing stack, only an explicit
+    // BACKGROUND wire composites two things together (see CLAUDE.md).
+    outputEntryId = outputEntryId === entry.id ? null : entry.id;
+
+    updateOutputNodeId();
     reportSelection(e.detail.scope);
 });
 
