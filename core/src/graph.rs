@@ -6,6 +6,8 @@ caller and the operation had to independently agree on for position 0
 vs 1.
 */
 
+use std::any::Any;
+
 use crate::compositor::{Input, Operation, OperationError};
 
 pub type NodeId = usize;
@@ -67,6 +69,19 @@ impl Graph {
         self.nodes.push(node);
         self.validation = ValidationState::Dirty;
         id
+    }
+
+    /*
+    Generalizes the as_any_mut/downcast_mut pattern already used for
+    live-editing a node's own concrete Operation (THRESHOLD +/-, text
+    content, ...) so a call site names the target type once instead of
+    repeating as_any_mut().downcast_mut::<T>() inline. None covers both
+    "no node at this id" and "wrong type" - callers that already know
+    node_id names a T only care that the edit happened, not which of
+    the two reasons a miss would be.
+    */
+    pub fn operation_mut<T: Any>(&mut self, node_id: NodeId) -> Option<&mut T> {
+        self.nodes.get_mut(node_id)?.operation.as_any_mut().downcast_mut::<T>()
     }
 
     /*
@@ -144,9 +159,27 @@ mod tests {
     use super::*;
     use crate::compositor::{Context, Value};
 
-    struct NoOp;
+    // calls exists purely so operation_mut's tests have something
+    // observable to mutate through the returned reference - cycle
+    // detection itself never reads it.
+    struct NoOp {
+        calls: u32,
+    }
 
     impl Operation for NoOp {
+        fn as_any(&self) -> &dyn std::any::Any { self }
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+        fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
+            Ok(vec![])
+        }
+    }
+
+    // A second concrete Operation type, distinct from NoOp, purely to
+    // exercise operation_mut's wrong-type case.
+    struct OtherOp;
+
+    impl Operation for OtherOp {
         fn as_any(&self) -> &dyn std::any::Any { self }
         fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 
@@ -160,7 +193,7 @@ mod tests {
     // real key choice is exercised by each operation's own tests.
     fn node(inputs: Vec<NodeId>) -> Node {
         Node {
-            operation: Box::new(NoOp),
+            operation: Box::new(NoOp { calls: 0 }),
             inputs: inputs.into_iter().map(|id| (Input::Source, id)).collect(),
         }
     }
@@ -245,5 +278,30 @@ mod tests {
         graph.add_node(node(vec![]));
 
         assert!(matches!(graph.validate(), Err(OperationError::Cycle(_))));
+    }
+
+    #[test]
+    fn operation_mut_returns_the_concrete_type_and_allows_mutation() {
+        let mut graph = Graph::new(1, 1);
+        let id = graph.add_node(node(vec![]));
+
+        graph.operation_mut::<NoOp>(id).expect("should find the NoOp").calls += 1;
+
+        assert_eq!(graph.operation_mut::<NoOp>(id).unwrap().calls, 1);
+    }
+
+    #[test]
+    fn operation_mut_returns_none_for_the_wrong_type() {
+        let mut graph = Graph::new(1, 1);
+        let id = graph.add_node(node(vec![])); // a NoOp, not an OtherOp
+
+        assert!(graph.operation_mut::<OtherOp>(id).is_none());
+    }
+
+    #[test]
+    fn operation_mut_returns_none_for_an_unknown_node_id() {
+        let mut graph = Graph::new(1, 1);
+
+        assert!(graph.operation_mut::<NoOp>(0).is_none());
     }
 }

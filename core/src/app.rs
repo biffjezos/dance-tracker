@@ -340,11 +340,7 @@ impl App {
     }
 
     pub fn set_text_content(&mut self, node_id: usize, content: String) {
-        if let Some(text) = self.graph.nodes[node_id]
-            .operation
-            .as_any_mut()
-            .downcast_mut::<Text>()
-        {
+        if let Some(text) = self.graph.operation_mut::<Text>(node_id) {
             text.content = content;
         }
     }
