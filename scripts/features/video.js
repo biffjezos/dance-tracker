@@ -18,41 +18,67 @@ import {
 import {
     defaultUniversalSettings
 } from "../state/registry.js";
-const camera = getCamera();
-const originalVideoLayer = {
-    id: "original",
-    number: null,
-    name: null,
-    videoEl: camera.getVideo(),
-    settings: defaultUniversalSettings()
-};
+
+let originalVideoLayer = null;
+
+function getOriginalVideoLayer() {
+    if (originalVideoLayer) return originalVideoLayer;
+
+    const camera = getCamera();
+    if (!camera) return null;
+
+    originalVideoLayer = {
+        id: "original",
+        number: null,
+        name: null,
+        videoEl: camera.getVideo(),
+        settings: defaultUniversalSettings()
+    };
+
+    return originalVideoLayer;
+}
+
 window.addEventListener("toggleCamera", () => {
+    const camera = getCamera();
+    if (!camera) return;
+
     state.cameraOn = !state.cameraOn;
+
     if (state.cameraOn) {
+        const layer = getOriginalVideoLayer();
+        if (!layer) return;
+
         if (!state.cameraActivated) {
             state.cameraActivated = true;
-            originalVideoLayer.number = state.nextVideoNumber++;
-            originalVideoLayer.name = "VIDEO " + originalVideoLayer.number;
-            state.videoLayers.push(originalVideoLayer);
+            layer.number = state.nextVideoNumber++;
+            layer.name = "VIDEO " + layer.number;
+            state.videoLayers.push(layer);
             rebuildGraph();
             reportSelection("video");
         }
+
         state.transportPlaying = true;
         camera.start();
+
     } else {
         camera.stop();
     }
 });
+
 window.addEventListener("loadVideoFile", e => {
     const video = document.createElement("video");
     video.muted = true;
     video.loop = true;
     video.playsInline = true;
     video.style.display = "none";
+
     document.body.appendChild(video);
+
     video.src = URL.createObjectURL(e.detail.file);
     video.play();
+
     const number = state.nextVideoNumber++;
+
     const layer = {
         id: "video-" + number,
         number,
@@ -60,21 +86,29 @@ window.addEventListener("loadVideoFile", e => {
         videoEl: video,
         settings: defaultUniversalSettings()
     };
+
     state.videoLayers.push(layer);
     state.transportPlaying = true;
+
     rebuildGraph();
     reportSelection("video");
 });
+
 window.addEventListener("addVideoLayer", e => {
     const video = document.createElement("video");
+
     video.muted = true;
     video.loop = true;
     video.playsInline = true;
     video.style.display = "none";
+
     document.body.appendChild(video);
+
     video.src = URL.createObjectURL(e.detail.file);
     video.play();
+
     const number = state.nextVideoNumber++;
+
     const layer = {
         id: "video-" + number,
         number,
@@ -82,7 +116,10 @@ window.addEventListener("addVideoLayer", e => {
         videoEl: video,
         settings: defaultUniversalSettings()
     };
+
     state.videoLayers.push(layer);
+    state.transportPlaying = true;
+
     rebuildGraph();
     reportSelection("video");
 });
