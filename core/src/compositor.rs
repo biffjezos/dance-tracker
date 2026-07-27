@@ -32,7 +32,6 @@ pub enum Value {
     Text(String),
     Color(Color),
 }
-/* Color added by biffjezos
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color {

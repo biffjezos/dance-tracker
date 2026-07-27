@@ -1594,27 +1594,6 @@ export class MenuManager {
                 "COLOUR"
             );
 
-
-            /*
-            CAPTURE BACKGROUND only means anything in difference mode
-            (Segmentation.process() keys off capturedBackground there,
-            keyColour in keying mode) and KEY COLOUR only means
-            anything in keying mode - each is hidden outside the mode
-            it actually affects instead of sitting there doing nothing.
-            */
-            const matteMode =
-                this.maskSelection.mode ||
-                "difference";
-
-            if(matteMode === "difference"){
-
-                this.addLayerButton(
-                    "CAPTURE BACKGROUND",
-                    "captureLayerBackground"
-                );
-
-            }
-
             this.addLayerButton(
                 "THRESHOLD +",
                 "thresholdUp"
@@ -1625,6 +1604,10 @@ export class MenuManager {
                 "thresholdDown"
             );
 
+
+            const matteMode =
+                this.maskSelection.mode ||
+                "difference";
 
             let matteModeButton =
             document.createElement(
@@ -1658,7 +1641,24 @@ export class MenuManager {
             );
 
 
-            if(matteMode === "keying"){
+            /*
+            Both context-dependent on the mode - CAPTURE BACKGROUND
+            only means anything in difference mode (Segmentation.
+            process() keys off capturedBackground there), KEY COLOUR
+            only in keying mode - kept after the MODE button (the
+            only thing that changes when it's clicked) instead of
+            before it, so toggling mode never shifts the MODE button's
+            own position or anything before it.
+            */
+            if(matteMode === "difference"){
+
+                this.addLayerButton(
+                    "CAPTURE BACKGROUND",
+                    "captureLayerBackground"
+                );
+
+            }
+            else {
 
                 this.addLayerScreenButton(
                     "KEY COLOUR",
