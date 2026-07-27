@@ -63,3 +63,12 @@ A modern visual synthesizer wearing the interface of a forgotten 1990s computer.
 
 Powered by **Copper Engine**.
 Built for the future. Designed like the past.
+
+## Screenshots
+
+v0.1
+
+![DANCE TRACKER 5000 v0.1](dance-tracker-0.1.png)
+![DANCE TRACKER 5000 v0.1](rings.png)
+![DANCE TRACKER 5000 v0.1](key-rings.png)
+![DANCE TRACKER 5000 v0.1](key-rings-2.png)
