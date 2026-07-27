@@ -16,6 +16,7 @@ import {
 let outputNodeId = null;
 let cachedContentIds = new Map();
 let cachedWiredIds = new Map();
+let lastPreviewScope = "video";
 
 function buildVideoContent(layer) {
     const wasmApp = getWasmApp();
@@ -161,6 +162,7 @@ export function updateOutputNodeId() {
 export function getOutputNodeId() {
     return outputNodeId;
 }
+
 export function currentPreviewContentId() {
     const entry = scopedEntry(lastPreviewScope);
     if (!entry.id) return null;
