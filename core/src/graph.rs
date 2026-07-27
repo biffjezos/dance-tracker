@@ -8,7 +8,7 @@ vs 1.
 
 use std::any::Any;
 
-use crate::compositor::{Input, Operation, OperationError};
+use crate::compositor::{Input, Operation, OperationError, OperationMetadata, Value};
 
 /*
 A plain usize index would go stale silently once node removal exists -
@@ -48,6 +48,20 @@ impl Node {
     pub fn input(&self, key: Input) -> Option<NodeId> {
         self.inputs.iter().find(|(k, _)| *k == key).map(|(_, id)| *id)
     }
+}
+
+/*
+Everything a future save/load would need to reconstruct one node -
+see Graph::describe_node. Not a serialization format itself (no
+serde, no schema) - just proof the pieces (stable id, typed metadata,
+parameters as Value data, explicit input wiring) already compose into
+one self-describing snapshot.
+*/
+pub struct NodeDescription {
+    pub id: NodeId,
+    pub metadata: OperationMetadata,
+    pub parameters: Vec<(&'static str, Value)>,
+    pub inputs: Vec<(Input, NodeId)>,
 }
 
 /*
@@ -178,6 +192,36 @@ impl Graph {
     */
     pub fn operation_mut<T: Any>(&mut self, node_id: NodeId) -> Option<&mut T> {
         self.resolve_mut(node_id)?.operation.as_any_mut().downcast_mut::<T>()
+    }
+
+    /*
+    Prepares (without implementing) graph save/load: bundles everything
+    a serializer would need for one node - a stable id, what kind of
+    operation it is (metadata), its current settings as data (walking
+    parameters() and reading each one back through get_parameter(),
+    not just the descriptor list), and its explicit connections
+    (inputs, unchanged). Nothing here reaches into a concrete Operation
+    type - describe_node works for any Operation purely through the
+    trait, which is the actual point: a future save/load or node
+    editor never needs a per-kind branch to know what a node is or
+    holds.
+    */
+    pub fn describe_node(&self, node_id: NodeId) -> Option<NodeDescription> {
+        let node = self.resolve(node_id)?;
+
+        let parameters = node
+            .operation
+            .parameters()
+            .into_iter()
+            .filter_map(|p| node.operation.get_parameter(p.name).map(|v| (p.name, v)))
+            .collect();
+
+        Some(NodeDescription {
+            id: node_id,
+            metadata: node.operation.metadata(),
+            parameters,
+            inputs: node.inputs.clone(),
+        })
     }
 
     /*
@@ -484,5 +528,40 @@ mod tests {
         graph.remove_node(a);
 
         assert!(matches!(graph.validate(), Err(OperationError::UnknownNode)));
+    }
+
+    #[test]
+    fn describe_node_bundles_id_metadata_parameters_and_inputs() {
+        use crate::operations::masks::{Chroma, Fill};
+
+        let mut graph = Graph::new(1, 1);
+        let source = graph.add_node(node(vec![]));
+
+        let chroma_id = graph.add_node(Node {
+            operation: Box::new(Chroma {
+                key_colour: (0, 255, 0),
+                threshold: 42,
+                fill: Fill::Solid(255, 0, 255),
+            }),
+            inputs: vec![(Input::Source, source)],
+        });
+
+        let description = graph.describe_node(chroma_id).expect("should resolve");
+
+        assert_eq!(description.id, chroma_id);
+        assert_eq!(description.metadata.display_name, "Chroma Key");
+        assert_eq!(description.inputs, vec![(Input::Source, source)]);
+
+        assert_eq!(description.parameters.len(), 1);
+        let (name, value) = &description.parameters[0];
+        assert_eq!(*name, "threshold");
+        assert!(matches!(value, Value::Number(v) if *v == 42.0));
+    }
+
+    #[test]
+    fn describe_node_returns_none_for_an_unknown_node_id() {
+        let graph = Graph::new(1, 1);
+
+        assert!(graph.describe_node(NodeId::from_index(0)).is_none());
     }
 }
