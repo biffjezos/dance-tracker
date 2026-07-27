@@ -309,12 +309,8 @@ impl App {
         spacing: f64,
         size: f64,
         stroke_width: f64,
+        colours: Vec<String>,
     ) -> Result<usize, JsValue> {
-        let colours = vec![
-            "rgb(255,0,255)".to_string(),
-            "rgb(0,255,80)".to_string(),
-        ];
-
         let rings = Rings::new(
             count,
             rings_per_group,
