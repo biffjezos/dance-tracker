@@ -11,7 +11,7 @@ import {
 } from "../core/wasm.js";
 import {
     selectedVideoEntry
-} from "../engine/registry.js";
+} from "../state/registry.js";
 import {
     getCamera
 } from "../engine/camera.js";

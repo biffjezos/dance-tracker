@@ -9,7 +9,7 @@ import {
 import {
     getAllRealEntries,
     scopedEntry
-} from "./registry.js";
+} from "../state/registry.js";
 import {
     state
 } from "./state.js";

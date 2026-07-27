@@ -10,7 +10,7 @@ import {
     selectedMaskEntry,
     getVideoRegistry,
     defaultUniversalSettings
-} from "../engine/registry.js";
+} from "../state/registry.js";
 import {
     rebuildGraph
 } from "../engine/graph.js";

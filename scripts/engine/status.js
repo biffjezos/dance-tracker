@@ -6,7 +6,7 @@ STATUS BAR / CAMERA PANEL TITLE
 import {
     scopedEntry,
     resolveMaskSourceLabel
-} from "./registry.js";
+} from "../state/registry.js";
 import {
     state
 } from "./state.js";

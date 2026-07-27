@@ -11,7 +11,7 @@ import {
     getMaskRegistry,
     getAllRealEntries,
     scopedEntry
-} from "./registry.js";
+} from "../state/registry.js";
 
 import {
     rebuildGraph,

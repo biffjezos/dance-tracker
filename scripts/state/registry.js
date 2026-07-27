@@ -1,6 +1,6 @@
 import {
     state
-} from "./state.js";
+} from "../engine/state.js";
 export function defaultUniversalSettings() {
     return {
         maskedBy: {
