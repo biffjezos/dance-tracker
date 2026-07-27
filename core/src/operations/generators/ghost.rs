@@ -2,7 +2,10 @@ use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use crate::compositor::{find_input, Context, Input, Operation, OperationError, Value};
+use crate::compositor::{
+    find_input, Context, Input, Operation, OperationError, ParameterDescriptor, ParameterKind,
+    Value,
+};
 use crate::operations::composite::BlendMode;
 use crate::operations::{expect_frame_arc, Frame};
 
@@ -41,6 +44,33 @@ impl Ghost {
 impl Operation for Ghost {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn parameters(&self) -> Vec<ParameterDescriptor> {
+        vec![
+            ParameterDescriptor { name: "count", kind: ParameterKind::Number },
+            ParameterDescriptor { name: "alpha", kind: ParameterKind::Number },
+            ParameterDescriptor { name: "delay_ticks", kind: ParameterKind::Number },
+        ]
+    }
+
+    fn get_parameter(&self, name: &str) -> Option<Value> {
+        match name {
+            "count" => Some(Value::Number(self.count as f64)),
+            "alpha" => Some(Value::Number(self.alpha as f64)),
+            "delay_ticks" => Some(Value::Number(self.delay_ticks as f64)),
+            _ => None,
+        }
+    }
+
+    fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
+        match (name, value) {
+            ("count", Value::Number(v)) => { self.count = v.max(0.0) as usize; Ok(()) }
+            ("alpha", Value::Number(v)) => { self.alpha = v as f32; Ok(()) }
+            ("delay_ticks", Value::Number(v)) => { self.delay_ticks = v.max(0.0) as u32; Ok(()) }
+            ("count" | "alpha" | "delay_ticks", _) => Err(OperationError::WrongValueType),
+            _ => Err(OperationError::UnknownParameter(name.to_string())),
+        }
+    }
 
     fn execute(
         &self,
@@ -150,5 +180,44 @@ mod tests {
         }
 
         assert_eq!(op.history.borrow().len(), 2);
+    }
+
+    #[test]
+    fn parameters_round_trip_and_take_effect() {
+        let mut op = Ghost::new(4, 0.45, 3);
+
+        assert!(matches!(op.get_parameter("count"), Some(Value::Number(v)) if v == 4.0));
+        assert!(matches!(op.get_parameter("alpha"), Some(Value::Number(v)) if (v - 0.45).abs() < 1e-6));
+        assert!(matches!(op.get_parameter("delay_ticks"), Some(Value::Number(v)) if v == 3.0));
+
+        op.set_parameter("count", Value::Number(2.0)).expect("should accept a Number");
+        op.set_parameter("delay_ticks", Value::Number(1.0)).expect("should accept a Number");
+
+        assert_eq!(op.count, 2);
+        assert_eq!(op.delay_ticks, 1);
+
+        // count now caps history at 2 instead of 4, delay_ticks captures
+        // every tick instead of every 3rd - both take effect immediately,
+        // no rebuild required.
+        let source = frame(vec![10, 10, 10, 255]);
+        for _ in 0..10 {
+            tick(&op, &source);
+        }
+        assert_eq!(op.history.borrow().len(), 2);
+    }
+
+    #[test]
+    fn set_parameter_rejects_wrong_type_and_unknown_name() {
+        let mut op = Ghost::new(4, 0.45, 3);
+
+        assert!(matches!(
+            op.set_parameter("count", Value::Text("nope".to_string())),
+            Err(OperationError::WrongValueType)
+        ));
+
+        assert!(matches!(
+            op.set_parameter("not_a_real_parameter", Value::Number(1.0)),
+            Err(OperationError::UnknownParameter(_))
+        ));
     }
 }

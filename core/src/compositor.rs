@@ -14,6 +14,7 @@ use std::sync::Arc;
 use crate::operations::{Frame, Image, Mask};
 use crate::resource_manager::ResourceManager;
 
+#[derive(Debug)]
 pub enum Value {
     Frame(Arc<Frame>),
     Mask(Arc<Mask>),
@@ -106,6 +107,28 @@ pub enum OperationError {
     same underlying usize.
     */
     Cycle(Vec<usize>),
+    // set_parameter with a name the operation doesn't have - distinct
+    // from WrongValueType, which is a real parameter given a value of
+    // the wrong kind.
+    UnknownParameter(String),
+}
+
+/*
+Only the scalar Value variants make sense as something a UI would show
+a control for - Frame/Mask/Image are graph-wired inputs, never a
+setting on the node that produces them.
+*/
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ParameterKind {
+    Number,
+    Boolean,
+    Text,
+}
+
+#[derive(Clone, Debug)]
+pub struct ParameterDescriptor {
+    pub name: &'static str,
+    pub kind: ParameterKind,
 }
 
 /*
@@ -130,4 +153,25 @@ pub trait Operation: Any {
     fn as_any(&self) -> &dyn Any;
 
     fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    /*
+    UI-facing live parameter editing that doesn't require the caller
+    to know (or downcast to) the concrete Operation type - a generic
+    counterpart to as_any_mut, which stays for internal Rust use (see
+    Graph::operation_mut). Defaults to "no editable parameters", which
+    is correct for most operations (sources, composites, CapturedFrame
+    have nothing a UI would show a control for); a concrete type only
+    overrides these three when it actually has settings.
+    */
+    fn parameters(&self) -> Vec<ParameterDescriptor> {
+        Vec::new()
+    }
+
+    fn get_parameter(&self, _name: &str) -> Option<Value> {
+        None
+    }
+
+    fn set_parameter(&mut self, name: &str, _value: Value) -> Result<(), OperationError> {
+        Err(OperationError::UnknownParameter(name.to_string()))
+    }
 }

@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::compositor::{find_input, Context, Input, Operation, OperationError, Value};
+use crate::compositor::{
+    find_input, Context, Input, Operation, OperationError, ParameterDescriptor, ParameterKind,
+    Value,
+};
 use crate::operations::masks::{key_pixel, Fill};
 use crate::operations::{expect_frame, Frame};
 
@@ -23,6 +26,25 @@ pub struct Difference {
 impl Operation for Difference {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn parameters(&self) -> Vec<ParameterDescriptor> {
+        vec![ParameterDescriptor { name: "threshold", kind: ParameterKind::Number }]
+    }
+
+    fn get_parameter(&self, name: &str) -> Option<Value> {
+        match name {
+            "threshold" => Some(Value::Number(self.threshold as f64)),
+            _ => None,
+        }
+    }
+
+    fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
+        match (name, value) {
+            ("threshold", Value::Number(v)) => { self.threshold = v.max(0.0) as u32; Ok(()) }
+            ("threshold", _) => Err(OperationError::WrongValueType),
+            _ => Err(OperationError::UnknownParameter(name.to_string())),
+        }
+    }
 
     fn execute(
         &self,
@@ -123,5 +145,37 @@ mod tests {
         let result = op.execute(&ctx, &inputs);
 
         assert!(matches!(result, Err(OperationError::DimensionMismatch)));
+    }
+
+    #[test]
+    fn threshold_parameter_round_trips_and_takes_effect() {
+        let mut op = Difference { threshold: 30, fill: Fill::Solid(255, 0, 255) };
+
+        assert!(matches!(op.get_parameter("threshold"), Some(Value::Number(v)) if v == 30.0));
+
+        op.set_parameter("threshold", Value::Number(2.0)).expect("should accept a Number");
+
+        assert_eq!(op.threshold, 2);
+
+        // |40-42| + |40-41| + |40-39| = 4, within the old threshold
+        // (30) but past the lowered one (2), so it should now key as
+        // differing instead of matching.
+        let out = run(&op, frame(vec![40, 40, 40, 255]), frame(vec![42, 41, 39, 255]));
+        assert_ne!(out.pixels, vec![0, 0, 0, 0], "lowered threshold should stop treating this as a match");
+    }
+
+    #[test]
+    fn set_parameter_rejects_wrong_type_and_unknown_name() {
+        let mut op = Difference { threshold: 30, fill: Fill::Solid(255, 0, 255) };
+
+        assert!(matches!(
+            op.set_parameter("threshold", Value::Boolean(true)),
+            Err(OperationError::WrongValueType)
+        ));
+
+        assert!(matches!(
+            op.set_parameter("not_a_real_parameter", Value::Number(1.0)),
+            Err(OperationError::UnknownParameter(_))
+        ));
     }
 }

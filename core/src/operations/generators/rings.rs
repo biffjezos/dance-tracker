@@ -14,7 +14,9 @@ use std::f64::consts::PI;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
-use crate::compositor::{Context, Input, Operation, OperationError, Value};
+use crate::compositor::{
+    Context, Input, Operation, OperationError, ParameterDescriptor, ParameterKind, Value,
+};
 use crate::operations::Frame;
 
 struct Centre {
@@ -112,6 +114,41 @@ impl Rings {
 impl Operation for Rings {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn parameters(&self) -> Vec<ParameterDescriptor> {
+        vec![
+            ParameterDescriptor { name: "count", kind: ParameterKind::Number },
+            ParameterDescriptor { name: "rings_per_group", kind: ParameterKind::Number },
+            ParameterDescriptor { name: "spacing", kind: ParameterKind::Number },
+            ParameterDescriptor { name: "size", kind: ParameterKind::Number },
+            ParameterDescriptor { name: "stroke_width", kind: ParameterKind::Number },
+        ]
+    }
+
+    fn get_parameter(&self, name: &str) -> Option<Value> {
+        match name {
+            "count" => Some(Value::Number(self.count as f64)),
+            "rings_per_group" => Some(Value::Number(self.rings_per_group as f64)),
+            "spacing" => Some(Value::Number(self.spacing)),
+            "size" => Some(Value::Number(self.size)),
+            "stroke_width" => Some(Value::Number(self.width)),
+            _ => None,
+        }
+    }
+
+    fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
+        match (name, value) {
+            ("count", Value::Number(v)) => { self.count = v.max(0.0) as u32; Ok(()) }
+            ("rings_per_group", Value::Number(v)) => { self.rings_per_group = v.max(0.0) as u32; Ok(()) }
+            ("spacing", Value::Number(v)) => { self.spacing = v; Ok(()) }
+            ("size", Value::Number(v)) => { self.size = v; Ok(()) }
+            ("stroke_width", Value::Number(v)) => { self.width = v; Ok(()) }
+            ("count" | "rings_per_group" | "spacing" | "size" | "stroke_width", _) => {
+                Err(OperationError::WrongValueType)
+            }
+            _ => Err(OperationError::UnknownParameter(name.to_string())),
+        }
+    }
 
     fn execute(
         &self,
