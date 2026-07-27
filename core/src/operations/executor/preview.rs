@@ -23,7 +23,7 @@ impl Execute for PreviewExecutor {
         node: NodeId,
         ctx: &Context,
     ) -> Result<Vec<Value>, OperationError> {
-        let node_data = &graph.nodes[node];
+        let node_data = graph.resolve(node).ok_or(OperationError::UnknownNode)?;
 
         let mut input_values: Vec<(Input, Value)> = Vec::new();
 

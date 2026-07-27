@@ -149,7 +149,7 @@ impl App {
             inputs: vec![],
         };
 
-        Ok(self.graph.add_node(node))
+        Ok(self.graph.add_node(node).index() as usize)
     }
 
     /*
@@ -176,10 +176,10 @@ impl App {
                 threshold,
                 fill: parse_fill(fill_video, fill_r, fill_g, fill_b),
             }),
-            inputs: vec![(Input::Source, source)],
+            inputs: vec![(Input::Source, NodeId::from_index(source as u32))],
         };
 
-        self.graph.add_node(node)
+        self.graph.add_node(node).index() as usize
     }
 
     /*
@@ -213,14 +213,17 @@ impl App {
                 threshold,
                 fill: parse_fill(fill_video, fill_r, fill_g, fill_b),
             }),
-            inputs: vec![(Input::Source, source), (Input::Reference, captured_id)],
+            inputs: vec![
+                (Input::Source, NodeId::from_index(source as u32)),
+                (Input::Reference, captured_id),
+            ],
         };
 
         let difference_id = self.graph.add_node(node);
 
         self.difference_source.insert(difference_id, captured_id);
 
-        difference_id
+        difference_id.index() as usize
     }
 
     /*
@@ -231,8 +234,12 @@ impl App {
     pub fn capture_background(&mut self, difference_node: usize) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
 
-        let source_id = self.graph.nodes[difference_node]
-            .input(Input::Source)
+        let difference_node = NodeId::from_index(difference_node as u32);
+
+        let source_id = self
+            .graph
+            .resolve(difference_node)
+            .and_then(|n| n.input(Input::Source))
             .ok_or_else(|| JsValue::from_str("difference node has no source input"))?;
 
         let ctx = self.context(false);
@@ -262,10 +269,13 @@ impl App {
     pub fn add_apply_mask(&mut self, content: usize, mask: usize, channel: &str) -> usize {
         let node = Node {
             operation: Box::new(ApplyMask { channel: parse_channel(channel) }),
-            inputs: vec![(Input::Content, content), (Input::Mask, mask)],
+            inputs: vec![
+                (Input::Content, NodeId::from_index(content as u32)),
+                (Input::Mask, NodeId::from_index(mask as u32)),
+            ],
         };
 
-        self.graph.add_node(node)
+        self.graph.add_node(node).index() as usize
     }
 
     /*
@@ -277,10 +287,13 @@ impl App {
     pub fn add_compose(&mut self, foreground: usize, background: usize, mode: &str) -> usize {
         let node = Node {
             operation: Box::new(Compose { mode: parse_blend_mode(mode) }),
-            inputs: vec![(Input::Foreground, foreground), (Input::Background, background)],
+            inputs: vec![
+                (Input::Foreground, NodeId::from_index(foreground as u32)),
+                (Input::Background, NodeId::from_index(background as u32)),
+            ],
         };
 
-        self.graph.add_node(node)
+        self.graph.add_node(node).index() as usize
     }
 
     /*
@@ -314,16 +327,16 @@ impl App {
 
         let node = Node { operation: Box::new(rings), inputs: vec![] };
 
-        Ok(self.graph.add_node(node))
+        Ok(self.graph.add_node(node).index() as usize)
     }
 
     pub fn add_ghost(&mut self, source: usize, count: usize, alpha: f32, delay_ticks: u32) -> usize {
         let node = Node {
             operation: Box::new(Ghost::new(count, alpha, delay_ticks)),
-            inputs: vec![(Input::Source, source)],
+            inputs: vec![(Input::Source, NodeId::from_index(source as u32))],
         };
 
-        self.graph.add_node(node)
+        self.graph.add_node(node).index() as usize
     }
 
     pub fn add_text(
@@ -336,11 +349,11 @@ impl App {
 
         let node = Node { operation: Box::new(text), inputs: vec![] };
 
-        Ok(self.graph.add_node(node))
+        Ok(self.graph.add_node(node).index() as usize)
     }
 
     pub fn set_text_content(&mut self, node_id: usize, content: String) {
-        if let Some(text) = self.graph.operation_mut::<Text>(node_id) {
+        if let Some(text) = self.graph.operation_mut::<Text>(NodeId::from_index(node_id as u32)) {
             text.content = content;
         }
     }
@@ -394,7 +407,7 @@ impl App {
         let executor = RenderExecutor;
 
         let values = executor
-            .execute(&self.graph, output_node, &ctx)
+            .execute(&self.graph, NodeId::from_index(output_node as u32), &ctx)
             .map_err(js_err)?;
 
         let frame = expect_frame(values.first()).map_err(js_err)?;
@@ -408,7 +421,9 @@ impl App {
         let ctx = self.context(true);
         let executor = PreviewExecutor;
 
-        let values = executor.execute(&self.graph, node, &ctx).map_err(js_err)?;
+        let values = executor
+            .execute(&self.graph, NodeId::from_index(node as u32), &ctx)
+            .map_err(js_err)?;
 
         let frame = expect_frame(values.first()).map_err(js_err)?;
 

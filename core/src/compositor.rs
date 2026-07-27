@@ -111,6 +111,10 @@ pub enum OperationError {
     // from WrongValueType, which is a real parameter given a value of
     // the wrong kind.
     UnknownParameter(String),
+    // A NodeId that doesn't resolve - out of range, or a stale
+    // generation (its node has since been removed). Distinct from
+    // MissingInput, which is a wire that was never connected at all.
+    UnknownNode,
 }
 
 /*

@@ -10,7 +10,34 @@ use std::any::Any;
 
 use crate::compositor::{Input, Operation, OperationError};
 
-pub type NodeId = usize;
+/*
+A plain usize index would go stale silently once node removal exists -
+reusing (or even just outliving) an index that now names a different
+node. generation guards against that: add_node always mints
+generation 0 for a brand new slot; remove_node (unused by anything
+today - deletion isn't implemented, this only proves the mechanism
+works) bumps the slot's generation without reusing it, so any NodeId
+minted before the removal stops resolving. from_index() is for
+boundary callers (app.rs) that only ever hand back an index they
+previously received - JS never deletes a node, so it always effectively
+means generation 0, and resolve() below still rejects it correctly if
+the graph's own generation for that slot has since moved on.
+*/
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct NodeId {
+    index: u32,
+    generation: u32,
+}
+
+impl NodeId {
+    pub fn from_index(index: u32) -> Self {
+        NodeId { index, generation: 0 }
+    }
+
+    pub fn index(&self) -> u32 {
+        self.index
+    }
+}
 
 pub struct Node {
     pub operation: Box<dyn Operation>,
@@ -31,6 +58,9 @@ construction time and needing the whole graph rebuilt to change it.
 */
 pub struct Graph {
     pub nodes: Vec<Node>,
+    // Parallel to nodes - generations[i] is the current generation for
+    // slot i, bumped by remove_node, checked by resolve.
+    generations: Vec<u32>,
     /*
     Which node is "the" render output, if the graph has designated one
     - informational, not enforced: render_tick/preview_tick still take
@@ -61,7 +91,14 @@ enum ValidationState {
 
 impl Graph {
     pub fn new(width: u32, height: u32) -> Self {
-        Graph { nodes: vec![], output: None, width, height, validation: ValidationState::Dirty }
+        Graph {
+            nodes: vec![],
+            generations: vec![],
+            output: None,
+            width,
+            height,
+            validation: ValidationState::Dirty,
+        }
     }
 
     pub fn set_resolution(&mut self, width: u32, height: u32) {
@@ -82,23 +119,65 @@ impl Graph {
     }
 
     pub fn add_node(&mut self, node: Node) -> NodeId {
-        let id = self.nodes.len();
+        let index = self.nodes.len() as u32;
         self.nodes.push(node);
+        self.generations.push(0);
         self.validation = ValidationState::Dirty;
-        id
+        NodeId { index, generation: 0 }
+    }
+
+    /*
+    Not called from anywhere yet - app.rs/JS never removes a node today
+    (rebuildGraph() always just re-adds, leaving orphans, a known
+    accepted tradeoff). Exists so the generation mechanism is real and
+    tested rather than an unused type change: the slot stays in nodes
+    (a tombstone, not freed for reuse - an explicit free-list is its
+    own follow-up if slot reuse is ever wanted), but its generation
+    moves past whatever any already-minted NodeId for it remembers.
+    */
+    pub fn remove_node(&mut self, node_id: NodeId) -> bool {
+        let idx = node_id.index as usize;
+
+        if idx >= self.generations.len() || self.generations[idx] != node_id.generation {
+            return false;
+        }
+
+        self.generations[idx] += 1;
+        self.validation = ValidationState::Dirty;
+        true
+    }
+
+    pub fn resolve(&self, node_id: NodeId) -> Option<&Node> {
+        let idx = node_id.index as usize;
+
+        if self.generations.get(idx) == Some(&node_id.generation) {
+            self.nodes.get(idx)
+        } else {
+            None
+        }
+    }
+
+    fn resolve_mut(&mut self, node_id: NodeId) -> Option<&mut Node> {
+        let idx = node_id.index as usize;
+
+        if self.generations.get(idx) == Some(&node_id.generation) {
+            self.nodes.get_mut(idx)
+        } else {
+            None
+        }
     }
 
     /*
     Generalizes the as_any_mut/downcast_mut pattern already used for
     live-editing a node's own concrete Operation (THRESHOLD +/-, text
     content, ...) so a call site names the target type once instead of
-    repeating as_any_mut().downcast_mut::<T>() inline. None covers both
-    "no node at this id" and "wrong type" - callers that already know
-    node_id names a T only care that the edit happened, not which of
-    the two reasons a miss would be.
+    repeating as_any_mut().downcast_mut::<T>() inline. None covers "no
+    node at this id" (unknown or stale), "wrong type" - callers that
+    already know node_id names a T only care that the edit happened,
+    not which reason a miss would be.
     */
     pub fn operation_mut<T: Any>(&mut self, node_id: NodeId) -> Option<&mut T> {
-        self.nodes.get_mut(node_id)?.operation.as_any_mut().downcast_mut::<T>()
+        self.resolve_mut(node_id)?.operation.as_any_mut().downcast_mut::<T>()
     }
 
     /*
@@ -136,7 +215,7 @@ impl Graph {
         for start in 0..self.nodes.len() {
             if state[start] == VisitState::Unvisited {
                 let mut path = Vec::new();
-                self.visit(start, &mut state, &mut path)?;
+                self.visit(NodeId { index: start as u32, generation: self.generations[start] }, &mut state, &mut path)?;
             }
         }
 
@@ -149,15 +228,32 @@ impl Graph {
         state: &mut [VisitState],
         path: &mut Vec<NodeId>,
     ) -> Result<(), OperationError> {
-        state[id] = VisitState::Visiting;
+        let idx = id.index as usize;
+
+        state[idx] = VisitState::Visiting;
         path.push(id);
 
-        for &(_, input_id) in &self.nodes[id].inputs {
-            match state[input_id] {
+        let node = self.resolve(id).ok_or(OperationError::UnknownNode)?;
+
+        for &(_, input_id) in &node.inputs {
+            /*
+            state below is positional (indexed by slot, not
+            generation-checked), so a stale input_id pointing at an
+            already-visited slot would otherwise read as "fine, already
+            visited" without this - resolve() is the actual generation
+            check.
+            */
+            if self.resolve(input_id).is_none() {
+                return Err(OperationError::UnknownNode);
+            }
+
+            let input_idx = input_id.index as usize;
+
+            match state[input_idx] {
                 VisitState::Visiting => {
                     let start = path.iter().position(|&n| n == input_id).unwrap();
-                    let mut cycle = path[start..].to_vec();
-                    cycle.push(input_id);
+                    let mut cycle: Vec<usize> = path[start..].iter().map(|n| n.index as usize).collect();
+                    cycle.push(input_idx);
                     return Err(OperationError::Cycle(cycle));
                 }
                 VisitState::Unvisited => self.visit(input_id, state, path)?,
@@ -166,7 +262,7 @@ impl Graph {
         }
 
         path.pop();
-        state[id] = VisitState::Visited;
+        state[idx] = VisitState::Visited;
         Ok(())
     }
 }
@@ -264,8 +360,8 @@ mod tests {
     #[test]
     fn a_node_pointing_at_itself_is_a_cycle() {
         let mut graph = Graph::new(1, 1);
-        graph.add_node(node(vec![]));
-        graph.nodes[0].inputs.push((Input::Source, 0));
+        let a = graph.add_node(node(vec![]));
+        graph.nodes[0].inputs.push((Input::Source, a));
 
         let result = graph.validate();
 
@@ -282,7 +378,7 @@ mod tests {
         let a = graph.add_node(node(vec![]));
         let b = graph.add_node(node(vec![a]));
         let c = graph.add_node(node(vec![b]));
-        graph.nodes[a].inputs.push((Input::Source, c));
+        graph.nodes[a.index as usize].inputs.push((Input::Source, c));
 
         let result = graph.validate();
 
@@ -300,7 +396,7 @@ mod tests {
         // Bypasses add_node, so this does NOT mark the graph dirty -
         // it introduces a real cycle that the cached Valid result
         // won't know about.
-        graph.nodes[a].inputs.push((Input::Source, a));
+        graph.nodes[a.index as usize].inputs.push((Input::Source, a));
 
         assert!(
             graph.validate().is_ok(),
@@ -348,6 +444,45 @@ mod tests {
     fn operation_mut_returns_none_for_an_unknown_node_id() {
         let mut graph = Graph::new(1, 1);
 
-        assert!(graph.operation_mut::<NoOp>(0).is_none());
+        assert!(graph.operation_mut::<NoOp>(NodeId::from_index(0)).is_none());
+    }
+
+    #[test]
+    fn removed_node_is_a_stale_reference_even_though_its_slot_still_exists() {
+        let mut graph = Graph::new(1, 1);
+        let a = graph.add_node(node(vec![]));
+
+        assert!(graph.operation_mut::<NoOp>(a).is_some(), "should resolve before removal");
+
+        assert!(graph.remove_node(a), "should succeed removing a live node");
+
+        assert!(
+            graph.operation_mut::<NoOp>(a).is_none(),
+            "the pre-removal NodeId should no longer resolve"
+        );
+
+        // The slot is a tombstone, not reused - the pre-removal NodeId's
+        // index is still in range, only its generation is now stale.
+        assert!(a.index() < graph.nodes.len() as u32);
+    }
+
+    #[test]
+    fn remove_node_rejects_an_id_that_was_already_stale() {
+        let mut graph = Graph::new(1, 1);
+        let a = graph.add_node(node(vec![]));
+
+        assert!(graph.remove_node(a));
+        assert!(!graph.remove_node(a), "removing the same (now stale) id again should fail");
+    }
+
+    #[test]
+    fn a_node_referencing_a_removed_input_fails_validation_instead_of_panicking() {
+        let mut graph = Graph::new(1, 1);
+        let a = graph.add_node(node(vec![]));
+        graph.add_node(node(vec![a]));
+
+        graph.remove_node(a);
+
+        assert!(matches!(graph.validate(), Err(OperationError::UnknownNode)));
     }
 }
