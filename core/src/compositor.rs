@@ -33,6 +33,7 @@ pub enum Value {
     Boolean(bool),
     Text(String),
     Color(Color),
+    Center(Center)
 }
 
 pub struct Point2D {

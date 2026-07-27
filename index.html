@@ -1,132 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-
-    <meta charset="UTF-8">
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>
-        Dance Tracker 5000
-    </title>
-
-    <link rel="stylesheet" href="./styles.css">
-
-</head>
-
-<body>
-
-    <div id="app">
-
-        <header class="titlebar">
-
-            <div>
-                ⚡ DANCE TRACKER 5000
-            </div>
-
-            <div class="subtitle">
-                REALTIME DEMO SCENE VIDEO SYNTHESIZER
-            </div>
-
-        </header>
-
-        <nav class="main-menu">
-
-            <button data-menu="input">
-            INPUT
-        </button>
-
-            <button data-menu="video">
-            NODES
-        </button>
-
-            <button data-menu="key">
-            KEY
-        </button>
-
-            <button data-menu="generate">
-            GENERATE
-        </button>
-
-            <button data-menu="compose">
-            COMPOSE
-        </button>
-
-            <button data-menu="transform">
-            TRANSFORM
-        </button>
-
-            <button data-menu="output">
-            OUTPUT
-        </button>
-
-        </nav>
-
-        <nav id="sub-menu" class="sub-menu">
-        </nav>
-
-        <main class="workspace">
-
-            <section class="panel camera-panel">
-
-                <div class="panel-title" id="camera-panel-title">
-                    CAMERA INPUT
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dance Tracker 5000</title>
+        <link rel="stylesheet" href="./styles.css">
+    </head>
+    <body>
+        <div id="app">
+            <header class="titlebar">
+                <div>
+                    ⚡ DANCE TRACKER 5000
                 </div>
 
-                <div class="screen">
-
-                    <video id="camera" autoplay muted playsinline style="display:none">
-                </video>
-
-                    <canvas id="camera-preview">
-                </canvas>
-
+                <div class="subtitle">
+                    REALTIME DEMO SCENE VIDEO SYNTHESIZER
                 </div>
+            </header>
 
-            </section>
+            <nav class="main-menu">
+                <button data-menu="input"> INPUT </button>
+                <button data-menu="video"> NODES </button>
+                <button data-menu="key"> KEY </button>
+                <button data-menu="generate"> GENERATE </button>
+                <button data-menu="animate"> ANIMATE </button>
+                <button data-menu="compose"> COMPOSE </button>
+                <button data-menu="transform"> TRANSFORM </button>
+                <button data-menu="output"> OUTPUT </button>
+            </nav>
 
-            <section class="panel output-panel">
+            <nav id="sub-menu" class="sub-menu"></nav>
 
-                <div class="panel-title">
-                    LIVE OUTPUT
-                </div>
+            <main class="workspace">
+                <section class="panel camera-panel">
+                    <div class="panel-title" id="camera-panel-title">
+                        CAMERA INPUT
+                    </div>
+                    <div class="screen">
+                        <video id="camera" autoplay muted playsinline style="display:none"></video>
+                        <canvas id="camera-preview"></canvas>
+                    </div>
+                </section>
 
-                <div class="screen output-stack">
+                <section class="panel output-panel">
+                    <div class="panel-title">LIVE OUTPUT</div>
+                    <div class="screen output-stack">
+                        <canvas id="master-layer"></canvas>
+                    </div>
+                </section>
+            </main>
 
-                    <canvas id="master-layer"></canvas>
-                </div>
+            <footer class="statusbar">
+                <span> STATUS: READY </span>
 
-            </section>
+                <span> FPS: -- </span>
 
-        </main>
+                <span> VISIBILITY: ON </span>
 
-        <footer class="statusbar">
+                <span> TYPE: VIDEO </span>
 
-            <span>
-            STATUS: READY
-        </span>
-
-            <span>
-            FPS: --
-        </span>
-
-            <span>
-            VISIBILITY: ON
-        </span>
-
-            <span>
-            TYPE: VIDEO
-        </span>
-
-            <span>
-            REC: OFF
-        </span>
-            <span>
-            320x240 1.333
-        </span>
-        </footer>
-    </div>
-    <script type="module" src="app.js"></script>
-</body>
+                <span> REC: OFF</span>
+                <span>  320x240 1.333 </span>
+            </footer>
+        </div>
+        <script type="module" src="./scripts/app.js"></script>
+    </body>
 </html>

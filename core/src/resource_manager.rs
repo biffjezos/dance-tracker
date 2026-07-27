@@ -16,10 +16,8 @@ entries (there are only ever a few distinct HtmlVideoElements in a
 session - the camera feed, maybe one or two loaded files) beats
 needing Hash/Eq on a JsValue-wrapping type for no real benefit.
 */
-
 use std::cell::RefCell;
 use std::rc::Rc;
-
 #[derive(Clone)]
 pub struct ResourceManager {
     // Only read by scratch_canvas_for below, which is wasm32-only -
@@ -29,29 +27,27 @@ pub struct ResourceManager {
     #[allow(dead_code)]
     inner: Rc<RefCell<Inner>>,
 }
-
 struct Inner {
     #[cfg(target_arch = "wasm32")]
     scratch_canvases: Vec<(web_sys::HtmlVideoElement, web_sys::HtmlCanvasElement)>,
 }
-
 impl ResourceManager {
     pub fn new() -> Self {
         ResourceManager {
-            inner: Rc::new(RefCell::new(Inner {
-                #[cfg(target_arch = "wasm32")]
-                scratch_canvases: Vec::new(),
-            })),
+            inner: Rc::new(
+                RefCell::new(Inner {
+                    #[cfg(target_arch = "wasm32")]
+                    scratch_canvases: Vec::new(),
+                })
+            ),
         }
     }
 }
-
 impl Default for ResourceManager {
     fn default() -> Self {
         Self::new()
     }
 }
-
 #[cfg(target_arch = "wasm32")]
 impl ResourceManager {
     /*
@@ -60,24 +56,21 @@ impl ResourceManager {
     */
     pub fn scratch_canvas_for(
         &self,
-        video: &web_sys::HtmlVideoElement,
+        video: &web_sys::HtmlVideoElement
     ) -> Result<web_sys::HtmlCanvasElement, wasm_bindgen::JsValue> {
         let mut inner = self.inner.borrow_mut();
-
         if let Some((_, canvas)) = inner.scratch_canvases.iter().find(|(v, _)| v == video) {
             return Ok(canvas.clone());
         }
-
-        let document = web_sys::window()
+        let document = web_sys
+            ::window()
             .ok_or_else(|| wasm_bindgen::JsValue::from_str("no window"))?
             .document()
             .ok_or_else(|| wasm_bindgen::JsValue::from_str("no document"))?;
-
-        let canvas: web_sys::HtmlCanvasElement =
-            wasm_bindgen::JsCast::dyn_into(document.create_element("canvas")?)?;
-
+        let canvas: web_sys::HtmlCanvasElement = wasm_bindgen::JsCast::dyn_into(
+            document.create_element("canvas")?
+        )?;
         inner.scratch_canvases.push((video.clone(), canvas.clone()));
-
         Ok(canvas)
     }
 }

@@ -278,11 +278,7 @@ impl App {
         self.graph.add_node(node).index() as usize
     }
 
-    /*
-    ==================================================
-    COMPOSITE (BACKGROUND)
-    ==================================================
-    */
+    /* COMPOSITE (BACKGROUND) */
 
     pub fn add_compose(&mut self, foreground: usize, background: usize, mode: &str) -> usize {
         let node = Node {
@@ -296,11 +292,7 @@ impl App {
         self.graph.add_node(node).index() as usize
     }
 
-    /*
-    ==================================================
-    GENERATORS
-    ==================================================
-    */
+    /* GENERATORS */
 
     pub fn add_rings(
         &mut self,
@@ -356,15 +348,40 @@ impl App {
         }
     }
 
+    /* ANIMATIONS */
+    pub fn add_lissajous(
+        &mut self,
+        center: Center,
+        amplitude_x: f64,
+        amplitude_y: f64,
+        frequency_x: f64,
+        frequency_y: f64,
+        phase: f64,
+    ) -> Result<usize, JsValue> {
+
+        let lissajous = Lissajous::new(
+            center,
+            amplitude_x,
+            amplitude_y,
+            frequency_x,
+            frequency_y,
+            phase,
+        );
+
+        let node = Node {
+            operation: Box::new(lissajous),
+            inputs: vec![],
+        };
+
+        Ok(self.graph.add_node(node).index() as usize)
+    }
     /*
-    ==================================================
     CONTROLS (TRANSPORT)
 
     Plain HtmlVideoElement calls, not graph Operations - these never
     touch the graph, a Value, or a Context, so wrapping them in the
     Operation trait bought nothing but as_any/as_any_mut boilerplate
     for something JS could've called on the video element directly.
-    ==================================================
     */
 
     pub fn play(&self, video: HtmlVideoElement) -> Result<(), JsValue> {

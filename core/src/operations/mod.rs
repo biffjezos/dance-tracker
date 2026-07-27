@@ -86,6 +86,7 @@ pub fn expect_frame_arc(value: Option<&Value>) -> Result<Arc<Frame>, OperationEr
     }
 }
 
+pub mod animations;
 pub mod sources;
 pub mod composite;
 pub mod generators;
