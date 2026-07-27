@@ -82,7 +82,7 @@ impl App {
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32) -> App {
         App {
-            graph: Graph { nodes: vec![] },
+            graph: Graph::new(width, height),
             captured: HashMap::new(),
             difference_source: HashMap::new(),
             width,
@@ -93,16 +93,36 @@ impl App {
     }
 
     /*
+    Changing resolution never requires rebuilding the graph - it just
+    updates the one shared value every operation reads through Context
+    on its next execute() call. Also updates width/height (still used
+    directly by add_video_source's own letterboxing target) so a
+    resize takes effect for future add_video_source calls even before
+    every operation reads its size from Context instead of a
+    constructor argument.
+    */
+    pub fn set_resolution(&mut self, width: u32, height: u32) {
+        self.graph.set_resolution(width, height);
+        self.width = width;
+        self.height = height;
+    }
+
+    /*
     A fresh Context sharing the persistent ResourceManager (a clone is
     just another handle to the same cache, not a new one) plus a Meta
-    stamped with the current frame count and which pass this is for -
-    fps/time stay at Meta's defaults, nothing reads them yet.
+    stamped with the current frame count, which pass this is for, and
+    the graph's current render resolution - fps/time stay at Meta's
+    defaults, nothing reads them yet.
     */
     fn context(&self, preview: bool) -> Context {
+        let (width, height) = self.graph.resolution();
+
         Context {
             meta: Meta {
                 frame: self.frame_counter.get(),
                 preview,
+                width,
+                height,
                 ..Meta::default()
             },
             resources: self.resources.clone(),

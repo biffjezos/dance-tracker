@@ -19,6 +19,7 @@ export class App {
     preview_tick(node: number, canvas: HTMLCanvasElement): void;
     render_tick(output_node: number, canvas: HTMLCanvasElement): void;
     rewind(video: HTMLVideoElement, seconds: number): void;
+    set_resolution(width: number, height: number): void;
     set_text_content(node_id: number, content: string): void;
     stop(video: HTMLVideoElement): void;
 }
@@ -43,6 +44,7 @@ export interface InitOutput {
     readonly app_preview_tick: (a: number, b: number, c: any) => [number, number];
     readonly app_render_tick: (a: number, b: number, c: any) => [number, number];
     readonly app_rewind: (a: number, b: any, c: number) => [number, number];
+    readonly app_set_resolution: (a: number, b: number, c: number) => void;
     readonly app_set_text_content: (a: number, b: number, c: number, d: number) => void;
     readonly app_stop: (a: number, b: any) => [number, number];
     readonly __wbindgen_exn_store: (a: number) => void;

@@ -21,8 +21,16 @@ impl Node {
     }
 }
 
+/*
+Owns the render resolution so it's one piece of state shared by every
+node's execution (via Context - see App::context), instead of each
+source/generator operation baking in its own fixed width/height at
+construction time and needing the whole graph rebuilt to change it.
+*/
 pub struct Graph {
     pub nodes: Vec<Node>,
+    width: u32,
+    height: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -33,6 +41,19 @@ enum VisitState {
 }
 
 impl Graph {
+    pub fn new(width: u32, height: u32) -> Self {
+        Graph { nodes: vec![], width, height }
+    }
+
+    pub fn set_resolution(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+    }
+
+    pub fn resolution(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
     pub fn add_node(&mut self, node: Node) -> NodeId {
         let id = self.nodes.len();
         self.nodes.push(node);
@@ -117,13 +138,13 @@ mod tests {
 
     #[test]
     fn empty_graph_is_valid() {
-        let graph = Graph { nodes: vec![] };
+        let graph = Graph::new(1, 1);
         assert!(graph.validate().is_ok());
     }
 
     #[test]
     fn a_chain_with_no_cycle_is_valid() {
-        let mut graph = Graph { nodes: vec![] };
+        let mut graph = Graph::new(1, 1);
         let a = graph.add_node(node(vec![]));
         let b = graph.add_node(node(vec![a]));
         graph.add_node(node(vec![b]));
@@ -134,7 +155,7 @@ mod tests {
     #[test]
     fn a_diamond_shared_input_is_not_a_cycle() {
         // c and d both depend on shared input a - fan-in, not a cycle.
-        let mut graph = Graph { nodes: vec![] };
+        let mut graph = Graph::new(1, 1);
         let a = graph.add_node(node(vec![]));
         let c = graph.add_node(node(vec![a]));
         let d = graph.add_node(node(vec![a]));
@@ -145,7 +166,8 @@ mod tests {
 
     #[test]
     fn a_node_pointing_at_itself_is_a_cycle() {
-        let mut graph = Graph { nodes: vec![node(vec![])] };
+        let mut graph = Graph::new(1, 1);
+        graph.add_node(node(vec![]));
         graph.nodes[0].inputs.push((Input::Source, 0));
 
         let result = graph.validate();
@@ -159,7 +181,7 @@ mod tests {
         // reference already-existing ids - mirrors how a future
         // in-place rewire (rather than today's append-only add_node)
         // could actually produce this shape.
-        let mut graph = Graph { nodes: vec![] };
+        let mut graph = Graph::new(1, 1);
         let a = graph.add_node(node(vec![]));
         let b = graph.add_node(node(vec![a]));
         let c = graph.add_node(node(vec![b]));

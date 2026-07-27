@@ -17,6 +17,7 @@ export const app_play: (a: number, b: any) => [number, number];
 export const app_preview_tick: (a: number, b: number, c: any) => [number, number];
 export const app_render_tick: (a: number, b: number, c: any) => [number, number];
 export const app_rewind: (a: number, b: any, c: number) => [number, number];
+export const app_set_resolution: (a: number, b: number, c: number) => void;
 export const app_set_text_content: (a: number, b: number, c: number, d: number) => void;
 export const app_stop: (a: number, b: any) => [number, number];
 export const __wbindgen_exn_store: (a: number) => void;

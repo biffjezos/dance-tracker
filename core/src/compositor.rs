@@ -68,9 +68,13 @@ impl Default for RenderQuality {
 /*
 Per-tick, read-only facts about the evaluation that's currently
 running - which frame/time this is, whether it's the preview or main
-render pass, how much fidelity to spend. Distinct from ResourceManager
-below: Meta is cheap and rebuilt fresh every tick, ResourceManager is
-the persistent, shared part of Context.
+render pass, how much fidelity to spend, and the graph's current
+render resolution (width/height mirror Graph::resolution() - see
+App::context - so a source/generator operation reads its output size
+from here every execute() call instead of baking one in at
+construction time and needing the whole graph rebuilt to change it).
+Distinct from ResourceManager below: Meta is cheap and rebuilt fresh
+every tick, ResourceManager is the persistent, shared part of Context.
 */
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Meta {
@@ -79,6 +83,8 @@ pub struct Meta {
     pub time: f64,
     pub preview: bool,
     pub render_quality: RenderQuality,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Clone, Default)]

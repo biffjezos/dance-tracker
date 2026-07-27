@@ -191,6 +191,13 @@ export class App {
         }
     }
     /**
+     * @param {number} width
+     * @param {number} height
+     */
+    set_resolution(width, height) {
+        wasm.app_set_resolution(this.__wbg_ptr, width, height);
+    }
+    /**
      * @param {number} node_id
      * @param {string} content
      */

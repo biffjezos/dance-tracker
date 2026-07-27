@@ -23,7 +23,7 @@ impl PixelSource for FixedPixelSource {
 }
 
 fn main() {
-    let mut graph = Graph { nodes: vec![] };
+    let mut graph = Graph::new(1, 1);
 
     let keyed_source = VideoSource {
         pixels: Box::new(FixedPixelSource(Frame {
