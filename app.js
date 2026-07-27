@@ -289,6 +289,7 @@ function reportSelection(scope){
     window.dispatchEvent(new CustomEvent("layerSelectionChanged", {
         detail:{
             scope,
+            id:entry.id,
             label:entry.label,
             kind:entry.kind,
             visibilityMode:entry.id !== null && entry.id === outputEntryId ? "on" : "off",
@@ -496,13 +497,38 @@ function rebuildGraph(){
     /*
     Pass 3: COMPOSE - the only place two nodes ever end up drawn
     together (see CLAUDE.md). Each COMPOSITE's own result is stored
-    into wiredIds too, so it can itself be MASKED BY'd, or used as
-    another COMPOSITE's foreground/background.
+    into wiredIds too, so it can be used as another COMPOSITE's
+    foreground/background.
     */
     all.forEach(entry=>{
         if(entry.kind !== "composite") return;
         const id = buildCompositeContent(entry.layer, contentIds, wiredIds);
         if(id !== null && id !== undefined) wiredIds.set(entry.id, id);
+    });
+
+    /*
+    Pass 4: MASKED BY on a COMPOSITE's own result. Composites never go
+    through pass 2 (they have no entry in contentIds - they don't
+    exist until pass 3 builds them), so masking the composite's own
+    output - as opposed to masking one of its ingredients before it
+    goes in - needs its own pass, after pass 3 has something to mask.
+    */
+    all.forEach(entry=>{
+        if(entry.kind !== "composite") return;
+
+        let id = wiredIds.get(entry.id);
+        if(id === undefined) return;
+
+        const s = entry.layer.settings;
+
+        if(s.maskedBy.source !== "none"){
+            const maskId = wiredIds.get(s.maskedBy.source) !== undefined
+                ? wiredIds.get(s.maskedBy.source)
+                : contentIds.get(s.maskedBy.source);
+            if(maskId !== undefined) id = wasmApp.add_apply_mask(id, maskId, s.maskedBy.channel);
+        }
+
+        wiredIds.set(entry.id, id);
     });
 
     cachedContentIds = contentIds;
@@ -946,6 +972,18 @@ window.addEventListener("compositeIndexStep", e=>{
 });
 
 
+// NODES' EDIT button for a composite entry points COMPOSE's own,
+// independent stepper (selectedCompositeId) at that exact composite
+// before jumping there - otherwise COMPOSE could open on whichever
+// composite it last happened to be showing instead of the one the
+// user just selected.
+window.addEventListener("focusComposite", e=>{
+    if(!getCompositeRegistry().some(entry=>entry.id === e.detail.id)) return;
+    selectedCompositeId = e.detail.id;
+    reportSelection("composite");
+});
+
+
 window.addEventListener("compositeForegroundStep", e=>{
     const entry = selectedCompositeEntry();
     if(entry.kind !== "composite") return;
@@ -1126,7 +1164,11 @@ window.addEventListener("requestApplyToMaskRefresh", e=>{
     const eligible = eligibleMaskTargets(entry.id);
     const match = eligible.find(target=>target.id === entry.layer.settings.applyToMask);
 
-    e.detail.label = match ? match.label : "NONE AVAILABLE";
+    // "NONE AVAILABLE" means there's genuinely nothing eligible to pick
+    // - distinct from "NONE", which means eligible targets exist but
+    // nothing's been chosen yet. Conflating the two showed "NONE
+    // AVAILABLE" even with a full list of real options underneath it.
+    e.detail.label = match ? match.label : (eligible.length ? "NONE" : "NONE AVAILABLE");
     e.detail.options = eligible.map(target=>({id:target.id, label:target.label}));
 });
 
