@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::compositor::{find_input, Context, Input, Operation, OperationError, Value};
+use crate::compositor::{
+    find_input, Context, Input, Operation, OperationCategory, OperationError, OperationMetadata,
+    OutputKind, Value,
+};
 use crate::operations::{expect_frame, Frame};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +40,15 @@ pub struct ApplyMask {
 impl Operation for ApplyMask {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn metadata(&self) -> OperationMetadata {
+        OperationMetadata {
+            display_name: "Apply Mask",
+            category: OperationCategory::Composite,
+            input_count: 2,
+            outputs: vec![OutputKind::Frame],
+        }
+    }
 
     fn execute(
         &self,

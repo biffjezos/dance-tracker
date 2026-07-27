@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::compositor::{
-    find_input, Context, Input, Operation, OperationError, ParameterDescriptor, ParameterKind,
-    Value,
+    find_input, Context, Input, Operation, OperationCategory, OperationError, OperationMetadata,
+    OutputKind, ParameterDescriptor, ParameterKind, Value,
 };
 use crate::operations::masks::{key_pixel, Fill};
 use crate::operations::{expect_frame, Frame};
@@ -26,6 +26,15 @@ pub struct Difference {
 impl Operation for Difference {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn metadata(&self) -> OperationMetadata {
+        OperationMetadata {
+            display_name: "Difference Key",
+            category: OperationCategory::Mask,
+            input_count: 2,
+            outputs: vec![OutputKind::Frame],
+        }
+    }
 
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![ParameterDescriptor { name: "threshold", kind: ParameterKind::Number }]

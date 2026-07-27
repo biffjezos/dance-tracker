@@ -157,7 +157,7 @@ impl Graph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compositor::{Context, Value};
+    use crate::compositor::{Context, OperationCategory, OperationMetadata, Value};
 
     // calls exists purely so operation_mut's tests have something
     // observable to mutate through the returned reference - cycle
@@ -169,6 +169,15 @@ mod tests {
     impl Operation for NoOp {
         fn as_any(&self) -> &dyn std::any::Any { self }
         fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+        fn metadata(&self) -> OperationMetadata {
+            OperationMetadata {
+                display_name: "NoOp",
+                category: OperationCategory::Reference,
+                input_count: 0,
+                outputs: vec![],
+            }
+        }
 
         fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
             Ok(vec![])
@@ -182,6 +191,15 @@ mod tests {
     impl Operation for OtherOp {
         fn as_any(&self) -> &dyn std::any::Any { self }
         fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+        fn metadata(&self) -> OperationMetadata {
+            OperationMetadata {
+                display_name: "OtherOp",
+                category: OperationCategory::Reference,
+                input_count: 0,
+                outputs: vec![],
+            }
+        }
 
         fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
             Ok(vec![])

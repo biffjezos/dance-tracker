@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::compositor::{find_input, Context, Input, Operation, OperationError, Value};
+use crate::compositor::{
+    find_input, Context, Input, Operation, OperationCategory, OperationError, OperationMetadata,
+    OutputKind, Value,
+};
 use crate::operations::composite::blend_mode::BlendMode;
 use crate::operations::{expect_frame, Frame};
 
@@ -20,6 +23,15 @@ pub struct Compose {
 impl Operation for Compose {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn metadata(&self) -> OperationMetadata {
+        OperationMetadata {
+            display_name: "Compose",
+            category: OperationCategory::Composite,
+            input_count: 2,
+            outputs: vec![OutputKind::Frame],
+        }
+    }
 
     fn execute(
         &self,

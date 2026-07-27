@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::compositor::{
-    find_input, Context, Input, Operation, OperationError, ParameterDescriptor, ParameterKind,
-    Value,
+    find_input, Context, Input, Operation, OperationCategory, OperationError, OperationMetadata,
+    OutputKind, ParameterDescriptor, ParameterKind, Value,
 };
 use crate::operations::masks::{key_pixel, Fill};
 use crate::operations::{expect_frame, Frame};
@@ -22,6 +22,15 @@ pub struct Chroma {
 impl Operation for Chroma {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn metadata(&self) -> OperationMetadata {
+        OperationMetadata {
+            display_name: "Chroma Key",
+            category: OperationCategory::Mask,
+            input_count: 1,
+            outputs: vec![OutputKind::Frame],
+        }
+    }
 
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![ParameterDescriptor { name: "threshold", kind: ParameterKind::Number }]
@@ -133,6 +142,22 @@ mod tests {
         let out = run(&op, frame(vec![200, 100, 80, 255]));
 
         assert_eq!(out.pixels, vec![200, 100, 80, 255]);
+    }
+
+    #[test]
+    fn metadata_describes_the_operation() {
+        let op = Chroma {
+            key_colour: (0, 255, 0),
+            threshold: 60,
+            fill: Fill::Solid(255, 0, 255),
+        };
+
+        let meta = op.metadata();
+
+        assert_eq!(meta.display_name, "Chroma Key");
+        assert_eq!(meta.category, OperationCategory::Mask);
+        assert_eq!(meta.input_count, 1);
+        assert_eq!(meta.outputs, vec![OutputKind::Frame]);
     }
 
     #[test]

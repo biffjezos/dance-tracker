@@ -3,8 +3,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use crate::compositor::{
-    find_input, Context, Input, Operation, OperationError, ParameterDescriptor, ParameterKind,
-    Value,
+    find_input, Context, Input, Operation, OperationCategory, OperationError, OperationMetadata,
+    OutputKind, ParameterDescriptor, ParameterKind, Value,
 };
 use crate::operations::composite::BlendMode;
 use crate::operations::{expect_frame_arc, Frame};
@@ -44,6 +44,15 @@ impl Ghost {
 impl Operation for Ghost {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn metadata(&self) -> OperationMetadata {
+        OperationMetadata {
+            display_name: "Ghost",
+            category: OperationCategory::Generator,
+            input_count: 1,
+            outputs: vec![OutputKind::Frame],
+        }
+    }
 
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![

@@ -15,7 +15,8 @@ use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
 use crate::compositor::{
-    Context, Input, Operation, OperationError, ParameterDescriptor, ParameterKind, Value,
+    Context, Input, Operation, OperationCategory, OperationError, OperationMetadata, OutputKind,
+    ParameterDescriptor, ParameterKind, Value,
 };
 use crate::operations::Frame;
 
@@ -114,6 +115,15 @@ impl Rings {
 impl Operation for Rings {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn metadata(&self) -> OperationMetadata {
+        OperationMetadata {
+            display_name: "Rings",
+            category: OperationCategory::Generator,
+            input_count: 0,
+            outputs: vec![OutputKind::Frame],
+        }
+    }
 
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![
