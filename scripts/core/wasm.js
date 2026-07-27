@@ -13,16 +13,14 @@ instance used by graph/render/output modules.
 import init, { App } from "../../core/pkg/dance_tracker_core.js";
 import { WIDTH, HEIGHT } from "../engine/constants.js";
 
-
 let wasmApp = null;
 
-
-export async function initWasm(){
-    if(wasmApp) return wasmApp;
+export async function initWasm() {
+    if (wasmApp) return wasmApp;
 
     await init();
 
-    wasmApp = new WasmApp(
+    wasmApp = new App(
         WIDTH,
         HEIGHT
     );
@@ -30,7 +28,6 @@ export async function initWasm(){
     return wasmApp;
 }
 
-
-export function getWasmApp(){
+export function getWasmApp() {
     return wasmApp;
 }
