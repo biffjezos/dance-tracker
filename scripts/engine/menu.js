@@ -308,7 +308,7 @@ export class MenuManager {
                     event: "addOperation",
                     operation: "Lissajous"
                 }
-            }
+            },
             /*
             The only place two nodes get drawn together - see
             CLAUDE.md. Not a "layerEditor" like NODES/KEY: a COMPOSITE
