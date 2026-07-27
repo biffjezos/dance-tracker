@@ -93,7 +93,7 @@ pub struct Context {
     pub resources: ResourceManager,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OperationError {
     MissingInput,
     WrongValueType,

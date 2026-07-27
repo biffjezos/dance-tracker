@@ -11,7 +11,7 @@ written from the boundary inward instead of the graph outward.
 */
 #![cfg(target_arch = "wasm32")]
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -72,7 +72,7 @@ pub struct App {
     capture_background read the current value rather than each
     keeping their own notion of "which frame is this".
     */
-    frame_counter: Cell<u64>,
+    frame_counter: u64,
 }
 
 #[wasm_bindgen]
@@ -84,7 +84,7 @@ impl App {
             captured: HashMap::new(),
             difference_source: HashMap::new(),
             resources: ResourceManager::new(),
-            frame_counter: Cell::new(0),
+            frame_counter: 0,
         }
     }
 
@@ -109,7 +109,7 @@ impl App {
 
         Context {
             meta: Meta {
-                frame: self.frame_counter.get(),
+                frame: self.frame_counter,
                 preview,
                 width,
                 height,
@@ -390,10 +390,10 @@ impl App {
     ==================================================
     */
 
-    pub fn render_tick(&self, output_node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
+    pub fn render_tick(&mut self, output_node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
 
-        self.frame_counter.set(self.frame_counter.get() + 1);
+        self.frame_counter += 1;
         let ctx = self.context(false);
         let executor = RenderExecutor;
 
@@ -406,7 +406,7 @@ impl App {
         write_frame_to_canvas(&canvas, frame)
     }
 
-    pub fn preview_tick(&self, node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
+    pub fn preview_tick(&mut self, node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
 
         let ctx = self.context(true);

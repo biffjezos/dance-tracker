@@ -31,6 +31,7 @@ pub struct Graph {
     pub nodes: Vec<Node>,
     width: u32,
     height: u32,
+    validation: ValidationState,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -40,9 +41,16 @@ enum VisitState {
     Visited,
 }
 
+#[derive(Clone)]
+enum ValidationState {
+    Dirty,
+    Valid,
+    Invalid(OperationError),
+}
+
 impl Graph {
     pub fn new(width: u32, height: u32) -> Self {
-        Graph { nodes: vec![], width, height }
+        Graph { nodes: vec![], width, height, validation: ValidationState::Dirty }
     }
 
     pub fn set_resolution(&mut self, width: u32, height: u32) {
@@ -57,6 +65,7 @@ impl Graph {
     pub fn add_node(&mut self, node: Node) -> NodeId {
         let id = self.nodes.len();
         self.nodes.push(node);
+        self.validation = ValidationState::Dirty;
         id
     }
 
@@ -67,9 +76,29 @@ impl Graph {
     not a catchable Err) rather than failing one tick gracefully. Call
     this before handing the graph to an executor whenever its shape
     might have changed (app.rs does this in capture_background,
-    render_tick and preview_tick).
+    render_tick and preview_tick) - cheap to call every time since the
+    actual DFS below only re-runs when add_node marked the graph dirty
+    since the last validate() call; a validated-then-untouched graph
+    just returns the cached result.
     */
-    pub fn validate(&self) -> Result<(), OperationError> {
+    pub fn validate(&mut self) -> Result<(), OperationError> {
+        if matches!(self.validation, ValidationState::Dirty) {
+            let result = self.run_validation();
+            self.validation = match &result {
+                Ok(()) => ValidationState::Valid,
+                Err(e) => ValidationState::Invalid(e.clone()),
+            };
+            return result;
+        }
+
+        match &self.validation {
+            ValidationState::Valid => Ok(()),
+            ValidationState::Invalid(e) => Err(e.clone()),
+            ValidationState::Dirty => unreachable!("just resolved above"),
+        }
+    }
+
+    fn run_validation(&self) -> Result<(), OperationError> {
         let mut state = vec![VisitState::Unvisited; self.nodes.len()];
 
         for start in 0..self.nodes.len() {
@@ -138,7 +167,7 @@ mod tests {
 
     #[test]
     fn empty_graph_is_valid() {
-        let graph = Graph::new(1, 1);
+        let mut graph = Graph::new(1, 1);
         assert!(graph.validate().is_ok());
     }
 
@@ -190,5 +219,31 @@ mod tests {
         let result = graph.validate();
 
         assert!(matches!(result, Err(OperationError::Cycle(_))));
+    }
+
+    #[test]
+    fn validate_result_is_cached_until_add_node_dirties_it_again() {
+        let mut graph = Graph::new(1, 1);
+        let a = graph.add_node(node(vec![]));
+        graph.add_node(node(vec![a]));
+
+        assert!(graph.validate().is_ok());
+
+        // Bypasses add_node, so this does NOT mark the graph dirty -
+        // it introduces a real cycle that the cached Valid result
+        // won't know about.
+        graph.nodes[a].inputs.push((Input::Source, a));
+
+        assert!(
+            graph.validate().is_ok(),
+            "cached result should be reused instead of re-running the DFS"
+        );
+
+        // add_node dirties the graph again, so this validate() call
+        // actually re-runs the DFS and catches the cycle that's been
+        // sitting there since the out-of-band mutation above.
+        graph.add_node(node(vec![]));
+
+        assert!(matches!(graph.validate(), Err(OperationError::Cycle(_))));
     }
 }
