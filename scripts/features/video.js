@@ -17,7 +17,7 @@ import {
 } from "../engine/status.js";
 import {
     defaultUniversalSettings
-} from "../engine/registry.js";
+} from "../state/registry.js";
 const camera = getCamera();
 const originalVideoLayer = {
     id: "original",
