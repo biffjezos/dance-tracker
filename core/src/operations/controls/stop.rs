@@ -2,7 +2,7 @@
 
 use web_sys::HtmlVideoElement;
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{Context, Input, Operation, OperationError, Value};
 
 pub struct Stop {
     pub video: HtmlVideoElement,
@@ -15,7 +15,7 @@ impl Operation for Stop {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Value],
+        _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
         self.video.pause().map_err(|_| OperationError::WrongValueType)?;
 

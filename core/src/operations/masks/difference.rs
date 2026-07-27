@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{find_input, Context, Input, Operation, OperationError, Value};
 use crate::operations::masks::{key_pixel, Fill};
 use crate::operations::{expect_frame, Frame};
 
 /*
-inputs[0] is the video being keyed, inputs[1] is the reference/
+Input::Source is the video being keyed, Input::Reference is the
 "empty room" frame - per-pixel, not a single colour like Chroma. This
 operation itself is stateless; "CAPTURE BACKGROUND" in the UI is pure
 node-graph rewiring (see sources::captured::CapturedFrame), not
 something this operation does internally - wire a CapturedFrame node
-into inputs[1] and repoint/recapture it whenever the user clicks
-CAPTURE BACKGROUND. A live second feed works here too, for true
+into Input::Reference and repoint/recapture it whenever the user
+clicks CAPTURE BACKGROUND. A live second feed works here too, for true
 real-time background subtraction, which the old fixed-snapshot-only
 version couldn't do.
 */
@@ -27,10 +27,10 @@ impl Operation for Difference {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Value],
+        inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
-        let video = expect_frame(inputs.first())?;
-        let reference = expect_frame(inputs.get(1))?;
+        let video = expect_frame(find_input(inputs, Input::Source))?;
+        let reference = expect_frame(find_input(inputs, Input::Reference))?;
 
         if !video.same_dimensions(reference) {
             return Err(OperationError::DimensionMismatch);
@@ -73,7 +73,10 @@ mod tests {
 
     fn run(op: &Difference, video: Frame, reference: Frame) -> Frame {
         let ctx = Context::default();
-        let inputs = vec![Value::Frame(Arc::new(video)), Value::Frame(Arc::new(reference))];
+        let inputs = vec![
+            (Input::Source, Value::Frame(Arc::new(video))),
+            (Input::Reference, Value::Frame(Arc::new(reference))),
+        ];
 
         let mut outputs = op.execute(&ctx, &inputs).expect("should succeed");
 
@@ -112,7 +115,10 @@ mod tests {
             height: 1,
             timestamp: 0.0,
         };
-        let inputs = vec![Value::Frame(Arc::new(video)), Value::Frame(Arc::new(reference))];
+        let inputs = vec![
+            (Input::Source, Value::Frame(Arc::new(video))),
+            (Input::Reference, Value::Frame(Arc::new(reference))),
+        ];
 
         let result = op.execute(&ctx, &inputs);
 

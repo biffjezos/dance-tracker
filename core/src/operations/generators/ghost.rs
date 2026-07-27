@@ -2,14 +2,14 @@ use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{find_input, Context, Input, Operation, OperationError, Value};
 use crate::operations::composite::BlendMode;
 use crate::operations::{expect_frame_arc, Frame};
 
 /*
-inputs[0] is whatever's trailing (usually a rings/shape node's output,
-but any frame works). Captures a copy every delay_ticks calls, keeps
-up to count of them, and screen-blends them together with fading
+Input::Source is whatever's trailing (usually a rings/shape node's
+output, but any frame works). Captures a copy every delay_ticks calls,
+keeps up to count of them, and screen-blends them together with fading
 weight, newest strongest - same idea as the old JS Ghost.history, but
 counting executor ticks rather than wall-clock milliseconds (Context
 doesn't carry a clock; this keeps Ghost pure Rust and natively
@@ -45,9 +45,9 @@ impl Operation for Ghost {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Value],
+        inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
-        let source = expect_frame_arc(inputs.first())?;
+        let source = expect_frame_arc(find_input(inputs, Input::Source))?;
 
         let ticks = self.ticks_since_capture.get() + 1;
 
@@ -110,7 +110,7 @@ mod tests {
 
     fn tick(op: &Ghost, source: &Frame) -> Frame {
         let ctx = Context::default();
-        let inputs = vec![Value::Frame(Arc::new(source.clone()))];
+        let inputs = vec![(Input::Source, Value::Frame(Arc::new(source.clone())))];
 
         let mut outputs = op.execute(&ctx, &inputs).expect("should succeed");
 

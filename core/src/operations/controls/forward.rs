@@ -2,7 +2,7 @@
 
 use web_sys::HtmlVideoElement;
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{Context, Input, Operation, OperationError, Value};
 
 /*
 Covers MINUTE +/SECOND +/FRAME + alike - just different seconds
@@ -20,7 +20,7 @@ impl Operation for Forward {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Value],
+        _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
         let target = self.video.current_time() + self.seconds;
 

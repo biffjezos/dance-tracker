@@ -9,7 +9,7 @@ only, drawn via web-sys onto a private detached scratch canvas.
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{Context, Input, Operation, OperationError, Value};
 use crate::operations::Frame;
 
 pub struct Text {
@@ -83,7 +83,7 @@ impl Operation for Text {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Value],
+        _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
         let width = self.canvas.width();
         let height = self.canvas.height();

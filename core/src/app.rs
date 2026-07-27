@@ -19,7 +19,7 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
 
-use crate::compositor::{Context, Meta, Operation, OperationError};
+use crate::compositor::{Context, Input, Meta, Operation, OperationError};
 use crate::dom::{write_frame_to_canvas, VideoElementPixelSource};
 use crate::graph::{Graph, Node, NodeId};
 use crate::operations::composite::apply_mask::Channel as MaskChannel;
@@ -168,7 +168,7 @@ impl App {
                 threshold,
                 fill: parse_fill(fill_video, fill_r, fill_g, fill_b),
             }),
-            inputs: vec![source],
+            inputs: vec![(Input::Source, source)],
         };
 
         self.graph.add_node(node)
@@ -176,8 +176,8 @@ impl App {
 
     /*
     Also creates the CapturedFrame reference node under the hood and
-    wires it as input[1] - see capture_background for how the user's
-    CAPTURE BACKGROUND click feeds it a frame.
+    wires it as Input::Reference - see capture_background for how the
+    user's CAPTURE BACKGROUND click feeds it a frame.
     */
     pub fn add_difference(
         &mut self,
@@ -205,7 +205,7 @@ impl App {
                 threshold,
                 fill: parse_fill(fill_video, fill_r, fill_g, fill_b),
             }),
-            inputs: vec![source, captured_id],
+            inputs: vec![(Input::Source, source), (Input::Reference, captured_id)],
         };
 
         let difference_id = self.graph.add_node(node);
@@ -223,7 +223,9 @@ impl App {
     pub fn capture_background(&mut self, difference_node: usize) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
 
-        let source_id = self.graph.nodes[difference_node].inputs[0];
+        let source_id = self.graph.nodes[difference_node]
+            .input(Input::Source)
+            .ok_or_else(|| JsValue::from_str("difference node has no source input"))?;
 
         let ctx = self.context(false);
         let executor = SimpleExecutor;
@@ -252,7 +254,7 @@ impl App {
     pub fn add_apply_mask(&mut self, content: usize, mask: usize, channel: &str) -> usize {
         let node = Node {
             operation: Box::new(ApplyMask { channel: parse_channel(channel) }),
-            inputs: vec![content, mask],
+            inputs: vec![(Input::Content, content), (Input::Mask, mask)],
         };
 
         self.graph.add_node(node)
@@ -267,7 +269,7 @@ impl App {
     pub fn add_compose(&mut self, foreground: usize, background: usize, mode: &str) -> usize {
         let node = Node {
             operation: Box::new(Compose { mode: parse_blend_mode(mode) }),
-            inputs: vec![foreground, background],
+            inputs: vec![(Input::Foreground, foreground), (Input::Background, background)],
         };
 
         self.graph.add_node(node)
@@ -314,7 +316,7 @@ impl App {
     pub fn add_ghost(&mut self, source: usize, count: usize, alpha: f32, delay_ticks: u32) -> usize {
         let node = Node {
             operation: Box::new(Ghost::new(count, alpha, delay_ticks)),
-            inputs: vec![source],
+            inputs: vec![(Input::Source, source)],
         };
 
         self.graph.add_node(node)

@@ -24,6 +24,29 @@ pub enum Value {
 }
 
 /*
+Named input slots, shared across every Operation instead of each one
+inventing its own meaning for position 0 vs 1 (Compose's inputs[0]
+being "foreground" was only ever a convention the caller and the
+operation had to agree on separately). A Node's Vec<(Input, NodeId)>
+labels each upstream wire with one of these, and the executors carry
+the label through to the resolved Vec<(Input, Value)> an Operation
+actually reads via find_input below.
+*/
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Input {
+    Source,
+    Reference,
+    Content,
+    Mask,
+    Foreground,
+    Background,
+}
+
+pub fn find_input(inputs: &[(Input, Value)], key: Input) -> Option<&Value> {
+    inputs.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
+}
+
+/*
 Draft trades fidelity for speed (e.g. an operation could skip
 antialiasing or subsample); Full is always correct. Nothing branches
 on this yet - it exists so Meta's shape is already right for the first
@@ -95,7 +118,7 @@ pub trait Operation: Any {
     fn execute(
         &self,
         ctx: &Context,
-        inputs: &[Value],
+        inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError>;
 
     fn as_any(&self) -> &dyn Any;

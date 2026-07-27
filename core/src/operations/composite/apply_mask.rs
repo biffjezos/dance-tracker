@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{find_input, Context, Input, Operation, OperationError, Value};
 use crate::operations::{expect_frame, Frame};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,12 +23,12 @@ impl Channel {
 }
 
 /*
-inputs[0] is the content being masked, inputs[1] is the mask source -
-content's own RGB is untouched, only its alpha is scaled by the mask
-source's selected channel value (0 -> fully transparent there, 255 ->
-unchanged). This IS "MASKED BY": wiring another node in as inputs[1]
-here is the whole feature, not a settings field on the masked node.
-Ports the old renderer.js applyMask/maskChannelValue math.
+Input::Content is the content being masked, Input::Mask is the mask
+source - content's own RGB is untouched, only its alpha is scaled by
+the mask source's selected channel value (0 -> fully transparent
+there, 255 -> unchanged). This IS "MASKED BY": wiring another node in
+as Input::Mask here is the whole feature, not a settings field on the
+masked node. Ports the old renderer.js applyMask/maskChannelValue math.
 */
 pub struct ApplyMask {
     pub channel: Channel,
@@ -41,10 +41,10 @@ impl Operation for ApplyMask {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Value],
+        inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
-        let content = expect_frame(inputs.first())?;
-        let mask = expect_frame(inputs.get(1))?;
+        let content = expect_frame(find_input(inputs, Input::Content))?;
+        let mask = expect_frame(find_input(inputs, Input::Mask))?;
 
         if !content.same_dimensions(mask) {
             return Err(OperationError::DimensionMismatch);
@@ -81,7 +81,10 @@ mod tests {
     fn run(channel: Channel, content: Frame, mask: Frame) -> Result<Frame, OperationError> {
         let op = ApplyMask { channel };
         let ctx = Context::default();
-        let inputs = vec![Value::Frame(Arc::new(content)), Value::Frame(Arc::new(mask))];
+        let inputs = vec![
+            (Input::Content, Value::Frame(Arc::new(content))),
+            (Input::Mask, Value::Frame(Arc::new(mask))),
+        ];
 
         let mut outputs = op.execute(&ctx, &inputs)?;
 

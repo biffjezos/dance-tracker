@@ -6,7 +6,7 @@ PixelSource stand-in for the real DOM-backed one (dom.rs, wasm32 only)
 pixel, not just that it runs without crashing.
 */
 
-use dance_tracker_core::compositor::{Context, OperationError};
+use dance_tracker_core::compositor::{Context, Input, OperationError};
 use dance_tracker_core::graph::{Graph, Node};
 use dance_tracker_core::operations::composite::{BlendMode, Compose};
 use dance_tracker_core::operations::executor::{Execute, SimpleExecutor};
@@ -58,7 +58,10 @@ fn main() {
     };
     let compose_node = Node {
         operation: Box::new(compose),
-        inputs: vec![keyed_video_source_id, backdrop_source_node_id],
+        inputs: vec![
+            (Input::Foreground, keyed_video_source_id),
+            (Input::Background, backdrop_source_node_id),
+        ],
     };
     let compose_id = graph.add_node(compose_node);
 

@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{Context, Input, Operation, OperationError, Value};
 use crate::operations::Frame;
 
 /*
@@ -47,7 +47,7 @@ impl Operation for CapturedFrame {
     fn execute(
         &self,
         _ctx: &Context,
-        _inputs: &[Value],
+        _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
         let frame = self
             .frame

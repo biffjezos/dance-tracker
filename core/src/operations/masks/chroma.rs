@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{find_input, Context, Input, Operation, OperationError, Value};
 use crate::operations::masks::{key_pixel, Fill};
 use crate::operations::{expect_frame, Frame};
 
 /*
-inputs[0] is the video being keyed. Every pixel close enough to
+Input::Source is the video being keyed. Every pixel close enough to
 key_colour (within threshold) becomes fully transparent; everything
 else stays, either as a flat fill colour or the video's own colour.
 Stateless - unlike Difference, there's nothing to capture.
@@ -23,9 +23,9 @@ impl Operation for Chroma {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Value],
+        inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
-        let video = expect_frame(inputs.first())?;
+        let video = expect_frame(find_input(inputs, Input::Source))?;
 
         let mut pixels = Vec::with_capacity(video.pixels.len());
 
@@ -64,7 +64,7 @@ mod tests {
 
     fn run(op: &Chroma, video: Frame) -> Frame {
         let ctx = Context::default();
-        let inputs = vec![Value::Frame(Arc::new(video))];
+        let inputs = vec![(Input::Source, Value::Frame(Arc::new(video)))];
 
         let mut outputs = op.execute(&ctx, &inputs).expect("should succeed");
 

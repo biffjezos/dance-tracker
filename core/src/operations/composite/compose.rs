@@ -1,13 +1,11 @@
 use std::sync::Arc;
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{find_input, Context, Input, Operation, OperationError, Value};
 use crate::operations::composite::blend_mode::BlendMode;
 use crate::operations::{expect_frame, Frame};
 
 /*
-inputs[0] is the foreground (drawn on top), inputs[1] is the
-background - matching the stub demo's own wiring order
-(vec![keyed_video_source_id, backdrop_source_node_id]). Straight
+Input::Foreground is drawn on top of Input::Background. Straight
 (non-premultiplied) alpha in, straight alpha out: standard Porter-Duff
 "over" alpha accumulation always applies, regardless of which colour
 blend mode is chosen - the blend mode only changes how the RGB
@@ -26,10 +24,10 @@ impl Operation for Compose {
     fn execute(
         &self,
         _ctx: &Context,
-        inputs: &[Value],
+        inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
-        let fg = expect_frame(inputs.first())?;
-        let bg = expect_frame(inputs.get(1))?;
+        let fg = expect_frame(find_input(inputs, Input::Foreground))?;
+        let bg = expect_frame(find_input(inputs, Input::Background))?;
 
         if !fg.same_dimensions(bg) {
             return Err(OperationError::DimensionMismatch);
@@ -89,7 +87,10 @@ mod tests {
     fn run(mode: BlendMode, fg: Frame, bg: Frame) -> Result<Frame, OperationError> {
         let compose = Compose { mode };
         let ctx = Context::default();
-        let inputs = vec![Value::Frame(Arc::new(fg)), Value::Frame(Arc::new(bg))];
+        let inputs = vec![
+            (Input::Foreground, Value::Frame(Arc::new(fg))),
+            (Input::Background, Value::Frame(Arc::new(bg))),
+        ];
 
         let mut outputs = compose.execute(&ctx, &inputs)?;
 
@@ -148,7 +149,7 @@ mod tests {
     fn missing_input_errors_instead_of_panicking() {
         let compose = Compose { mode: BlendMode::Over };
         let ctx = Context::default();
-        let inputs = vec![Value::Frame(Arc::new(frame(vec![255, 0, 0, 255])))];
+        let inputs = vec![(Input::Foreground, Value::Frame(Arc::new(frame(vec![255, 0, 0, 255]))))];
 
         let result = compose.execute(&ctx, &inputs);
 

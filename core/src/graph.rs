@@ -1,17 +1,24 @@
 /*
-A Node's inputs are positional (Vec<NodeId>), not named fields - what
-position 0 vs 1 means is entirely up to the concrete Operation reading
-them (e.g. Compose treats inputs[0] as the foreground, inputs[1] as
-the background).
+A Node's inputs are named (Vec<(Input, NodeId)>), not positional - what
+each wire means is a label on the edge itself (e.g. Compose reads
+Input::Foreground and Input::Background) rather than a convention the
+caller and the operation had to independently agree on for position 0
+vs 1.
 */
 
-use crate::compositor::{Operation, OperationError};
+use crate::compositor::{Input, Operation, OperationError};
 
 pub type NodeId = usize;
 
 pub struct Node {
     pub operation: Box<dyn Operation>,
-    pub inputs: Vec<NodeId>,
+    pub inputs: Vec<(Input, NodeId)>,
+}
+
+impl Node {
+    pub fn input(&self, key: Input) -> Option<NodeId> {
+        self.inputs.iter().find(|(k, _)| *k == key).map(|(_, id)| *id)
+    }
 }
 
 pub struct Graph {
@@ -63,7 +70,7 @@ impl Graph {
         state[id] = VisitState::Visiting;
         path.push(id);
 
-        for &input_id in &self.nodes[id].inputs {
+        for &(_, input_id) in &self.nodes[id].inputs {
             match state[input_id] {
                 VisitState::Visiting => {
                     let start = path.iter().position(|&n| n == input_id).unwrap();
@@ -93,13 +100,19 @@ mod tests {
         fn as_any(&self) -> &dyn std::any::Any { self }
         fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 
-        fn execute(&self, _ctx: &Context, _inputs: &[Value]) -> Result<Vec<Value>, OperationError> {
+        fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
             Ok(vec![])
         }
     }
 
+    // Cycle detection only cares about graph connectivity, not which
+    // role each edge plays, so every test edge is tagged the same -
+    // real key choice is exercised by each operation's own tests.
     fn node(inputs: Vec<NodeId>) -> Node {
-        Node { operation: Box::new(NoOp), inputs }
+        Node {
+            operation: Box::new(NoOp),
+            inputs: inputs.into_iter().map(|id| (Input::Source, id)).collect(),
+        }
     }
 
     #[test]
@@ -133,7 +146,7 @@ mod tests {
     #[test]
     fn a_node_pointing_at_itself_is_a_cycle() {
         let mut graph = Graph { nodes: vec![node(vec![])] };
-        graph.nodes[0].inputs.push(0);
+        graph.nodes[0].inputs.push((Input::Source, 0));
 
         let result = graph.validate();
 
@@ -150,7 +163,7 @@ mod tests {
         let a = graph.add_node(node(vec![]));
         let b = graph.add_node(node(vec![a]));
         let c = graph.add_node(node(vec![b]));
-        graph.nodes[a].inputs.push(c);
+        graph.nodes[a].inputs.push((Input::Source, c));
 
         let result = graph.validate();
 
