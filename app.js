@@ -314,7 +314,6 @@ function buildMaskContent(layer, contentIds){
 
 function buildRingsContent(layer){
     return wasmApp.add_rings(
-        WIDTH, HEIGHT,
         layer.settings.count,
         layer.settings.ringsPerGroup,
         layer.settings.spacing,
@@ -333,7 +332,7 @@ function buildGhostContent(layer, contentIds){
 
 function buildTextContent(layer){
     if(!layer.settings.content.trim()) return null;
-    return wasmApp.add_text(WIDTH, HEIGHT, layer.settings.content, layer.settings.colour, layer.settings.size);
+    return wasmApp.add_text(layer.settings.content, layer.settings.colour, layer.settings.size);
 }
 
 

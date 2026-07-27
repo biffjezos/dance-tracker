@@ -9,7 +9,10 @@ only, drawn via web-sys onto a private detached scratch canvas.
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{
+    Context, Input, Operation, OperationCategory, OperationError, OperationMetadata, OutputKind,
+    ParameterDescriptor, ParameterKind, Value,
+};
 use crate::operations::Frame;
 
 pub struct Text {
@@ -22,18 +25,17 @@ pub struct Text {
 }
 
 impl Text {
-    pub fn new(width: u32, height: u32, content: String, colour: String, size: f64) -> Result<Text, JsValue> {
+    pub fn new(content: String, colour: String, size: f64) -> Result<Text, JsValue> {
         let document = web_sys::window()
             .expect("window should exist")
             .document()
             .expect("document should exist");
 
+        // Sized on the first execute() call, from Context::meta, not
+        // here - see execute() below.
         let canvas: HtmlCanvasElement = document
             .create_element("canvas")?
             .dyn_into::<HtmlCanvasElement>()?;
-
-        canvas.set_width(width);
-        canvas.set_height(height);
 
         let ctx = canvas
             .get_context("2d")?
@@ -80,11 +82,50 @@ impl Operation for Text {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 
+    fn metadata(&self) -> OperationMetadata {
+        OperationMetadata {
+            display_name: "Text",
+            category: OperationCategory::Generator,
+            input_count: 0,
+            outputs: vec![OutputKind::Frame],
+        }
+    }
+
+    fn parameters(&self) -> Vec<ParameterDescriptor> {
+        vec![
+            ParameterDescriptor { name: "content", kind: ParameterKind::Text },
+            ParameterDescriptor { name: "colour", kind: ParameterKind::Text },
+            ParameterDescriptor { name: "size", kind: ParameterKind::Number },
+        ]
+    }
+
+    fn get_parameter(&self, name: &str) -> Option<Value> {
+        match name {
+            "content" => Some(Value::Text(self.content.clone())),
+            "colour" => Some(Value::Text(self.colour.clone())),
+            "size" => Some(Value::Number(self.size)),
+            _ => None,
+        }
+    }
+
+    fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
+        match (name, value) {
+            ("content", Value::Text(v)) => { self.content = v; Ok(()) }
+            ("colour", Value::Text(v)) => { self.colour = v; Ok(()) }
+            ("size", Value::Number(v)) => { self.size = v; Ok(()) }
+            ("content" | "colour" | "size", _) => Err(OperationError::WrongValueType),
+            _ => Err(OperationError::UnknownParameter(name.to_string())),
+        }
+    }
+
     fn execute(
         &self,
-        _ctx: &Context,
-        _inputs: &[Value],
+        ctx: &Context,
+        _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
+        self.canvas.set_width(ctx.meta.width);
+        self.canvas.set_height(ctx.meta.height);
+
         let width = self.canvas.width();
         let height = self.canvas.height();
 

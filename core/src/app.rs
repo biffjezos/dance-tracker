@@ -11,7 +11,7 @@ written from the boundary inward instead of the graph outward.
 */
 #![cfg(target_arch = "wasm32")]
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -19,12 +19,11 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
 
-use crate::compositor::{Context, Meta, Operation, OperationError};
+use crate::compositor::{Context, Input, Meta, OperationError};
 use crate::dom::{write_frame_to_canvas, VideoElementPixelSource};
 use crate::graph::{Graph, Node, NodeId};
 use crate::operations::composite::apply_mask::Channel as MaskChannel;
 use crate::operations::composite::{ApplyMask, BlendMode, Compose};
-use crate::operations::controls::{Forward, Play, Rewind, Stop};
 use crate::operations::executor::{Execute, PreviewExecutor, RenderExecutor, SimpleExecutor};
 use crate::operations::generators::{Ghost, Rings, Text};
 use crate::operations::masks::{Chroma, Difference, Fill};
@@ -67,15 +66,13 @@ pub struct App {
     graph: Graph,
     captured: HashMap<NodeId, Rc<RefCell<Option<Arc<Frame>>>>>,
     difference_source: HashMap<NodeId, NodeId>,
-    width: u32,
-    height: u32,
     resources: ResourceManager,
     /*
     Only render_tick advances this - preview_tick and
     capture_background read the current value rather than each
     keeping their own notion of "which frame is this".
     */
-    frame_counter: Cell<u64>,
+    frame_counter: u64,
 }
 
 #[wasm_bindgen]
@@ -83,27 +80,39 @@ impl App {
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32) -> App {
         App {
-            graph: Graph { nodes: vec![] },
+            graph: Graph::new(width, height),
             captured: HashMap::new(),
             difference_source: HashMap::new(),
-            width,
-            height,
             resources: ResourceManager::new(),
-            frame_counter: Cell::new(0),
+            frame_counter: 0,
         }
+    }
+
+    /*
+    Changing resolution never requires rebuilding the graph - every
+    operation reads the graph's current size through Context on its
+    next execute() call.
+    */
+    pub fn set_resolution(&mut self, width: u32, height: u32) {
+        self.graph.set_resolution(width, height);
     }
 
     /*
     A fresh Context sharing the persistent ResourceManager (a clone is
     just another handle to the same cache, not a new one) plus a Meta
-    stamped with the current frame count and which pass this is for -
-    fps/time stay at Meta's defaults, nothing reads them yet.
+    stamped with the current frame count, which pass this is for, and
+    the graph's current render resolution - fps/time stay at Meta's
+    defaults, nothing reads them yet.
     */
     fn context(&self, preview: bool) -> Context {
+        let (width, height) = self.graph.resolution();
+
         Context {
             meta: Meta {
-                frame: self.frame_counter.get(),
+                frame: self.frame_counter,
                 preview,
+                width,
+                height,
                 ..Meta::default()
             },
             resources: self.resources.clone(),
@@ -117,9 +126,10 @@ impl App {
     */
 
     /*
-    Letterboxed (containFit) to the project's own width/height, same
-    as every other node's fixed frame size - a video's native
-    resolution almost never matches it.
+    Letterboxed (containFit) to the graph's current render resolution
+    on every read, not a size fixed here - a video's native resolution
+    almost never matches it, and this must keep matching even after a
+    set_resolution() call with no graph rebuild.
     */
     pub fn add_video_source(&mut self, video: HtmlVideoElement) -> Result<usize, JsValue> {
         // rebuildGraph() re-adds a source for the same HtmlVideoElement
@@ -132,8 +142,6 @@ impl App {
         let pixels = VideoElementPixelSource {
             video,
             scratch_canvas: scratch,
-            target_width: self.width,
-            target_height: self.height,
         };
 
         let node = Node {
@@ -141,7 +149,7 @@ impl App {
             inputs: vec![],
         };
 
-        Ok(self.graph.add_node(node))
+        Ok(self.graph.add_node(node).index() as usize)
     }
 
     /*
@@ -168,16 +176,16 @@ impl App {
                 threshold,
                 fill: parse_fill(fill_video, fill_r, fill_g, fill_b),
             }),
-            inputs: vec![source],
+            inputs: vec![(Input::Source, NodeId::from_index(source as u32))],
         };
 
-        self.graph.add_node(node)
+        self.graph.add_node(node).index() as usize
     }
 
     /*
     Also creates the CapturedFrame reference node under the hood and
-    wires it as input[1] - see capture_background for how the user's
-    CAPTURE BACKGROUND click feeds it a frame.
+    wires it as Input::Reference - see capture_background for how the
+    user's CAPTURE BACKGROUND click feeds it a frame.
     */
     pub fn add_difference(
         &mut self,
@@ -205,14 +213,17 @@ impl App {
                 threshold,
                 fill: parse_fill(fill_video, fill_r, fill_g, fill_b),
             }),
-            inputs: vec![source, captured_id],
+            inputs: vec![
+                (Input::Source, NodeId::from_index(source as u32)),
+                (Input::Reference, captured_id),
+            ],
         };
 
         let difference_id = self.graph.add_node(node);
 
         self.difference_source.insert(difference_id, captured_id);
 
-        difference_id
+        difference_id.index() as usize
     }
 
     /*
@@ -223,7 +234,13 @@ impl App {
     pub fn capture_background(&mut self, difference_node: usize) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
 
-        let source_id = self.graph.nodes[difference_node].inputs[0];
+        let difference_node = NodeId::from_index(difference_node as u32);
+
+        let source_id = self
+            .graph
+            .resolve(difference_node)
+            .and_then(|n| n.input(Input::Source))
+            .ok_or_else(|| JsValue::from_str("difference node has no source input"))?;
 
         let ctx = self.context(false);
         let executor = SimpleExecutor;
@@ -252,10 +269,13 @@ impl App {
     pub fn add_apply_mask(&mut self, content: usize, mask: usize, channel: &str) -> usize {
         let node = Node {
             operation: Box::new(ApplyMask { channel: parse_channel(channel) }),
-            inputs: vec![content, mask],
+            inputs: vec![
+                (Input::Content, NodeId::from_index(content as u32)),
+                (Input::Mask, NodeId::from_index(mask as u32)),
+            ],
         };
 
-        self.graph.add_node(node)
+        self.graph.add_node(node).index() as usize
     }
 
     /*
@@ -267,10 +287,13 @@ impl App {
     pub fn add_compose(&mut self, foreground: usize, background: usize, mode: &str) -> usize {
         let node = Node {
             operation: Box::new(Compose { mode: parse_blend_mode(mode) }),
-            inputs: vec![foreground, background],
+            inputs: vec![
+                (Input::Foreground, NodeId::from_index(foreground as u32)),
+                (Input::Background, NodeId::from_index(background as u32)),
+            ],
         };
 
-        self.graph.add_node(node)
+        self.graph.add_node(node).index() as usize
     }
 
     /*
@@ -281,8 +304,6 @@ impl App {
 
     pub fn add_rings(
         &mut self,
-        width: u32,
-        height: u32,
         count: u32,
         rings_per_group: u32,
         spacing: f64,
@@ -295,8 +316,6 @@ impl App {
         ];
 
         let rings = Rings::new(
-            width,
-            height,
             count,
             rings_per_group,
             spacing,
@@ -308,39 +327,33 @@ impl App {
 
         let node = Node { operation: Box::new(rings), inputs: vec![] };
 
-        Ok(self.graph.add_node(node))
+        Ok(self.graph.add_node(node).index() as usize)
     }
 
     pub fn add_ghost(&mut self, source: usize, count: usize, alpha: f32, delay_ticks: u32) -> usize {
         let node = Node {
             operation: Box::new(Ghost::new(count, alpha, delay_ticks)),
-            inputs: vec![source],
+            inputs: vec![(Input::Source, NodeId::from_index(source as u32))],
         };
 
-        self.graph.add_node(node)
+        self.graph.add_node(node).index() as usize
     }
 
     pub fn add_text(
         &mut self,
-        width: u32,
-        height: u32,
         content: String,
         colour: String,
         size: f64,
     ) -> Result<usize, JsValue> {
-        let text = Text::new(width, height, content, colour, size)?;
+        let text = Text::new(content, colour, size)?;
 
         let node = Node { operation: Box::new(text), inputs: vec![] };
 
-        Ok(self.graph.add_node(node))
+        Ok(self.graph.add_node(node).index() as usize)
     }
 
     pub fn set_text_content(&mut self, node_id: usize, content: String) {
-        if let Some(text) = self.graph.nodes[node_id]
-            .operation
-            .as_any_mut()
-            .downcast_mut::<Text>()
-        {
+        if let Some(text) = self.graph.operation_mut::<Text>(NodeId::from_index(node_id as u32)) {
             text.content = content;
         }
     }
@@ -348,30 +361,35 @@ impl App {
     /*
     ==================================================
     CONTROLS (TRANSPORT)
+
+    Plain HtmlVideoElement calls, not graph Operations - these never
+    touch the graph, a Value, or a Context, so wrapping them in the
+    Operation trait bought nothing but as_any/as_any_mut boilerplate
+    for something JS could've called on the video element directly.
     ==================================================
     */
 
     pub fn play(&self, video: HtmlVideoElement) -> Result<(), JsValue> {
-        let ctx = self.context(false);
-        Play { video }.execute(&ctx, &[]).map_err(js_err)?;
+        let _ = video.play()?;
         Ok(())
     }
 
     pub fn stop(&self, video: HtmlVideoElement) -> Result<(), JsValue> {
-        let ctx = self.context(false);
-        Stop { video }.execute(&ctx, &[]).map_err(js_err)?;
+        video.pause()?;
         Ok(())
     }
 
+    /*
+    Covers MINUTE +/SECOND +/FRAME + alike - just different seconds
+    values (60.0, 1.0, 1.0/30.0) passed in from JS.
+    */
     pub fn forward(&self, video: HtmlVideoElement, seconds: f64) -> Result<(), JsValue> {
-        let ctx = self.context(false);
-        Forward { video, seconds }.execute(&ctx, &[]).map_err(js_err)?;
+        video.set_current_time(video.current_time() + seconds);
         Ok(())
     }
 
     pub fn rewind(&self, video: HtmlVideoElement, seconds: f64) -> Result<(), JsValue> {
-        let ctx = self.context(false);
-        Rewind { video, seconds }.execute(&ctx, &[]).map_err(js_err)?;
+        video.set_current_time((video.current_time() - seconds).max(0.0));
         Ok(())
     }
 
@@ -381,15 +399,15 @@ impl App {
     ==================================================
     */
 
-    pub fn render_tick(&self, output_node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
+    pub fn render_tick(&mut self, output_node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
 
-        self.frame_counter.set(self.frame_counter.get() + 1);
+        self.frame_counter += 1;
         let ctx = self.context(false);
         let executor = RenderExecutor;
 
         let values = executor
-            .execute(&self.graph, output_node, &ctx)
+            .execute(&self.graph, NodeId::from_index(output_node as u32), &ctx)
             .map_err(js_err)?;
 
         let frame = expect_frame(values.first()).map_err(js_err)?;
@@ -397,13 +415,15 @@ impl App {
         write_frame_to_canvas(&canvas, frame)
     }
 
-    pub fn preview_tick(&self, node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
+    pub fn preview_tick(&mut self, node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
 
         let ctx = self.context(true);
         let executor = PreviewExecutor;
 
-        let values = executor.execute(&self.graph, node, &ctx).map_err(js_err)?;
+        let values = executor
+            .execute(&self.graph, NodeId::from_index(node as u32), &ctx)
+            .map_err(js_err)?;
 
         let frame = expect_frame(values.first()).map_err(js_err)?;
 

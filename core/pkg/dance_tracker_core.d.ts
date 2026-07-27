@@ -9,8 +9,8 @@ export class App {
     add_compose(foreground: number, background: number, mode: string): number;
     add_difference(source: number, threshold: number, fill_video: boolean, fill_r: number, fill_g: number, fill_b: number): number;
     add_ghost(source: number, count: number, alpha: number, delay_ticks: number): number;
-    add_rings(width: number, height: number, count: number, rings_per_group: number, spacing: number, size: number, stroke_width: number): number;
-    add_text(width: number, height: number, content: string, colour: string, size: number): number;
+    add_rings(count: number, rings_per_group: number, spacing: number, size: number, stroke_width: number): number;
+    add_text(content: string, colour: string, size: number): number;
     add_video_source(video: HTMLVideoElement): number;
     capture_background(difference_node: number): void;
     forward(video: HTMLVideoElement, seconds: number): void;
@@ -19,6 +19,7 @@ export class App {
     preview_tick(node: number, canvas: HTMLCanvasElement): void;
     render_tick(output_node: number, canvas: HTMLCanvasElement): void;
     rewind(video: HTMLVideoElement, seconds: number): void;
+    set_resolution(width: number, height: number): void;
     set_text_content(node_id: number, content: string): void;
     stop(video: HTMLVideoElement): void;
 }
@@ -33,8 +34,8 @@ export interface InitOutput {
     readonly app_add_compose: (a: number, b: number, c: number, d: number, e: number) => number;
     readonly app_add_difference: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
     readonly app_add_ghost: (a: number, b: number, c: number, d: number, e: number) => number;
-    readonly app_add_rings: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
-    readonly app_add_text: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
+    readonly app_add_rings: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly app_add_text: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly app_add_video_source: (a: number, b: any) => [number, number, number];
     readonly app_capture_background: (a: number, b: number) => [number, number];
     readonly app_forward: (a: number, b: any, c: number) => [number, number];
@@ -43,6 +44,7 @@ export interface InitOutput {
     readonly app_preview_tick: (a: number, b: number, c: any) => [number, number];
     readonly app_render_tick: (a: number, b: number, c: any) => [number, number];
     readonly app_rewind: (a: number, b: any, c: number) => [number, number];
+    readonly app_set_resolution: (a: number, b: number, c: number) => void;
     readonly app_set_text_content: (a: number, b: number, c: number, d: number) => void;
     readonly app_stop: (a: number, b: any) => [number, number];
     readonly __wbindgen_exn_store: (a: number) => void;

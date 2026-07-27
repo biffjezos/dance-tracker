@@ -14,6 +14,15 @@ use std::sync::Arc;
 use crate::operations::{Frame, Image, Mask};
 use crate::resource_manager::ResourceManager;
 
+/*
+Clone is cheap for every variant that matters: Frame/Mask/Image clone
+an Arc (a refcount bump, never pixel data), Number/Boolean are Copy,
+Text clones a (typically short) String - this is what the Arc move in
+the Value enum rewrite was for, and RenderExecutor's per-tick
+memoization (a shared node's Value handed to N consumers) is the
+concrete case that needs it.
+*/
+#[derive(Debug, Clone)]
 pub enum Value {
     Frame(Arc<Frame>),
     Mask(Arc<Mask>),
@@ -21,6 +30,29 @@ pub enum Value {
     Number(f64),
     Boolean(bool),
     Text(String),
+}
+
+/*
+Named input slots, shared across every Operation instead of each one
+inventing its own meaning for position 0 vs 1 (Compose's inputs[0]
+being "foreground" was only ever a convention the caller and the
+operation had to agree on separately). A Node's Vec<(Input, NodeId)>
+labels each upstream wire with one of these, and the executors carry
+the label through to the resolved Vec<(Input, Value)> an Operation
+actually reads via find_input below.
+*/
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Input {
+    Source,
+    Reference,
+    Content,
+    Mask,
+    Foreground,
+    Background,
+}
+
+pub fn find_input(inputs: &[(Input, Value)], key: Input) -> Option<&Value> {
+    inputs.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
 }
 
 /*
@@ -45,9 +77,13 @@ impl Default for RenderQuality {
 /*
 Per-tick, read-only facts about the evaluation that's currently
 running - which frame/time this is, whether it's the preview or main
-render pass, how much fidelity to spend. Distinct from ResourceManager
-below: Meta is cheap and rebuilt fresh every tick, ResourceManager is
-the persistent, shared part of Context.
+render pass, how much fidelity to spend, and the graph's current
+render resolution (width/height mirror Graph::resolution() - see
+App::context - so a source/generator operation reads its output size
+from here every execute() call instead of baking one in at
+construction time and needing the whole graph rebuilt to change it).
+Distinct from ResourceManager below: Meta is cheap and rebuilt fresh
+every tick, ResourceManager is the persistent, shared part of Context.
 */
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Meta {
@@ -56,6 +92,8 @@ pub struct Meta {
     pub time: f64,
     pub preview: bool,
     pub render_quality: RenderQuality,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Clone, Default)]
@@ -64,7 +102,7 @@ pub struct Context {
     pub resources: ResourceManager,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OperationError {
     MissingInput,
     WrongValueType,
@@ -77,6 +115,70 @@ pub enum OperationError {
     same underlying usize.
     */
     Cycle(Vec<usize>),
+    // set_parameter with a name the operation doesn't have - distinct
+    // from WrongValueType, which is a real parameter given a value of
+    // the wrong kind.
+    UnknownParameter(String),
+    // A NodeId that doesn't resolve - out of range, or a stale
+    // generation (its node has since been removed). Distinct from
+    // MissingInput, which is a wire that was never connected at all.
+    UnknownNode,
+}
+
+/*
+Only the scalar Value variants make sense as something a UI would show
+a control for - Frame/Mask/Image are graph-wired inputs, never a
+setting on the node that produces them.
+*/
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ParameterKind {
+    Number,
+    Boolean,
+    Text,
+}
+
+#[derive(Clone, Debug)]
+pub struct ParameterDescriptor {
+    pub name: &'static str,
+    pub kind: ParameterKind,
+}
+
+/*
+What kind of thing an operation is, for grouping in a future automatic
+node menu/editor - Reference covers CapturedFrame, a settable handle
+rather than something that decodes, generates, keys, or composites.
+*/
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OperationCategory {
+    Source,
+    Generator,
+    Mask,
+    Composite,
+    Reference,
+}
+
+/*
+Which Value variant(s) an operation's execute() can return - every
+operation here only ever produces exactly one output today, but this
+is a Vec (not a single OutputKind) so a future multi-output operation
+doesn't need the shape to change.
+*/
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputKind {
+    Frame,
+    Mask,
+    Image,
+    Number,
+    Boolean,
+    Text,
+}
+
+#[derive(Clone, Debug)]
+pub struct OperationMetadata {
+    pub display_name: &'static str,
+    pub category: OperationCategory,
+    pub input_count: usize,
+    pub outputs: Vec<OutputKind>,
 }
 
 /*
@@ -95,10 +197,41 @@ pub trait Operation: Any {
     fn execute(
         &self,
         ctx: &Context,
-        inputs: &[Value],
+        inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError>;
 
     fn as_any(&self) -> &dyn Any;
 
     fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    /*
+    Unlike parameters() below, every concrete Operation implements this
+    - there's no meaningful "operation with no name/category/output
+    type" the way there's legitimately "operation with no editable
+    settings", so this has no default. Purpose: future automatic node
+    menus/editors/inspectors driven by this instead of a hardcoded
+    per-kind list in JavaScript.
+    */
+    fn metadata(&self) -> OperationMetadata;
+
+    /*
+    UI-facing live parameter editing that doesn't require the caller
+    to know (or downcast to) the concrete Operation type - a generic
+    counterpart to as_any_mut, which stays for internal Rust use (see
+    Graph::operation_mut). Defaults to "no editable parameters", which
+    is correct for most operations (sources, composites, CapturedFrame
+    have nothing a UI would show a control for); a concrete type only
+    overrides these three when it actually has settings.
+    */
+    fn parameters(&self) -> Vec<ParameterDescriptor> {
+        Vec::new()
+    }
+
+    fn get_parameter(&self, _name: &str) -> Option<Value> {
+        None
+    }
+
+    fn set_parameter(&mut self, name: &str, _value: Value) -> Result<(), OperationError> {
+        Err(OperationError::UnknownParameter(name.to_string()))
+    }
 }

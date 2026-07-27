@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::compositor::{Context, Operation, OperationError, Value};
+use crate::compositor::{
+    Context, Input, Operation, OperationCategory, OperationError, OperationMetadata, OutputKind,
+    Value,
+};
 use crate::operations::sources::PixelSource;
 
 pub struct VideoSource {
@@ -11,12 +14,21 @@ impl Operation for VideoSource {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 
+    fn metadata(&self) -> OperationMetadata {
+        OperationMetadata {
+            display_name: "Video Source",
+            category: OperationCategory::Source,
+            input_count: 0,
+            outputs: vec![OutputKind::Frame],
+        }
+    }
+
     fn execute(
         &self,
-        _ctx: &Context,
-        _inputs: &[Value],
+        ctx: &Context,
+        _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
-        let frame = self.pixels.read()?;
+        let frame = self.pixels.read(ctx.meta.width, ctx.meta.height)?;
 
         Ok(vec![Value::Frame(Arc::new(frame))])
     }
@@ -30,7 +42,7 @@ mod tests {
     struct FixedPixelSource(Frame);
 
     impl PixelSource for FixedPixelSource {
-        fn read(&self) -> Result<Frame, OperationError> {
+        fn read(&self, _width: u32, _height: u32) -> Result<Frame, OperationError> {
             Ok(self.0.clone())
         }
     }
@@ -38,7 +50,7 @@ mod tests {
     struct FailingPixelSource;
 
     impl PixelSource for FailingPixelSource {
-        fn read(&self) -> Result<Frame, OperationError> {
+        fn read(&self, _width: u32, _height: u32) -> Result<Frame, OperationError> {
             Err(OperationError::SourceNotFound("gone".to_string()))
         }
     }

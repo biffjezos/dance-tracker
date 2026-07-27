@@ -6,7 +6,7 @@ PixelSource stand-in for the real DOM-backed one (dom.rs, wasm32 only)
 pixel, not just that it runs without crashing.
 */
 
-use dance_tracker_core::compositor::{Context, OperationError};
+use dance_tracker_core::compositor::{Context, Input, Meta, OperationError};
 use dance_tracker_core::graph::{Graph, Node};
 use dance_tracker_core::operations::composite::{BlendMode, Compose};
 use dance_tracker_core::operations::executor::{Execute, SimpleExecutor};
@@ -17,13 +17,13 @@ use dance_tracker_core::operations::{expect_frame, Frame};
 struct FixedPixelSource(Frame);
 
 impl PixelSource for FixedPixelSource {
-    fn read(&self) -> Result<Frame, OperationError> {
+    fn read(&self, _width: u32, _height: u32) -> Result<Frame, OperationError> {
         Ok(self.0.clone())
     }
 }
 
 fn main() {
-    let mut graph = Graph { nodes: vec![] };
+    let mut graph = Graph::new(1, 1);
 
     let keyed_source = VideoSource {
         pixels: Box::new(FixedPixelSource(Frame {
@@ -58,13 +58,19 @@ fn main() {
     };
     let compose_node = Node {
         operation: Box::new(compose),
-        inputs: vec![keyed_video_source_id, backdrop_source_node_id],
+        inputs: vec![
+            (Input::Foreground, keyed_video_source_id),
+            (Input::Background, backdrop_source_node_id),
+        ],
     };
     let compose_id = graph.add_node(compose_node);
 
     println!("Graph contains {:?} nodes", graph.nodes.len());
 
-    let ctx = Context::default();
+    let ctx = Context {
+        meta: Meta { width: 1, height: 1, ..Meta::default() },
+        ..Context::default()
+    };
 
     let executor = SimpleExecutor;
     let values = executor

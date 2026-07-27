@@ -1,4 +1,4 @@
-use crate::compositor::{Context, OperationError, Value};
+use crate::compositor::{Context, Input, OperationError, Value};
 use crate::graph::{Graph, NodeId};
 use crate::operations::executor::Execute;
 
@@ -19,13 +19,13 @@ impl Execute for SimpleExecutor {
         node: NodeId,
         ctx: &Context,
     ) -> Result<Vec<Value>, OperationError> {
-        let node = &graph.nodes[node];
+        let node = graph.resolve(node).ok_or(OperationError::UnknownNode)?;
 
-        let mut input_values = Vec::new();
+        let mut input_values: Vec<(Input, Value)> = Vec::new();
 
-        for input_node_id in &node.inputs {
-            let values = self.execute(graph, *input_node_id, ctx)?;
-            input_values.push(values.into_iter().next().unwrap());
+        for &(key, input_node_id) in &node.inputs {
+            let values = self.execute(graph, input_node_id, ctx)?;
+            input_values.push((key, values.into_iter().next().unwrap()));
         }
 
         node.operation.execute(ctx, &input_values)
