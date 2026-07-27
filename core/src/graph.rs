@@ -31,6 +31,15 @@ construction time and needing the whole graph rebuilt to change it.
 */
 pub struct Graph {
     pub nodes: Vec<Node>,
+    /*
+    Which node is "the" render output, if the graph has designated one
+    - informational, not enforced: render_tick/preview_tick still take
+    an explicit node id and can target any node (arbitrary-node preview
+    stays possible), this is for save/load and a future editor to know
+    what "the" output is without a caller having to track it
+    separately.
+    */
+    output: Option<NodeId>,
     width: u32,
     height: u32,
     validation: ValidationState,
@@ -52,7 +61,7 @@ enum ValidationState {
 
 impl Graph {
     pub fn new(width: u32, height: u32) -> Self {
-        Graph { nodes: vec![], width, height, validation: ValidationState::Dirty }
+        Graph { nodes: vec![], output: None, width, height, validation: ValidationState::Dirty }
     }
 
     pub fn set_resolution(&mut self, width: u32, height: u32) {
@@ -62,6 +71,14 @@ impl Graph {
 
     pub fn resolution(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+
+    pub fn set_output(&mut self, node_id: NodeId) {
+        self.output = Some(node_id);
+    }
+
+    pub fn output(&self) -> Option<NodeId> {
+        self.output
     }
 
     pub fn add_node(&mut self, node: Node) -> NodeId {
@@ -296,6 +313,17 @@ mod tests {
         graph.add_node(node(vec![]));
 
         assert!(matches!(graph.validate(), Err(OperationError::Cycle(_))));
+    }
+
+    #[test]
+    fn output_defaults_to_none_and_round_trips_through_set_output() {
+        let mut graph = Graph::new(1, 1);
+        assert_eq!(graph.output(), None);
+
+        let id = graph.add_node(node(vec![]));
+        graph.set_output(id);
+
+        assert_eq!(graph.output(), Some(id));
     }
 
     #[test]
