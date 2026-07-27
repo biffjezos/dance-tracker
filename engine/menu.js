@@ -114,22 +114,26 @@ export class MenuManager {
 
 
         /*
-        VIDEO and KEY are two independent steppers (video layers+real
-        generators vs masks-only), each tracked separately here, kept
-        in sync by app.js's layerSelectionChanged event (its "scope"
-        field says which one changed). Both render through the same
+        VIDEO, KEY and COMPOSE are three independent steppers (video
+        layers+real generators, masks-only, composites-only), each
+        tracked separately here, kept in sync by app.js's
+        layerSelectionChanged event (its "scope" field says which one
+        changed). VIDEO and KEY render through the same
         renderLayerEditor() - only which selection object it reads
-        differs.
+        differs; COMPOSE has its own renderComposePicker().
 
         label:null until the first real layerSelectionChanged event -
-        renderLayerEditor() reads that as "nothing real exists yet" and
-        shows an honest empty state. Never seed this with a fake
-        "VIDEO 1"/"MASK 1" placeholder - that displays as a real,
-        selectable node before the user has created anything.
+        renderLayerEditor()/renderComposePicker() read that as "nothing
+        real exists yet" and show an honest empty state. Never seed
+        this with a fake "VIDEO 1"/"MASK 1"/"COMPOSITE 1" placeholder -
+        that displays as a real, selectable node before the user has
+        created anything.
         */
         this.videoSelection = {label:null, kind:null, visibilityMode:"on"};
 
         this.maskSelection = {label:null, kind:null, visibilityMode:"on"};
+
+        this.compositeSelection = {label:null, visibilityMode:"on"};
 
 
         window.addEventListener(
@@ -142,13 +146,21 @@ export class MenuManager {
                     visibilityMode:e.detail.visibilityMode,
                     sourceLabel:e.detail.sourceLabel,
                     mode:e.detail.mode,
-                    ringCount:e.detail.ringCount
+                    ringCount:e.detail.ringCount,
+                    foregroundLabel:e.detail.foregroundLabel,
+                    backgroundLabel:e.detail.backgroundLabel,
+                    blendMode:e.detail.blendMode
                 };
 
 
                 if(e.detail.scope === "mask"){
 
                     this.maskSelection = selection;
+
+                }
+                else if(e.detail.scope === "composite"){
+
+                    this.compositeSelection = selection;
 
                 }
                 else {
@@ -169,7 +181,7 @@ export class MenuManager {
                 }
 
 
-                if(this.path[0] === "video" || this.path[0] === "key"){
+                if(this.path[0] === "video" || this.path[0] === "key" || this.path[0] === "compose"){
 
                     this.render();
 
@@ -205,43 +217,6 @@ export class MenuManager {
                 if(
                     node &&
                     node.type==="maskPicker"
-                ){
-
-                    this.render();
-
-                }
-
-            }
-        );
-
-
-        this.backgroundState = {
-
-            video:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}, blendMode:"normal"},
-
-            mask:{source:"none", sourceLabel:"NONE", colour:{r:0, g:0, b:0}, blendMode:"normal"}
-
-        };
-
-
-        window.addEventListener(
-            "backgroundSettingsChanged",
-            e=>{
-
-                this.backgroundState[e.detail.scope] = {
-                    source:e.detail.source,
-                    sourceLabel:e.detail.sourceLabel,
-                    colour:e.detail.colour,
-                    blendMode:e.detail.blendMode
-                };
-
-
-                let node =
-                    this.node();
-
-                if(
-                    node &&
-                    node.type==="backgroundPicker"
                 ){
 
                     this.render();
@@ -316,13 +291,15 @@ export class MenuManager {
             NODES only lists things that really exist: video layers
             you've actually added, every rings/ghost/text instance
             you've actually added via GENERATE's ADD RINGS/ADD GHOST/
-            ADD TEXT, and every mask you've actually added via KEY's
-            ADD MASK (any number of each, same list, no defaults).
+            ADD TEXT, every mask you've actually added via KEY's ADD
+            MASK, and every composite you've actually added via
+            COMPOSE's ADD (any number of each, same list, no defaults).
             Every entry, whatever kind, gets the exact same minimal
-            row - VISIBILITY MODE, BACKGROUND, MASK, TRANSPORT - plus
-            EDIT for anything with its own deep settings (rings/ghost/
-            text/mask kinds - a plain video has nothing more to
-            configure beyond the universal row).
+            row - VISIBILITY MODE, MASKED BY, TRANSPORT - plus EDIT for
+            anything with its own deep settings (rings/ghost/text/mask
+            kinds - a plain video has nothing more to configure beyond
+            the universal row, and a composite's own settings live on
+            COMPOSE's screen, not behind EDIT here).
             */
             video:{
 
@@ -333,14 +310,6 @@ export class MenuManager {
                 MASK:{
 
                     type:"maskPicker",
-
-                    scope:"video"
-
-                },
-
-                BACKGROUND:{
-
-                    type:"backgroundPicker",
 
                     scope:"video"
 
@@ -427,12 +396,10 @@ export class MenuManager {
             minimal top-level row (stepper, VISIBILITY, MASK, ADD
             MASK) plus an EDIT bridge to the actual chroma-key deep
             settings, instead of dumping both onto one screen. No
-            BACKGROUND or TRANSPORT button here specifically - not
-            because masks lack them (they don't - each mask has its
-            own BACKGROUND same as everything else), but because
-            they're already reachable for these same entries from
-            NODES, and a second copy under KEY was confusing (which
-            one's real?), not useful.
+            TRANSPORT button here specifically - not because masks
+            lack one (they don't), but because it's already reachable
+            for these same entries from NODES, and a second copy under
+            KEY was confusing (which one's real?), not useful.
             */
             key:{
 
@@ -489,6 +456,21 @@ export class MenuManager {
 
 
 
+            /*
+            The only place two nodes get drawn together - see
+            CLAUDE.md. Not a "layerEditor" like NODES/KEY: a COMPOSITE
+            has no deeper settings behind an EDIT bridge, so its own
+            stepper and its foreground/background/blend controls all
+            render on this one screen (renderComposePicker).
+            */
+            compose:{
+
+                type:"composePicker"
+
+            },
+
+
+
             transform:{
 
                 "COMING SOON":null
@@ -506,14 +488,6 @@ export class MenuManager {
                     "OUTPUT SIZE +":null,
 
                     "OUTPUT SIZE -":null
-
-                },
-
-                BACKGROUND:{
-
-                    COLOUR:colourMenu(
-                        "videoBackgroundColour"
-                    )
 
                 }
 
@@ -723,10 +697,10 @@ export class MenuManager {
 
         if(
             node &&
-            node.type==="backgroundPicker"
+            node.type==="composePicker"
         ){
 
-            this.renderBackgroundPicker();
+            this.renderComposePicker();
 
             return;
 
@@ -1116,7 +1090,7 @@ export class MenuManager {
     Serves both VIDEO and KEY - which one is which is entirely
     determined by this.node().scope ("video" or "mask"). Both show
     the exact same minimal row: NODE -/+ stepper, VISIBILITY MODE,
-    BACKGROUND COLOUR, MASK, TRANSPORT. KEY additionally shows the
+    MASKED BY, TRANSPORT (video only). KEY additionally shows the
     actual chroma-key deep settings, since scope is always "mask"
     there and a mask has no other screen to live on.
     */
@@ -1290,11 +1264,6 @@ export class MenuManager {
 
 
         if(scope === "video"){
-
-            this.addLayerScreenButton(
-                "BACKGROUND",
-                "BACKGROUND"
-            );
 
             this.addLayerScreenButton(
                 "TRANSPORT",
@@ -2209,254 +2178,304 @@ export class MenuManager {
 
 
     /*
-    Shares the SOURCE stepper shape with MASK, but steps through
-    NONE/COLOUR/every real layer instead of NONE/BACKGROUND/every
-    real layer, and shows swatches (instead of a channel stepper)
-    only when COLOUR is the current source - that's the only case
-    where a colour is actually used for anything.
+    The only place two nodes get drawn together - see CLAUDE.md. Not a
+    layerEditor: a COMPOSITE has no deeper settings behind an EDIT
+    bridge, so this one screen is both its own stepper (like every
+    other multi-instance kind) and its foreground/background/blend
+    controls. Empty state matches every other "nothing created yet"
+    screen (NODES/KEY, see renderLayerEditor).
     */
-    renderBackgroundPicker(){
+    renderComposePicker(){
 
-
-        const scope =
-            this.node().scope;
-
-        const state =
-            this.backgroundState[scope];
 
         const selection =
-            scope === "mask"
-            ?
-            this.maskSelection
-            :
-            this.videoSelection;
+            this.compositeSelection;
 
 
-        let layerLabel =
-        document.createElement(
-            "span"
-        );
+        if(!selection.label){
 
-        layerLabel.innerText=
-            selection.label;
-
-        layerLabel.className=
-            "ring-id-display";
-
-        this.subMenu.appendChild(
-            layerLabel
-        );
-
-
-        let sourceMinus =
-        document.createElement(
-            "button"
-        );
-
-        sourceMinus.innerText=
-            "SOURCE -";
-
-        sourceMinus.onclick=()=>{
-
-            window.dispatchEvent(
-                new CustomEvent(
-                    "backgroundSourceStep",
-                    {
-                        detail:{
-                            direction:-1,
-                            scope:scope
-                        }
-                    }
-                )
-            );
-
-        };
-
-        this.subMenu.appendChild(
-            sourceMinus
-        );
-
-
-
-        let sourceDisplay =
-        document.createElement(
-            "span"
-        );
-
-        sourceDisplay.innerText=
-            state.sourceLabel;
-
-        sourceDisplay.className=
-            "ring-id-display";
-
-        this.subMenu.appendChild(
-            sourceDisplay
-        );
-
-
-
-        let sourcePlus =
-        document.createElement(
-            "button"
-        );
-
-        sourcePlus.innerText=
-            "SOURCE +";
-
-        sourcePlus.onclick=()=>{
-
-            window.dispatchEvent(
-                new CustomEvent(
-                    "backgroundSourceStep",
-                    {
-                        detail:{
-                            direction:1,
-                            scope:scope
-                        }
-                    }
-                )
-            );
-
-        };
-
-        this.subMenu.appendChild(
-            sourcePlus
-        );
-
-
-
-        /*
-        BLEND applies to whatever the background is - a flat colour or
-        another node's output alike, same as any other per-layer
-        setting. Only the swatch list below is colour-specific.
-        */
-        if(state.source !== "none"){
-
-            let blendMinus =
-            document.createElement(
-                "button"
-            );
-
-            blendMinus.innerText=
-                "BLEND -";
-
-            blendMinus.onclick=()=>{
-
-                window.dispatchEvent(
-                    new CustomEvent(
-                        "backgroundBlendModeStep",
-                        {
-                            detail:{
-                                direction:-1,
-                                scope:scope
-                            }
-                        }
-                    )
-                );
-
-            };
-
-            this.subMenu.appendChild(
-                blendMinus
-            );
-
-
-
-            let blendDisplay =
+            let empty =
             document.createElement(
                 "span"
             );
 
-            blendDisplay.innerText=
-                "BLEND: " +
-                (state.blendMode || "normal").toUpperCase();
+            empty.innerText=
+                "NO COMPOSITES YET";
 
-            blendDisplay.className=
+            empty.className=
                 "ring-id-display";
 
             this.subMenu.appendChild(
-                blendDisplay
+                empty
             );
 
-
-
-            let blendPlus =
-            document.createElement(
-                "button"
+            this.addLayerButton(
+                "ADD",
+                "addCompositeLayer"
             );
 
-            blendPlus.innerText=
-                "BLEND +";
-
-            blendPlus.onclick=()=>{
-
-                window.dispatchEvent(
-                    new CustomEvent(
-                        "backgroundBlendModeStep",
-                        {
-                            detail:{
-                                direction:1,
-                                scope:scope
-                            }
-                        }
-                    )
-                );
-
-            };
-
-            this.subMenu.appendChild(
-                blendPlus
-            );
+            return;
 
         }
 
 
-        if(state.source === "colour"){
+        let minus =
+        document.createElement(
+            "button"
+        );
 
-            SWATCHES.forEach(swatch=>{
+        minus.innerText=
+            "NODE -";
 
+        minus.onclick=()=>{
 
-                let button =
-                document.createElement(
-                    "button"
-                );
+            window.dispatchEvent(
+                new CustomEvent(
+                    "compositeIndexStep",
+                    {detail:{direction:-1}}
+                )
+            );
 
-                button.innerText=
-                    swatch.label;
+        };
 
-                this.styleSwatch(
-                    button,
-                    swatch.r,
-                    swatch.g,
-                    swatch.b
-                );
-
-                button.onclick=()=>{
-
-                    window.dispatchEvent(
-                        new CustomEvent(
-                            "layerBackgroundColour",
-                            {
-                                detail:{
-                                    scope:scope,
-                                    r:swatch.r,
-                                    g:swatch.g,
-                                    b:swatch.b
-                                }
-                            }
-                        )
-                    );
-
-                };
-
-                this.subMenu.appendChild(
-                    button
-                );
+        this.subMenu.appendChild(
+            minus
+        );
 
 
-            });
+        let display =
+        document.createElement(
+            "span"
+        );
 
-        }
+        display.innerText=
+            selection.label;
+
+        display.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            display
+        );
+
+
+        let plus =
+        document.createElement(
+            "button"
+        );
+
+        plus.innerText=
+            "NODE +";
+
+        plus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "compositeIndexStep",
+                    {detail:{direction:1}}
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            plus
+        );
+
+
+        let fgMinus =
+        document.createElement(
+            "button"
+        );
+
+        fgMinus.innerText=
+            "FOREGROUND -";
+
+        fgMinus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "compositeForegroundStep",
+                    {detail:{direction:-1}}
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            fgMinus
+        );
+
+
+        let fgDisplay =
+        document.createElement(
+            "span"
+        );
+
+        fgDisplay.innerText=
+            "FOREGROUND: " +
+            (selection.foregroundLabel || "NONE");
+
+        fgDisplay.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            fgDisplay
+        );
+
+
+        let fgPlus =
+        document.createElement(
+            "button"
+        );
+
+        fgPlus.innerText=
+            "FOREGROUND +";
+
+        fgPlus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "compositeForegroundStep",
+                    {detail:{direction:1}}
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            fgPlus
+        );
+
+
+        let bgMinus =
+        document.createElement(
+            "button"
+        );
+
+        bgMinus.innerText=
+            "BACKGROUND -";
+
+        bgMinus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "compositeBackgroundStep",
+                    {detail:{direction:-1}}
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            bgMinus
+        );
+
+
+        let bgDisplay =
+        document.createElement(
+            "span"
+        );
+
+        bgDisplay.innerText=
+            "BACKGROUND: " +
+            (selection.backgroundLabel || "NONE");
+
+        bgDisplay.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            bgDisplay
+        );
+
+
+        let bgPlus =
+        document.createElement(
+            "button"
+        );
+
+        bgPlus.innerText=
+            "BACKGROUND +";
+
+        bgPlus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "compositeBackgroundStep",
+                    {detail:{direction:1}}
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            bgPlus
+        );
+
+
+        let blendMinus =
+        document.createElement(
+            "button"
+        );
+
+        blendMinus.innerText=
+            "BLEND -";
+
+        blendMinus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "compositeBlendModeStep",
+                    {detail:{direction:-1}}
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            blendMinus
+        );
+
+
+        let blendDisplay =
+        document.createElement(
+            "span"
+        );
+
+        blendDisplay.innerText=
+            "BLEND: " +
+            (selection.blendMode || "normal").toUpperCase();
+
+        blendDisplay.className=
+            "ring-id-display";
+
+        this.subMenu.appendChild(
+            blendDisplay
+        );
+
+
+        let blendPlus =
+        document.createElement(
+            "button"
+        );
+
+        blendPlus.innerText=
+            "BLEND +";
+
+        blendPlus.onclick=()=>{
+
+            window.dispatchEvent(
+                new CustomEvent(
+                    "compositeBlendModeStep",
+                    {detail:{direction:1}}
+                )
+            );
+
+        };
+
+        this.subMenu.appendChild(
+            blendPlus
+        );
 
 
     }

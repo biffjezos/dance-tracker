@@ -11,17 +11,17 @@ before.
 
 SCOPE NOTE: this pass covers the features the rewrite was asked to
 reach parity on - load (camera/video file), key (chroma/difference),
-mask (MASKED BY), generate (rings/ghost/text), background chaining,
-transport, and record. Audio sync, ring CONSTELLATION, per-stroke ring
-recolouring, the eyedropper, and OUTPUT SIZE actually resizing are not
-wired up yet - clicking those buttons is currently a no-op. Visibility
-is binary (on/off) rather than the old four-mode system, since ALPHA/
-MASK WHITE existed to solve a fixed-draw-order problem this graph
-model doesn't have.
+mask (MASKED BY), generate (rings/ghost/text), compose, transport, and
+record. Audio sync and per-stroke ring CONSTELLATION are not wired up
+yet - clicking those buttons is currently a no-op.
 
-Stacking order (when more than one thing is independently visible with
-no explicit BACKGROUND relationship between them) is fixed creation
-order, oldest first - there's no MOVE UP/DOWN control in this menu.
+Compositing (two nodes drawn together) only ever happens through an
+explicit COMPOSITE node the user creates via COMPOSE - there is no
+per-node BACKGROUND field anymore, and no automatic stacking of
+whatever's independently visible (see CLAUDE.md). The master output is
+exactly whichever single node is currently marked VISIBILITY: ON
+(outputEntryId, see rebuildGraph); if that's a COMPOSITE, its own
+foreground/background wiring is what makes two things appear together.
 ==================================================
 */
 
@@ -86,6 +86,7 @@ let nextMaskNumber = 1;
 let nextRingsNumber = 1;
 let nextGhostNumber = 1;
 let nextTextNumber = 1;
+let nextCompositeNumber = 1;
 
 let cameraActivated = false;
 let cameraOn = false;
@@ -95,6 +96,7 @@ const maskLayers = [];
 const ringsLayers = [];
 const ghostLayers = [];
 const textLayers = [];
+const compositeLayers = [];
 
 // Which entry NODES/KEY's stepper is currently pointed at, by stable
 // id - not a numeric index. getAllRealEntries() groups entries by
@@ -107,6 +109,7 @@ const textLayers = [];
 // the first real entry same as an out-of-range index used to.
 let selectedVideoId = null;
 let selectedMaskId = null;
+let selectedCompositeId = null;
 
 // Which single entry is actually live on the master output, by stable
 // id - completely independent of the above. Merely stepping through
@@ -123,8 +126,7 @@ let transportPlaying = false;
 
 function defaultUniversalSettings(){
     return {
-        maskedBy:{source:"none", channel:"alpha"},
-        background:{source:"none", blendMode:"normal"}
+        maskedBy:{source:"none", channel:"alpha"}
     };
 }
 
@@ -148,6 +150,13 @@ function getAllRealEntries(){
         id:"mask:" + layer.id,
         label:layer.name,
         kind:"standaloneMask",
+        layer
+    }));
+
+    compositeLayers.forEach(layer=>list.push({
+        id:"composite:" + layer.id,
+        label:layer.name,
+        kind:"composite",
         layer
     }));
 
@@ -182,13 +191,19 @@ function getVideoRegistry(){
         entry.kind === "rings" ||
         entry.kind === "ghost" ||
         entry.kind === "text" ||
-        entry.kind === "standaloneMask"
+        entry.kind === "standaloneMask" ||
+        entry.kind === "composite"
     );
 }
 
 
 function getMaskRegistry(){
     return getAllRealEntries().filter(entry=>entry.kind === "standaloneMask");
+}
+
+
+function getCompositeRegistry(){
+    return getAllRealEntries().filter(entry=>entry.kind === "composite");
 }
 
 
@@ -212,8 +227,16 @@ function selectedMaskEntry(){
 }
 
 
+function selectedCompositeEntry(){
+    const registry = getCompositeRegistry();
+    return registry.find(entry=>entry.id === selectedCompositeId) || registry[0] || EMPTY_ENTRY;
+}
+
+
 function scopedEntry(scope){
-    return scope === "mask" ? selectedMaskEntry() : selectedVideoEntry();
+    if(scope === "mask") return selectedMaskEntry();
+    if(scope === "composite") return selectedCompositeEntry();
+    return selectedVideoEntry();
 }
 
 
@@ -263,16 +286,6 @@ function reportSelection(scope){
         }
     }));
 
-    window.dispatchEvent(new CustomEvent("backgroundSettingsChanged", {
-        detail:{
-            scope,
-            source:entry.layer.settings.background.source,
-            sourceLabel:resolveMaskSourceLabel(entry.layer.settings.background.source),
-            colour:{r:0, g:0, b:0},
-            blendMode:entry.layer.settings.background.blendMode
-        }
-    }));
-
     window.dispatchEvent(new CustomEvent("layerSelectionChanged", {
         detail:{
             scope,
@@ -297,6 +310,18 @@ function reportSelection(scope){
             ringCount:
                 entry.kind === "rings"
                 ? entry.layer.settings.count
+                : null,
+            foregroundLabel:
+                entry.kind === "composite"
+                ? resolveMaskSourceLabel(entry.layer.settings.foreground)
+                : null,
+            backgroundLabel:
+                entry.kind === "composite"
+                ? resolveMaskSourceLabel(entry.layer.settings.background)
+                : null,
+            blendMode:
+                entry.kind === "composite"
+                ? entry.layer.settings.blendMode
                 : null
         }
     }));
@@ -399,6 +424,25 @@ function buildTextContent(layer){
 }
 
 
+/*
+The only place two nodes ever get composited together - resolves
+against wiredIds first (so a COMPOSITE can use an already MASKED BY'd
+or already-composited node as its foreground/background) falling back
+to contentIds (a plain node with no wiring of its own).
+*/
+function buildCompositeContent(layer, contentIds, wiredIds){
+    const s = layer.settings;
+    if(s.foreground === "none" || s.background === "none") return null;
+
+    const fgId = wiredIds.get(s.foreground) !== undefined ? wiredIds.get(s.foreground) : contentIds.get(s.foreground);
+    const bgId = wiredIds.get(s.background) !== undefined ? wiredIds.get(s.background) : contentIds.get(s.background);
+
+    if(fgId === undefined || bgId === undefined) return null;
+
+    return wasmApp.add_compose(fgId, bgId, s.blendMode);
+}
+
+
 function rebuildGraph(){
     if(!wasmApp) return;
 
@@ -432,7 +476,7 @@ function rebuildGraph(){
         }
     });
 
-    // Pass 2: wire MASKED BY then BACKGROUND on top of each entry's own content.
+    // Pass 2: wire MASKED BY on top of each entry's own content.
     const wiredIds = new Map();
 
     all.forEach(entry=>{
@@ -446,14 +490,19 @@ function rebuildGraph(){
             if(maskId !== undefined) id = wasmApp.add_apply_mask(id, maskId, s.maskedBy.channel);
         }
 
-        if(s.background.source !== "none"){
-            const bgId = wiredIds.get(s.background.source) !== undefined
-                ? wiredIds.get(s.background.source)
-                : contentIds.get(s.background.source);
-            if(bgId !== undefined) id = wasmApp.add_compose(id, bgId, s.background.blendMode);
-        }
-
         wiredIds.set(entry.id, id);
+    });
+
+    /*
+    Pass 3: COMPOSE - the only place two nodes ever end up drawn
+    together (see CLAUDE.md). Each COMPOSITE's own result is stored
+    into wiredIds too, so it can itself be MASKED BY'd, or used as
+    another COMPOSITE's foreground/background.
+    */
+    all.forEach(entry=>{
+        if(entry.kind !== "composite") return;
+        const id = buildCompositeContent(entry.layer, contentIds, wiredIds);
+        if(id !== null && id !== undefined) wiredIds.set(entry.id, id);
     });
 
     cachedContentIds = contentIds;
@@ -468,9 +517,9 @@ function rebuildGraph(){
 /*
 Output is exactly whichever single entry is currently marked live
 (outputEntryId), rendered through its own fully-wired node (its own
-MASKED BY / BACKGROUND, if the user set them) - never an automatic
-merge with anything else. Stacking happens only through an explicit
-BACKGROUND wire the user set themselves (see CLAUDE.md).
+MASKED BY, and its own foreground/background if it's a COMPOSITE) -
+never an automatic merge with anything else. Stacking happens only
+through an explicit COMPOSITE node the user created (see CLAUDE.md).
 
 Deliberately NOT derived from "whatever NODES/KEY is currently
 scrolled to" - outputEntryId only changes via an explicit VISIBILITY
@@ -828,7 +877,7 @@ window.addEventListener("cycleVisibilityMode", e=>{
 
     // Exclusive: making this entry live takes any other entry off air
     // - there is no implicit multi-thing stack, only an explicit
-    // BACKGROUND wire composites two things together (see CLAUDE.md).
+    // COMPOSITE node composites two things together (see CLAUDE.md).
     outputEntryId = outputEntryId === entry.id ? null : entry.id;
 
     updateOutputNodeId();
@@ -862,35 +911,83 @@ window.addEventListener("maskChannelStep", e=>{
 });
 
 
-window.addEventListener("backgroundSourceStep", e=>{
-    const entry = scopedEntry(e.detail.scope);
-    const target = entry.layer.settings.background;
+/*
+==================================================
+COMPOSE: the only place two nodes get drawn together (see CLAUDE.md)
+==================================================
+*/
+
+function addCompositeLayer(){
+    const layer = {
+        id:"composite-" + nextCompositeNumber,
+        number:nextCompositeNumber++,
+        name:"COMPOSITE " + (nextCompositeNumber - 1),
+        settings:Object.assign(defaultUniversalSettings(), {
+            foreground:"none",
+            background:"none",
+            blendMode:"normal"
+        })
+    };
+    compositeLayers.push(layer);
+    return layer;
+}
+
+
+window.addEventListener("addCompositeLayer", ()=>{
+    addCompositeLayer();
+    rebuildGraph();
+    reportSelection("composite");
+});
+
+
+window.addEventListener("compositeIndexStep", e=>{
+    selectedCompositeId = stepSelection(getCompositeRegistry(), selectedCompositeId, e.detail.direction);
+    reportSelection("composite");
+});
+
+
+window.addEventListener("compositeForegroundStep", e=>{
+    const entry = selectedCompositeEntry();
+    if(entry.kind !== "composite") return;
+    const s = entry.layer.settings;
     const ids = ["none", ...getAllRealEntries().filter(o=>o.id !== entry.id).map(o=>o.id)];
-    let index = ids.indexOf(target.source);
+    let index = ids.indexOf(s.foreground);
     if(index < 0) index = 0;
     index = Math.min(Math.max(index + e.detail.direction, 0), ids.length - 1);
-    target.source = ids[index];
+    s.foreground = ids[index];
     rebuildGraph();
-    reportSelection(e.detail.scope);
+    reportSelection("composite");
 });
 
 
-window.addEventListener("backgroundBlendModeStep", e=>{
-    const entry = scopedEntry(e.detail.scope);
-    const target = entry.layer.settings.background;
-    const modes = ["normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion"];
-    let index = modes.indexOf(target.blendMode);
+window.addEventListener("compositeBackgroundStep", e=>{
+    const entry = selectedCompositeEntry();
+    if(entry.kind !== "composite") return;
+    const s = entry.layer.settings;
+    const ids = ["none", ...getAllRealEntries().filter(o=>o.id !== entry.id).map(o=>o.id)];
+    let index = ids.indexOf(s.background);
+    if(index < 0) index = 0;
+    index = Math.min(Math.max(index + e.detail.direction, 0), ids.length - 1);
+    s.background = ids[index];
+    rebuildGraph();
+    reportSelection("composite");
+});
+
+
+window.addEventListener("compositeBlendModeStep", e=>{
+    const entry = selectedCompositeEntry();
+    if(entry.kind !== "composite") return;
+    const s = entry.layer.settings;
+    // Only the blend modes the wasm side actually implements (see
+    // parse_blend_mode in app.rs) - anything else silently falls back
+    // to "over", so offering more here would be phantom UI.
+    const modes = ["normal", "multiply", "screen"];
+    let index = modes.indexOf(s.blendMode);
     if(index < 0) index = 0;
     index = Math.min(Math.max(index + e.detail.direction, 0), modes.length - 1);
-    target.blendMode = modes[index];
+    s.blendMode = modes[index];
     rebuildGraph();
-    reportSelection(e.detail.scope);
-});
-
-
-window.addEventListener("layerBackgroundColour", ()=>{
-    // Flat colour backgrounds aren't wired to the wasm graph in this
-    // pass - BACKGROUND only supports another node as its source.
+    reportSelection("composite");
 });
 
 
