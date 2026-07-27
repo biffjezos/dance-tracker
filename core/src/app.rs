@@ -19,12 +19,11 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
 
-use crate::compositor::{Context, Input, Meta, Operation, OperationError};
+use crate::compositor::{Context, Input, Meta, OperationError};
 use crate::dom::{write_frame_to_canvas, VideoElementPixelSource};
 use crate::graph::{Graph, Node, NodeId};
 use crate::operations::composite::apply_mask::Channel as MaskChannel;
 use crate::operations::composite::{ApplyMask, BlendMode, Compose};
-use crate::operations::controls::{Forward, Play, Rewind, Stop};
 use crate::operations::executor::{Execute, PreviewExecutor, RenderExecutor, SimpleExecutor};
 use crate::operations::generators::{Ghost, Rings, Text};
 use crate::operations::masks::{Chroma, Difference, Fill};
@@ -350,30 +349,35 @@ impl App {
     /*
     ==================================================
     CONTROLS (TRANSPORT)
+
+    Plain HtmlVideoElement calls, not graph Operations - these never
+    touch the graph, a Value, or a Context, so wrapping them in the
+    Operation trait bought nothing but as_any/as_any_mut boilerplate
+    for something JS could've called on the video element directly.
     ==================================================
     */
 
     pub fn play(&self, video: HtmlVideoElement) -> Result<(), JsValue> {
-        let ctx = self.context(false);
-        Play { video }.execute(&ctx, &[]).map_err(js_err)?;
+        let _ = video.play()?;
         Ok(())
     }
 
     pub fn stop(&self, video: HtmlVideoElement) -> Result<(), JsValue> {
-        let ctx = self.context(false);
-        Stop { video }.execute(&ctx, &[]).map_err(js_err)?;
+        video.pause()?;
         Ok(())
     }
 
+    /*
+    Covers MINUTE +/SECOND +/FRAME + alike - just different seconds
+    values (60.0, 1.0, 1.0/30.0) passed in from JS.
+    */
     pub fn forward(&self, video: HtmlVideoElement, seconds: f64) -> Result<(), JsValue> {
-        let ctx = self.context(false);
-        Forward { video, seconds }.execute(&ctx, &[]).map_err(js_err)?;
+        video.set_current_time(video.current_time() + seconds);
         Ok(())
     }
 
     pub fn rewind(&self, video: HtmlVideoElement, seconds: f64) -> Result<(), JsValue> {
-        let ctx = self.context(false);
-        Rewind { video, seconds }.execute(&ctx, &[]).map_err(js_err)?;
+        video.set_current_time((video.current_time() - seconds).max(0.0));
         Ok(())
     }
 
