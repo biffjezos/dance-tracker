@@ -141,6 +141,7 @@ export class MenuManager {
             e=>{
 
                 const selection = {
+                    id:e.detail.id,
                     label:e.detail.label,
                     kind:e.detail.kind,
                     visibilityMode:e.detail.visibilityMode,
@@ -1266,6 +1267,11 @@ export class MenuManager {
         if(scope === "video"){
 
             this.addLayerScreenButton(
+                "MASKED BY",
+                "MASK"
+            );
+
+            this.addLayerScreenButton(
                 "TRANSPORT",
                 "TRANSPORT"
             );
@@ -1273,25 +1279,49 @@ export class MenuManager {
         }
 
 
-        this.addLayerScreenButton(
-            "MASKED BY",
-            "MASK"
-        );
 
+        if(
+            scope === "video" &&
+            selection.kind === "composite"
+        ){
 
+            /*
+            A composite's settings live on COMPOSE's own screen, not
+            behind a local EDIT bridge - COMPOSE has its own
+            independent stepper (this.compositeSelection), so EDIT has
+            to point it at this exact composite (focusComposite) before
+            jumping there, otherwise COMPOSE could open on a different
+            one than the user just selected here.
+            */
+            let editButton =
+            document.createElement(
+                "button"
+            );
 
-        if(scope === "mask"){
+            editButton.innerText=
+                "EDIT";
 
-            this.addLayerButton(
-                "ADD MASK",
-                "addMaskLayer"
+            editButton.onclick=()=>{
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "focusComposite",
+                        {detail:{id:selection.id}}
+                    )
+                );
+
+                this.show(
+                    "compose"
+                );
+
+            };
+
+            this.subMenu.appendChild(
+                editButton
             );
 
         }
-
-
-
-        if(
+        else if(
             (
                 scope === "video" &&
                 (
@@ -1308,6 +1338,17 @@ export class MenuManager {
             this.addLayerScreenButton(
                 "EDIT",
                 "EDIT"
+            );
+
+        }
+
+
+
+        if(scope === "mask"){
+
+            this.addLayerButton(
+                "ADD MASK",
+                "addMaskLayer"
             );
 
         }
@@ -1342,32 +1383,32 @@ export class MenuManager {
         if(kind === "rings"){
 
             this.addLayerButton(
-                "RING COUNT +",
+                "COUNT +",
                 "ringCountUp"
             );
 
             this.addLayerButton(
-                "RING COUNT -",
+                "COUNT -",
                 "ringCountDown"
             );
 
             this.addLayerButton(
-                "RING SIZE +",
+                "SIZE +",
                 "ringSizeUp"
             );
 
             this.addLayerButton(
-                "RING SIZE -",
+                "SIZE -",
                 "ringSizeDown"
             );
 
             this.addLayerButton(
-                "RING THICKNESS +",
+                "THICKNESS +",
                 "ringThicknessUp"
             );
 
             this.addLayerButton(
-                "RING THICKNESS -",
+                "THICKNESS -",
                 "ringThicknessDown"
             );
 
@@ -2313,8 +2354,7 @@ export class MenuManager {
         );
 
         fgDisplay.innerText=
-            "FOREGROUND: " +
-            (selection.foregroundLabel || "NONE");
+            selection.foregroundLabel || "NONE";
 
         fgDisplay.className=
             "ring-id-display";
@@ -2378,8 +2418,7 @@ export class MenuManager {
         );
 
         bgDisplay.innerText=
-            "BACKGROUND: " +
-            (selection.backgroundLabel || "NONE");
+            selection.backgroundLabel || "NONE";
 
         bgDisplay.className=
             "ring-id-display";
@@ -2443,7 +2482,6 @@ export class MenuManager {
         );
 
         blendDisplay.innerText=
-            "BLEND: " +
             (selection.blendMode || "normal").toUpperCase();
 
         blendDisplay.className=
@@ -2475,6 +2513,15 @@ export class MenuManager {
 
         this.subMenu.appendChild(
             blendPlus
+        );
+
+
+        // Stays available even with composites already existing -
+        // same as ADD MASK on KEY - otherwise there'd be no way to
+        // create a second one.
+        this.addLayerButton(
+            "ADD",
+            "addCompositeLayer"
         );
 
 
@@ -2757,47 +2804,6 @@ export class MenuManager {
                 new Event("audioSyncFrameDown")
             );
 
-
-
-        if(item==="RING COUNT +")
-            window.dispatchEvent(
-                new Event("ringCountUp")
-            );
-
-
-
-        if(item==="RING COUNT -")
-            window.dispatchEvent(
-                new Event("ringCountDown")
-            );
-
-
-
-        if(item==="RING SIZE +")
-            window.dispatchEvent(
-                new Event("ringSizeUp")
-            );
-
-
-
-        if(item==="RING SIZE -")
-            window.dispatchEvent(
-                new Event("ringSizeDown")
-            );
-
-
-
-        if(item==="RING THICKNESS +")
-            window.dispatchEvent(
-                new Event("ringThicknessUp")
-            );
-
-
-
-        if(item==="RING THICKNESS -")
-            window.dispatchEvent(
-                new Event("ringThicknessDown")
-            );
 
 
 
