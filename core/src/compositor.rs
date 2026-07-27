@@ -1,3 +1,5 @@
+// biffjezos: THIS IS NOT A COMPOSITOR
+
 /*
 Core, kind-agnostic contract every concrete operation implements.
 
@@ -31,6 +33,15 @@ pub enum Value {
     Boolean(bool),
     Text(String),
     Color(Color),
+}
+
+pub struct Point2D {
+    x: f64,
+    y: f64,
+}
+
+pub struct Center {
+    point: Point2D,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

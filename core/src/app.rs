@@ -19,7 +19,7 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
 
-use crate::compositor::{Context, Input, Meta, OperationError};
+use crate::compositor::{Center, Color, Context, Input, Meta, OperationError};
 use crate::dom::{write_frame_to_canvas, VideoElementPixelSource};
 use crate::graph::{Graph, Node, NodeId};
 use crate::operations::composite::apply_mask::Channel as MaskChannel;
@@ -304,24 +304,26 @@ impl App {
 
     pub fn add_rings(
         &mut self,
-        count: u32,
-        rings_per_group: u32,
+        center: Center,
+        ring_count: u32,
         spacing: f64,
-        size: f64,
+        radius: f64,
         stroke_width: f64,
-        colours: Vec<String>,
+        colour: Color,
     ) -> Result<usize, JsValue> {
         let rings = Rings::new(
-            count,
-            rings_per_group,
+            center,
+            ring_count,
             spacing,
-            size,
+            radius,
             stroke_width,
-            colours,
-            None,
+            colour,
         )?;
 
-        let node = Node { operation: Box::new(rings), inputs: vec![] };
+        let node = Node {
+            operation: Box::new(rings),
+            inputs: vec![],
+        };
 
         Ok(self.graph.add_node(node).index() as usize)
     }

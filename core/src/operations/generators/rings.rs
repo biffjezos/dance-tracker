@@ -1,25 +1,3 @@
-/*
-Draws via the browser's own Canvas2D (arcs/strokes) through web-sys on
-a private, detached scratch canvas, then reads the result back into a
-Frame - reimplementing anti-aliased circle stroking by hand in pure
-Rust pixel math would be a lot of extra scope for a worse-looking
-result than just using the same drawing primitives the old JS version
-already relied on. wasm32-only for that reason, same as dom.rs.
-*/
-#![cfg(target_arch = "wasm32")]
-
-use std::cell::RefCell;
-use std::f64::consts::PI;
-
-use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
-
-use crate::compositor::{
-    Context, Input, Operation, OperationCategory, OperationError, OperationMetadata, OutputKind,
-    ParameterDescriptor, ParameterKind, Value,
-};
-use crate::operations::Frame;
-
 /** by biffjezos
 
     We cannot add new features and operations if we do not separate concerns.
@@ -123,46 +101,53 @@ use crate::operations::Frame;
 
 **/
 
-struct Centre {
-    x: f64,
-    y: f64,
-    phase: f64,
-    speed: f64,
-}
+
+/*
+Draws via the browser's own Canvas2D (arcs/strokes) through web-sys on
+a private, detached scratch canvas, then reads the result back into a
+Frame - reimplementing anti-aliased circle stroking by hand in pure
+Rust pixel math would be a lot of extra scope for a worse-looking
+result than just using the same drawing primitives the old JS version
+already relied on. wasm32-only for that reason, same as dom.rs.
+*/
+#![cfg(target_arch = "wasm32")]
+
+use std::cell::RefCell;
+use std::f64::consts::PI;
+use crate::compositor::{2dPoint, Center}
+
+use wasm_bindgen::{JsCast, JsValue};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+
+use crate::compositor::{
+    Center, Color, Context, Input, Operation, OperationCategory, OperationError, OperationMetadata, OutputKind,
+    ParameterDescriptor, ParameterKind, Value,
+};
+use crate::operations::Frame;
 
 pub struct Rings {
-    pub count: u32,
-    pub rings_per_group: u32,
-    pub spacing: f64,
-    pub size: f64,
-    pub width: f64,
-    pub colours: Vec<String>,
-    pub constellation: Option<f64>, // Some(distance) when enabled
-
-    canvas: HtmlCanvasElement,
-    ctx: CanvasRenderingContext2d,
-    time: RefCell<f64>,
-    hub_phase: f64,
-    centres: RefCell<Vec<Centre>>,
+    center: Center,
+    ring_count: u32,
+    spacing: f64,
+    radius: f64,
+    width: f64,
+    colour: Color,
 }
 
 impl Rings {
     pub fn new(
-        count: u32,
-        rings_per_group: u32,
+        centre: Point2D,
+        ring_count: u32,
         spacing: f64,
-        size: f64,
+        radius: f64,
         stroke_width: f64,
-        colours: Vec<String>,
-        constellation: Option<f64>,
+        colour: Color,
     ) -> Result<Rings, JsValue> {
         let document = web_sys::window()
             .expect("window should exist")
             .document()
             .expect("document should exist");
 
-        // Sized on the first execute() call, from Context::meta, not
-        // here - see execute() below.
         let canvas: HtmlCanvasElement = document
             .create_element("canvas")?
             .dyn_into::<HtmlCanvasElement>()?;
@@ -173,45 +158,15 @@ impl Rings {
             .dyn_into::<CanvasRenderingContext2d>()?;
 
         Ok(Rings {
-            count,
-            rings_per_group,
+            centre,
+            ring_count,
             spacing,
-            size,
+            radius,
             width: stroke_width,
-            colours,
-            constellation,
+            colour,
             canvas,
             ctx,
-            time: RefCell::new(0.0),
-            hub_phase: js_sys::Math::random() * PI * 2.0,
-            centres: RefCell::new(Vec::new()),
         })
-    }
-
-    fn hub(&self, time: f64) -> (f64, f64) {
-        let w = self.canvas.width() as f64;
-        let h = self.canvas.height() as f64;
-
-        (
-            w / 2.0 + (time * 0.4 + self.hub_phase).sin() * 40.0,
-            h / 2.0 + (time * 0.32 + self.hub_phase).cos() * 30.0,
-        )
-    }
-
-    fn constellation_position(&self, time: f64, group: u32, count: u32, distance: f64) -> (f64, f64) {
-        let (hx, hy) = self.hub(time);
-
-        let angle = (PI * 2.0 / count as f64) * group as f64 + time * 0.15;
-
-        (hx + angle.cos() * distance, hy + angle.sin() * distance)
-    }
-
-    fn colour(&self, index: u32) -> &str {
-        if self.colours.is_empty() {
-            return "rgb(255,0,255)";
-        }
-
-        &self.colours[(index as usize) % self.colours.len()]
     }
 }
 
@@ -230,35 +185,71 @@ impl Operation for Rings {
 
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![
-            ParameterDescriptor { name: "count", kind: ParameterKind::Number },
-            ParameterDescriptor { name: "rings_per_group", kind: ParameterKind::Number },
-            ParameterDescriptor { name: "spacing", kind: ParameterKind::Number },
-            ParameterDescriptor { name: "size", kind: ParameterKind::Number },
-            ParameterDescriptor { name: "stroke_width", kind: ParameterKind::Number },
+            ParameterDescriptor {
+                name: "ring_count",
+                kind: ParameterKind::Number,
+            },
+            ParameterDescriptor {
+                name: "spacing",
+                kind: ParameterKind::Number,
+            },
+            ParameterDescriptor {
+                name: "radius",
+                kind: ParameterKind::Number,
+            },
+            ParameterDescriptor {
+                name: "stroke_width",
+                kind: ParameterKind::Number,
+            },
         ]
     }
 
     fn get_parameter(&self, name: &str) -> Option<Value> {
         match name {
-            "count" => Some(Value::Number(self.count as f64)),
-            "rings_per_group" => Some(Value::Number(self.rings_per_group as f64)),
+            "ring_count" => Some(Value::Number(self.ring_count as f64)),
             "spacing" => Some(Value::Number(self.spacing)),
-            "size" => Some(Value::Number(self.size)),
+            "radius" => Some(Value::Number(self.radius)),
             "stroke_width" => Some(Value::Number(self.width)),
             _ => None,
         }
     }
 
-    fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
+    fn set_parameter(
+        &mut self,
+        name: &str,
+        value: Value,
+    ) -> Result<(), OperationError> {
         match (name, value) {
-            ("count", Value::Number(v)) => { self.count = v.max(0.0) as u32; Ok(()) }
-            ("rings_per_group", Value::Number(v)) => { self.rings_per_group = v.max(0.0) as u32; Ok(()) }
-            ("spacing", Value::Number(v)) => { self.spacing = v; Ok(()) }
-            ("size", Value::Number(v)) => { self.size = v; Ok(()) }
-            ("stroke_width", Value::Number(v)) => { self.width = v; Ok(()) }
-            ("count" | "rings_per_group" | "spacing" | "size" | "stroke_width", _) => {
+            ("ring_count", Value::Number(v)) => {
+                self.ring_count = v.max(0.0) as u32;
+                Ok(())
+            }
+
+            ("spacing", Value::Number(v)) => {
+                self.spacing = v;
+                Ok(())
+            }
+
+            ("radius", Value::Number(v)) => {
+                self.radius = v;
+                Ok(())
+            }
+
+            ("stroke_width", Value::Number(v)) => {
+                self.width = v;
+                Ok(())
+            }
+
+            (
+                "ring_count" |
+                "spacing" |
+                "radius" |
+                "stroke_width",
+                _
+            ) => {
                 Err(OperationError::WrongValueType)
             }
+
             _ => Err(OperationError::UnknownParameter(name.to_string())),
         }
     }
@@ -274,80 +265,58 @@ impl Operation for Rings {
         let width = self.canvas.width();
         let height = self.canvas.height();
 
-        {
-            let mut time = self.time.borrow_mut();
-            *time += 0.03;
-        }
+        self.ctx.clear_rect(
+            0.0,
+            0.0,
+            width as f64,
+            height as f64,
+        );
 
-        let time = *self.time.borrow();
-
-        {
-            let mut centres = self.centres.borrow_mut();
-
-            while (centres.len() as u32) < self.count {
-                centres.push(Centre {
-                    x: js_sys::Math::random() * width as f64,
-                    y: js_sys::Math::random() * height as f64,
-                    phase: js_sys::Math::random() * PI * 2.0,
-                    speed: 0.5 + js_sys::Math::random(),
-                });
-            }
-
-            centres.truncate(self.count as usize);
-        }
-
-        self.ctx.clear_rect(0.0, 0.0, width as f64, height as f64);
         self.ctx.save();
+
         self.ctx.set_global_alpha(0.8);
+        self.ctx.set_stroke_style_str(&self.colour.to_css());
+        self.ctx.set_line_width(self.width);
 
-        let zoom = self.size / 30.0;
-        let unit = self.spacing * zoom;
-        let inner_radius = unit * 0.3;
+        for n in 0..self.ring_count {
+            let radius = self.radius + n as f64 * self.spacing;
 
-        let centres = self.centres.borrow();
+            self.ctx.begin_path();
 
-        for group in 0..self.count {
-            let (cx, cy) = if let Some(distance) = self.constellation {
-                self.constellation_position(time, group, self.count, distance)
-            } else {
-                let centre = &centres[group as usize];
-
-                (
-                    centre.x + (time * centre.speed + centre.phase).sin() * 50.0,
-                    centre.y + (time * centre.speed * 0.8 + centre.phase).cos() * 40.0,
+            self.ctx
+                .arc(
+                    self.center.x,
+                    self.center.y,
+                    radius,
+                    0.0,
+                    PI * 2.0,
                 )
-            };
+                .map_err(|_| OperationError::WrongValueType)?;
 
-            self.ctx.set_stroke_style_str(self.colour(group));
-            self.ctx.set_line_width(self.width);
-
-            for n in 0..=self.rings_per_group {
-                let radius = inner_radius + n as f64 * unit;
-
-                self.ctx.begin_path();
-
-                self.ctx
-                    .arc(cx, cy, radius, 0.0, PI * 2.0)
-                    .map_err(|_| OperationError::WrongValueType)?;
-
-                self.ctx.stroke();
-            }
+            self.ctx.stroke();
         }
 
         self.ctx.restore();
 
         let image_data = self
             .ctx
-            .get_image_data(0.0, 0.0, width as f64, height as f64)
+            .get_image_data(
+                0.0,
+                0.0,
+                width as f64,
+                height as f64,
+            )
             .map_err(|_| OperationError::WrongValueType)?;
 
         let frame = Frame {
             pixels: image_data.data().0,
             width,
             height,
-            timestamp: time,
+            timestamp: 0.0,
         };
 
-        Ok(vec![Value::Frame(std::sync::Arc::new(frame))])
+        Ok(vec![
+            Value::Frame(std::sync::Arc::new(frame))
+        ])
     }
 }
