@@ -20,6 +20,63 @@ use crate::compositor::{
 };
 use crate::operations::Frame;
 
+/** by biffjezos
+
+    We cannot add new features and operations if we do not separate concerns.
+
+    1. Position and movements should be separate:
+
+    struct Position {
+        x: f64,
+        y: f64,
+    }
+    
+    Use this struct for all nodes that need a position. Replace all x,y values in the other
+    operations. 
+
+    2.
+    The rings and all other generated nodes should be static.
+    The hard coded movement is an operation. BUT NOT BY DEFAULT
+    only if a movement operation is added to a node (can be of many (visual) types ).
+
+    It's up-to-you, but create an animation operator that does the same moves
+    used for the Rings now. Give it an explicit name like GentleMove. 
+
+    You could also implement a ```2dTransform``` operation that moves nodes in x and y.
+    It might be a good design decision to have the animation operation use 2dTransform
+    as long as the animation is active. (Play/Stop controls are already implemented).
+
+    Please elaborate on the actual abstraction you are going to use.
+    
+    3. 
+
+    For the colours (completely gone from the UI):
+    
+    I added a ```struct Colour``` to ```compositor.rs``` and a stub for
+    ``òperations::generators::SolidColor``` that struct
+    instead ```pub colours: Vec<String>``` 
+
+    I was thinking that we would use these to:
+
+    - generate a solid plane (menu GENERATE Solid -> ``òperations::generators::SolidColor```)
+    - to give nodes a color (text, masks, rings, solid plane, ghosts)
+    - to change the color of the nodes.
+
+    4.
+    
+    Go through all visualizing nodes and make them respect the new operations, if applicable.
+
+    which means:
+
+    - they need a colour to show up on the canvas,
+    - they have a center position and they have
+    - the have no movement operations attached by default
+
+    5.
+    From now on ALWAYS THINK OF separation of concerns. If a struct could potentially be re-used
+    DO NOT PUT IT INTO THE LOWEST MODULE IN THE HIERARCHY. PUT IT INTO A HIGHER LEVEL AND USE IT.
+**/
+
 struct Centre {
     x: f64,
     y: f64,
