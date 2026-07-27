@@ -35,10 +35,27 @@ import { containFit } from "./engine/fit.js";
 const WIDTH = 320;
 const HEIGHT = 240;
 
-const OUTPUT_SIZE_MIN = { width:160, height:120 };
-const OUTPUT_SIZE_MAX = { width:960, height:720 };
-const OUTPUT_SIZE_STEP = { width:40, height:30 };
+/*
+Common, recognized, square-pixel resolutions only - no anamorphic
+pixels, no letterboxed-on-4:3 legacy broadcast sizes (PALplus and
+friends). Ordered by pixel count so OUTPUT SIZE +/- is a straight
+"bigger/smaller" ladder across every aspect ratio family at once
+(4:3, 1:1, 16:9) rather than three separate ladders.
+*/
+const OUTPUT_RESOLUTIONS = [
+    { width:320, height:240 },   // QVGA, 4:3
+    { width:640, height:480 },   // VGA, 4:3
+    { width:800, height:600 },   // SVGA, 4:3
+    { width:1024, height:768 },  // XGA, 4:3
+    { width:1280, height:720 },  // HD, 16:9
+    { width:1024, height:1024 }, // square
+    { width:1600, height:1200 }, // UXGA, 4:3
+    { width:1920, height:1080 }, // Full HD, 16:9
+    { width:2560, height:1440 }, // QHD, 16:9
+    { width:3840, height:2160 }  // 4K UHD, 16:9
+];
 
+let outputResolutionIndex = OUTPUT_RESOLUTIONS.findIndex(r => r.width === WIDTH && r.height === HEIGHT);
 let outputWidth = WIDTH;
 let outputHeight = HEIGHT;
 
@@ -1138,21 +1155,24 @@ function applyOutputSize(){
     if(!wasmApp) return;
     wasmApp.set_resolution(outputWidth, outputHeight);
 
+    const aspectRatio = (outputWidth / outputHeight).toFixed(3);
     const bar = document.querySelector(".statusbar");
-    bar.children[5].innerText = outputWidth + "x" + outputHeight;
+    bar.children[5].innerText = outputWidth + "x" + outputHeight + " " + aspectRatio;
 }
 
 
 window.addEventListener("outputSizeUp", ()=>{
-    outputWidth = Math.min(OUTPUT_SIZE_MAX.width, outputWidth + OUTPUT_SIZE_STEP.width);
-    outputHeight = Math.min(OUTPUT_SIZE_MAX.height, outputHeight + OUTPUT_SIZE_STEP.height);
+    outputResolutionIndex = Math.min(OUTPUT_RESOLUTIONS.length - 1, outputResolutionIndex + 1);
+    outputWidth = OUTPUT_RESOLUTIONS[outputResolutionIndex].width;
+    outputHeight = OUTPUT_RESOLUTIONS[outputResolutionIndex].height;
     applyOutputSize();
 });
 
 
 window.addEventListener("outputSizeDown", ()=>{
-    outputWidth = Math.max(OUTPUT_SIZE_MIN.width, outputWidth - OUTPUT_SIZE_STEP.width);
-    outputHeight = Math.max(OUTPUT_SIZE_MIN.height, outputHeight - OUTPUT_SIZE_STEP.height);
+    outputResolutionIndex = Math.max(0, outputResolutionIndex - 1);
+    outputWidth = OUTPUT_RESOLUTIONS[outputResolutionIndex].width;
+    outputHeight = OUTPUT_RESOLUTIONS[outputResolutionIndex].height;
     applyOutputSize();
 });
 
@@ -1212,6 +1232,7 @@ async function boot(){
     await init();
     wasmApp = new WasmApp(WIDTH, HEIGHT);
 
+    applyOutputSize();
     reportSelection("video");
     requestAnimationFrame(loop);
 }
