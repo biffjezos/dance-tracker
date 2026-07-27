@@ -48,7 +48,49 @@ use crate::operations::Frame;
 
     Please elaborate on the actual abstraction you are going to use.
     
-    3. 
+    3. About ring(s), RINGS and Constellation
+    
+    The RINGS generator operation should
+
+    - only create one RINGS node
+    - which can have one or many rings (saturn-like rings)
+    - each RINGS node can have one color (all rings of a RINGS node are the same color,
+    as it is now)
+    
+    If a user wants more than one saturn RINGS, new RINGS nodes must be added.
+
+    3.a) Separate Constellation from RINGS.
+    
+    - In the UI add a new MENU: 'ANIMATE' under which the user can find "CONSTELLATION"
+    - Create a new Constellation operation in ```operations::animations::constellation.rs```
+    - Constellation keeps two or more nodes at a set distance, use the same maths behind it
+    to support many nodes at the same distance (in-between).
+    (2 at a line, 3 in a triangle, 4 in a square, ..., 8 in an octagon)
+
+    Example:
+    The ANIMATE/CONSTELLATION sub menu:
+    ADD - [NODE SELECTOR] + | - [DISTANCE] + | - [ NODES IN CONSTELLATION ] + | [future remove button]
+    
+    - ADD
+    - - MASK 1
+    - - MASK 2
+    - - RINGS 1
+
+    Added nodes appear in NODES IN CONSTELLATION.
+
+    Menu: NODES/CONSTELLATION 1
+
+    Renders MASK 1, MASK 2, RINGS 1 in a Constellation around a common CENTER. It's static and not
+    animated at the moment. CONSTELLATION 1 appears under NODES:
+    
+    Menu: ANIMATE/[GENTLE MOVE] ( the animation currently hard coded into RINGS)
+    ADD TO - [NODE SELECTOR] + | - [SPEED] + (and the settings currently used in RINGS for the animation)
+
+    Menu: NODES/CONSTELLATION 1 selected
+
+    Shows MASK 1, MASK 2, RINGS 1 in the triangle-constellation at set distance, speed and other properties
+    
+    4. 
 
     For the colours (completely gone from the UI):
     
@@ -62,7 +104,7 @@ use crate::operations::Frame;
     - to give nodes a color (text, masks, rings, solid plane, ghosts)
     - to change the color of the nodes.
 
-    4.
+    5.
     
     Go through all visualizing nodes and make them respect the new operations, if applicable.
 
@@ -72,9 +114,13 @@ use crate::operations::Frame;
     - they have a center position and they have
     - the have no movement operations attached by default
 
-    5.
     From now on ALWAYS THINK OF separation of concerns. If a struct could potentially be re-used
     DO NOT PUT IT INTO THE LOWEST MODULE IN THE HIERARCHY. PUT IT INTO A HIGHER LEVEL AND USE IT.
+
+    Check all operations. Does a module contain code that could be an operation? If yes, create
+    an operation for it, or use an existing operation (all visual nodes may have a center and are
+    positioned at the center). In the future the center may be movable in x,y or animated.
+
 **/
 
 struct Centre {
