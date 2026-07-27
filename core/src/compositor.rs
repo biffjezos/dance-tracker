@@ -30,6 +30,16 @@ pub enum Value {
     Number(f64),
     Boolean(bool),
     Text(String),
+    Color(Color),
+}
+/* Color added by biffjezos
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
 }
 
 /*
@@ -135,6 +145,7 @@ pub enum ParameterKind {
     Number,
     Boolean,
     Text,
+    Color
 }
 
 #[derive(Clone, Debug)]
@@ -171,6 +182,7 @@ pub enum OutputKind {
     Number,
     Boolean,
     Text,
+    Color
 }
 
 #[derive(Clone, Debug)]
