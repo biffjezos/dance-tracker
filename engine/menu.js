@@ -120,10 +120,16 @@ export class MenuManager {
         field says which one changed). Both render through the same
         renderLayerEditor() - only which selection object it reads
         differs.
-        */
-        this.videoSelection = {label:"VIDEO 1", kind:"video", visibilityMode:"on"};
 
-        this.maskSelection = {label:"MASK 1", kind:"mask", visibilityMode:"on"};
+        label:null until the first real layerSelectionChanged event -
+        renderLayerEditor() reads that as "nothing real exists yet" and
+        shows an honest empty state. Never seed this with a fake
+        "VIDEO 1"/"MASK 1" placeholder - that displays as a real,
+        selectable node before the user has created anything.
+        */
+        this.videoSelection = {label:null, kind:null, visibilityMode:"on"};
+
+        this.maskSelection = {label:null, kind:null, visibilityMode:"on"};
 
 
         window.addEventListener(
@@ -135,7 +141,8 @@ export class MenuManager {
                     kind:e.detail.kind,
                     visibilityMode:e.detail.visibilityMode,
                     sourceLabel:e.detail.sourceLabel,
-                    mode:e.detail.mode
+                    mode:e.detail.mode,
+                    ringCount:e.detail.ringCount
                 };
 
 
@@ -1108,7 +1115,7 @@ export class MenuManager {
     /*
     Serves both VIDEO and KEY - which one is which is entirely
     determined by this.node().scope ("video" or "mask"). Both show
-    the exact same minimal row: LAYER -/+ stepper, VISIBILITY MODE,
+    the exact same minimal row: NODE -/+ stepper, VISIBILITY MODE,
     BACKGROUND COLOUR, MASK, TRANSPORT. KEY additionally shows the
     actual chroma-key deep settings, since scope is always "mask"
     there and a mask has no other screen to live on.
@@ -1180,7 +1187,7 @@ export class MenuManager {
         );
 
         minus.innerText=
-            "LAYER -";
+            "NODE -";
 
         minus.onclick=()=>{
 
@@ -1222,7 +1229,7 @@ export class MenuManager {
         );
 
         plus.innerText=
-            "LAYER +";
+            "NODE +";
 
         plus.onclick=()=>{
 
@@ -1732,14 +1739,23 @@ export class MenuManager {
 
 
     /*
-    This picks one of the (up to) 8 individual concentric ring strokes
-    drawn inside a single RINGS instance's own animation - a much more
-    granular thing than the RINGS 1/2/3 node-level numbering shown
-    elsewhere, hence "STROKE" here rather than "RING", so the two
-    can't be misread as the same count (one RINGS node here still
-    means exactly one node, however many strokes it draws).
+    This picks one of this RINGS instance's own individual concentric
+    ring strokes - a much more granular thing than the RINGS 1/2/3
+    node-level numbering shown elsewhere, hence "STROKE" here rather
+    than "RING", so the two can't be misread as the same count (one
+    RINGS node here still means exactly one node, however many strokes
+    it draws). Bounded by this instance's own RING COUNT, never a fixed
+    range - only ever offer strokes that actually exist, see CLAUDE.md.
     */
     renderRingColourPicker(){
+
+
+        const ringCount =
+            this.videoSelection.ringCount ||
+            1;
+
+        if(this.ringId > ringCount)
+            this.ringId = ringCount;
 
 
         let minus =
@@ -1801,7 +1817,7 @@ export class MenuManager {
 
         plus.onclick=()=>{
 
-            if(this.ringId < 8)
+            if(this.ringId < ringCount)
                 this.ringId++;
 
             this.render();
@@ -2580,14 +2596,6 @@ export class MenuManager {
         if(item==="ADD TEXT")
             window.dispatchEvent(
                 new Event("addTextLayer")
-            );
-
-
-
-
-        if(item==="ADD RINGS LAYER")
-            window.dispatchEvent(
-                new Event("addRingsLayer")
             );
 
 

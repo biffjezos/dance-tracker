@@ -9,7 +9,7 @@ export class App {
     add_compose(foreground: number, background: number, mode: string): number;
     add_difference(source: number, threshold: number, fill_video: boolean, fill_r: number, fill_g: number, fill_b: number): number;
     add_ghost(source: number, count: number, alpha: number, delay_ticks: number): number;
-    add_rings(count: number, rings_per_group: number, spacing: number, size: number, stroke_width: number): number;
+    add_rings(count: number, rings_per_group: number, spacing: number, size: number, stroke_width: number, colours: string[]): number;
     add_text(content: string, colour: string, size: number): number;
     add_video_source(video: HTMLVideoElement): number;
     capture_background(difference_node: number): void;
@@ -34,7 +34,7 @@ export interface InitOutput {
     readonly app_add_compose: (a: number, b: number, c: number, d: number, e: number) => number;
     readonly app_add_difference: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
     readonly app_add_ghost: (a: number, b: number, c: number, d: number, e: number) => number;
-    readonly app_add_rings: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly app_add_rings: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly app_add_text: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly app_add_video_source: (a: number, b: any) => [number, number, number];
     readonly app_capture_background: (a: number, b: number) => [number, number];
@@ -47,11 +47,11 @@ export interface InitOutput {
     readonly app_set_resolution: (a: number, b: number, c: number) => void;
     readonly app_set_text_content: (a: number, b: number, c: number, d: number) => void;
     readonly app_stop: (a: number, b: any) => [number, number];
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __wbindgen_malloc: (a: number, b: number) => number;
-    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_start: () => void;
 }

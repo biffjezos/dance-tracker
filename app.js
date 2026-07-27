@@ -29,10 +29,18 @@ import init, { App as WasmApp } from "./core/pkg/dance_tracker_core.js";
 import { Camera } from "./engine/camera.js";
 import { MenuManager } from "./engine/menu.js";
 import { Recorder } from "./engine/recorder.js";
+import { containFit } from "./engine/fit.js";
 
 
 const WIDTH = 320;
 const HEIGHT = 240;
+
+const OUTPUT_SIZE_MIN = { width:160, height:120 };
+const OUTPUT_SIZE_MAX = { width:960, height:720 };
+const OUTPUT_SIZE_STEP = { width:40, height:30 };
+
+let outputWidth = WIDTH;
+let outputHeight = HEIGHT;
 
 
 const settings = { video: { width: WIDTH, height: HEIGHT } };
@@ -209,6 +217,7 @@ function reportSelection(scope){
     lastPreviewScope = scope;
     const entry = scopedEntry(scope);
 
+    updateOutputNodeId();
     updateLayerStatusDisplay(entry);
 
     window.dispatchEvent(new CustomEvent("maskSettingsChanged", {
@@ -247,6 +256,13 @@ function reportSelection(scope){
             sourceLabel:
                 entry.kind === "standaloneMask"
                 ? resolveMaskSourceLabel(entry.layer.settings.source)
+                : null,
+            // How many ring groups/strokes this RINGS instance actually
+            // has - RING EDIT's STROKE stepper must never offer more
+            // than this many, see CLAUDE.md.
+            ringCount:
+                entry.kind === "rings"
+                ? entry.layer.settings.count
                 : null
         }
     }));
@@ -260,8 +276,8 @@ function reportSelection(scope){
 GRAPH REBUILD
 
 Rebuilds every node fresh from current JS-side settings and rewires
-BACKGROUND/MASKED BY, then figures out the fixed-order visible stack
-for the master output. Old wasm-side nodes from the previous rebuild
+BACKGROUND/MASKED BY, then points the master output at whichever entry
+is currently selected. Old wasm-side nodes from the previous rebuild
 are simply abandoned (the wasm Graph has no removal API) - harmless,
 since only nodes reachable from this rebuild's output/preview ids ever
 get evaluated; it does mean a long session accumulates unused nodes in
@@ -271,6 +287,18 @@ than incremental graph surgery.
 */
 
 let outputNodeId = null;
+
+// Own-content ids from the most recent rebuildGraph() - reused by
+// currentPreviewContentId() so every animation frame isn't minting
+// fresh wasm nodes for whatever's on screen (see there for why that
+// mattered).
+let cachedContentIds = new Map();
+
+// Fully-wired (masked-by + background applied) ids from the most
+// recent rebuildGraph() - reused by updateOutputNodeId() so stepping
+// to a different node updates the output without needing a full
+// rebuild.
+let cachedWiredIds = new Map();
 
 
 function buildVideoContent(layer){
@@ -318,7 +346,8 @@ function buildRingsContent(layer){
         layer.settings.ringsPerGroup,
         layer.settings.spacing,
         layer.settings.size,
-        layer.settings.width
+        layer.settings.width,
+        layer.settings.colours
     );
 }
 
@@ -371,13 +400,6 @@ function rebuildGraph(){
 
     // Pass 2: wire MASKED BY then BACKGROUND on top of each entry's own content.
     const wiredIds = new Map();
-    const consumed = new Set();
-
-    all.forEach(entry=>{
-        const s = entry.layer.settings;
-        if(s.maskedBy.source !== "none") consumed.add(s.maskedBy.source);
-        if(s.background.source !== "none") consumed.add(s.background.source);
-    });
 
     all.forEach(entry=>{
         let id = contentIds.get(entry.id);
@@ -400,50 +422,60 @@ function rebuildGraph(){
         wiredIds.set(entry.id, id);
     });
 
-    // Pass 3: fixed-order stack of everything independently visible and
-    // not consumed by another entry's BACKGROUND/MASKED BY.
-    let stackId = null;
-
-    all.forEach(entry=>{
-        if(!entry.layer.settings.enabled) return;
-        if(consumed.has(entry.id)) return;
-
-        const id = wiredIds.get(entry.id);
-        if(id === undefined) return;
-
-        stackId = stackId === null ? id : wasmApp.add_compose(id, stackId, "over");
-    });
-
-    outputNodeId = stackId;
+    cachedContentIds = contentIds;
+    cachedWiredIds = wiredIds;
+    updateOutputNodeId();
 
     videoLayers.forEach(layer=>{ layer.pendingCapture = false; });
     maskLayers.forEach(layer=>{ layer.pendingCapture = false; });
 }
 
 
+/*
+Output is exactly the currently selected entry's own fully-wired node
+(its own MASKED BY / BACKGROUND, if the user set them) - never an
+automatic merge with whatever else exists or is independently enabled
+elsewhere. Stacking happens only through an explicit BACKGROUND wire
+the user set themselves (see CLAUDE.md) - there is no fixed-order
+"everything visible" stack here. VISIBILITY: OFF on the selected entry
+blanks the output rather than showing it anyway.
+
+Called from rebuildGraph() (wiring may have changed) and separately
+from reportSelection() (stepping to a different node changes what
+should be on the output even when nothing about the graph itself
+changed - see there).
+*/
+function updateOutputNodeId(){
+    const current = scopedEntry(lastPreviewScope);
+    const currentId = cachedWiredIds.get(current.id);
+
+    outputNodeId =
+        (current.layer.settings.enabled && currentId !== undefined)
+        ? currentId
+        : null;
+}
+
+
+/*
+Reuses rebuildGraph()'s own-content ids instead of minting fresh wasm
+nodes every animation frame - re-running add_rings/add_video_source/etc
+every tick handed a stateful generator (Rings' wandering ring centres,
+a difference mask's captured background) a brand new node with none of
+its previous state every single frame, which is what made RINGS
+visibly jump around here even though the master output (built once per
+rebuildGraph(), not once per frame) looked fine.
+
+A standalone mask previews its SOURCE, not its own keyed output - you
+need to see the raw video to tell what you're keying (pick a colour,
+frame the shot), not the result of a key you haven't tuned yet.
+*/
 function currentPreviewContentId(){
     const entry = scopedEntry(lastPreviewScope);
     if(!entry.id) return null;
 
-    // Re-resolve through the same ids rebuildGraph just computed by
-    // rebuilding a second, tiny map is wasteful - instead just rebuild
-    // and grab this entry's own content id fresh, independent of
-    // whatever the master stack looks like.
-    const all = getAllRealEntries();
-    const contentIds = new Map();
+    if(entry.kind === "standaloneMask") return cachedContentIds.get(entry.layer.settings.source);
 
-    all.forEach(e=>{
-        let id = null;
-        if(e.kind === "video") id = buildVideoContent(e.layer);
-        else if(e.kind === "rings") id = buildRingsContent(e.layer);
-        else if(e.kind === "text") id = buildTextContent(e.layer);
-        if(id !== null && id !== undefined) contentIds.set(e.id, id);
-    });
-
-    if(entry.kind === "standaloneMask") return buildMaskContent(entry.layer, contentIds);
-    if(entry.kind === "ghost") return buildGhostContent(entry.layer, contentIds);
-
-    return contentIds.get(entry.id);
+    return cachedContentIds.get(entry.id);
 }
 
 
@@ -471,13 +503,21 @@ function renderPreview(){
 
 
 function loop(){
+    const masterCanvas = document.getElementById("master-layer");
+
     if(wasmApp && outputNodeId !== null && outputNodeId !== undefined){
         try {
-            wasmApp.render_tick(outputNodeId, document.getElementById("master-layer"));
+            wasmApp.render_tick(outputNodeId, masterCanvas);
         }
         catch(error){
             // expected transient failure - see comment above
         }
+    }
+    else {
+        // Nothing selected/enabled for output - go blank. Leaving the
+        // canvas showing its last rendered frame instead would freeze
+        // a live feed mid-frame, which reads as "the video stopped".
+        masterCanvas.getContext("2d").clearRect(0, 0, masterCanvas.width, masterCanvas.height);
     }
 
     renderPreview();
@@ -679,6 +719,46 @@ window.addEventListener("bodyKeyColour", e=>{
 });
 
 
+let armedKeyColourPick = false;
+
+
+/*
+Samples from #camera-preview, not any one fixed video - that canvas
+already shows whatever's currently relevant (see
+currentPreviewContentId, and note a mask's preview is its own SOURCE
+video precisely so there's something meaningful to pick a colour
+from), so picking a colour from what you're actually looking at is
+both simpler and more correct than hardcoding one particular video.
+*/
+window.addEventListener("armKeyColourPicker", ()=>{
+    armedKeyColourPick = true;
+    document.getElementById("camera-preview").classList.add("sampling");
+});
+
+
+document.getElementById("camera-preview").addEventListener("click", e=>{
+    if(!armedKeyColourPick) return;
+    armedKeyColourPick = false;
+
+    const source = e.target;
+    source.classList.remove("sampling");
+
+    const rect = source.getBoundingClientRect();
+    const fit = containFit(source.width, source.height, rect.width, rect.height);
+
+    const x = Math.floor((e.clientX - rect.left - fit.x) / fit.width * source.width);
+    const y = Math.floor((e.clientY - rect.top - fit.y) / fit.height * source.height);
+
+    if(x < 0 || y < 0 || x >= source.width || y >= source.height) return;
+
+    const pixel = source.getContext("2d").getImageData(x, y, 1, 1).data;
+
+    window.dispatchEvent(new CustomEvent("bodyKeyColour", {
+        detail:{r:pixel[0], g:pixel[1], b:pixel[2]}
+    }));
+});
+
+
 /*
 ==================================================
 UNIVERSAL ROW: stepper / visibility / background / masked by
@@ -778,7 +858,8 @@ function addRingsLayer(){
         number:nextRingsNumber++,
         name:"RINGS " + (nextRingsNumber - 1),
         settings:Object.assign(defaultUniversalSettings(), {
-            count:2, ringsPerGroup:8, spacing:14, size:20, width:6
+            count:2, ringsPerGroup:8, spacing:14, size:20, width:6,
+            colours:["rgb(255,0,255)", "rgb(0,255,80)"]
         })
     };
     ringsLayers.push(layer);
@@ -826,6 +907,18 @@ window.addEventListener("ringThicknessUp", ()=>{
 window.addEventListener("ringThicknessDown", ()=>{
     const s = selectedVideoEntry().layer.settings;
     if(s.width !== undefined) s.width = Math.max(1, s.width - 1);
+    rebuildGraph();
+});
+
+
+window.addEventListener("ringColour", e=>{
+    const s = selectedVideoEntry().layer.settings;
+    if(!Array.isArray(s.colours)) return;
+
+    const index = e.detail.ringId - 1;
+    while(s.colours.length <= index) s.colours.push("rgb(255,0,255)");
+    s.colours[index] = "rgb(" + e.detail.r + "," + e.detail.g + "," + e.detail.b + ")";
+
     rebuildGraph();
 });
 
@@ -1010,6 +1103,29 @@ OUTPUT / RECORDING
 ==================================================
 */
 
+function applyOutputSize(){
+    if(!wasmApp) return;
+    wasmApp.set_resolution(outputWidth, outputHeight);
+
+    const bar = document.querySelector(".statusbar");
+    bar.children[5].innerText = outputWidth + "x" + outputHeight;
+}
+
+
+window.addEventListener("outputSizeUp", ()=>{
+    outputWidth = Math.min(OUTPUT_SIZE_MAX.width, outputWidth + OUTPUT_SIZE_STEP.width);
+    outputHeight = Math.min(OUTPUT_SIZE_MAX.height, outputHeight + OUTPUT_SIZE_STEP.height);
+    applyOutputSize();
+});
+
+
+window.addEventListener("outputSizeDown", ()=>{
+    outputWidth = Math.max(OUTPUT_SIZE_MIN.width, outputWidth - OUTPUT_SIZE_STEP.width);
+    outputHeight = Math.max(OUTPUT_SIZE_MIN.height, outputHeight - OUTPUT_SIZE_STEP.height);
+    applyOutputSize();
+});
+
+
 let recorder = null;
 
 
@@ -1035,14 +1151,10 @@ NOT WIRED THIS PASS (documented, not silently missing)
 ==================================================
 */
 
-window.addEventListener("outputSizeUp", ()=>{});
-window.addEventListener("outputSizeDown", ()=>{});
 window.addEventListener("toggleConstellation", ()=>{});
 window.addEventListener("constellationDistanceUp", ()=>{});
 window.addEventListener("constellationDistanceDown", ()=>{});
 window.addEventListener("toggleRingsEnabled", ()=>{});
-window.addEventListener("ringColour", ()=>{});
-window.addEventListener("armKeyColourPicker", ()=>{});
 window.addEventListener("audioSyncMinuteUp", ()=>{});
 window.addEventListener("audioSyncMinuteDown", ()=>{});
 window.addEventListener("audioSyncSecondUp", ()=>{});
