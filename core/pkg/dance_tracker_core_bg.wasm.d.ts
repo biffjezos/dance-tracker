@@ -7,8 +7,8 @@ export const app_add_chroma: (a: number, b: number, c: number, d: number, e: num
 export const app_add_compose: (a: number, b: number, c: number, d: number, e: number) => number;
 export const app_add_difference: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
 export const app_add_ghost: (a: number, b: number, c: number, d: number, e: number) => number;
-export const app_add_rings: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
-export const app_add_text: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
+export const app_add_rings: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+export const app_add_text: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const app_add_video_source: (a: number, b: any) => [number, number, number];
 export const app_capture_background: (a: number, b: number) => [number, number];
 export const app_forward: (a: number, b: any, c: number) => [number, number];

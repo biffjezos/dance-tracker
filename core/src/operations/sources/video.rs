@@ -13,10 +13,10 @@ impl Operation for VideoSource {
 
     fn execute(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
-        let frame = self.pixels.read()?;
+        let frame = self.pixels.read(ctx.meta.width, ctx.meta.height)?;
 
         Ok(vec![Value::Frame(Arc::new(frame))])
     }
@@ -30,7 +30,7 @@ mod tests {
     struct FixedPixelSource(Frame);
 
     impl PixelSource for FixedPixelSource {
-        fn read(&self) -> Result<Frame, OperationError> {
+        fn read(&self, _width: u32, _height: u32) -> Result<Frame, OperationError> {
             Ok(self.0.clone())
         }
     }
@@ -38,7 +38,7 @@ mod tests {
     struct FailingPixelSource;
 
     impl PixelSource for FailingPixelSource {
-        fn read(&self) -> Result<Frame, OperationError> {
+        fn read(&self, _width: u32, _height: u32) -> Result<Frame, OperationError> {
             Err(OperationError::SourceNotFound("gone".to_string()))
         }
     }

@@ -49,24 +49,19 @@ fn contain_fit(source_w: f64, source_h: f64, target_w: f64, target_h: f64) -> (f
 
 /*
 A video/camera source: draws the live <video> element's current frame
-onto its own scratch canvas (letterboxed to target_width/height, same
-as every other node's fixed frame size - a video's native resolution
-almost never matches the project's output size), then reads that
-canvas's pixels back - the canvas here is Rust's own working buffer,
-not something JS has to keep refreshing.
+onto its own scratch canvas (letterboxed to whatever width/height it's
+asked for - a video's native resolution almost never matches the
+graph's render resolution), then reads that canvas's pixels back - the
+canvas here is Rust's own working buffer, not something JS has to keep
+refreshing.
 */
 pub struct VideoElementPixelSource {
     pub video: HtmlVideoElement,
     pub scratch_canvas: HtmlCanvasElement,
-    pub target_width: u32,
-    pub target_height: u32,
 }
 
 impl PixelSource for VideoElementPixelSource {
-    fn read(&self) -> Result<Frame, OperationError> {
-        let width = self.target_width;
-        let height = self.target_height;
-
+    fn read(&self, width: u32, height: u32) -> Result<Frame, OperationError> {
         self.scratch_canvas.set_width(width);
         self.scratch_canvas.set_height(height);
 

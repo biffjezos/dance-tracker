@@ -66,8 +66,6 @@ pub struct App {
     graph: Graph,
     captured: HashMap<NodeId, Rc<RefCell<Option<Arc<Frame>>>>>,
     difference_source: HashMap<NodeId, NodeId>,
-    width: u32,
-    height: u32,
     resources: ResourceManager,
     /*
     Only render_tick advances this - preview_tick and
@@ -85,26 +83,18 @@ impl App {
             graph: Graph::new(width, height),
             captured: HashMap::new(),
             difference_source: HashMap::new(),
-            width,
-            height,
             resources: ResourceManager::new(),
             frame_counter: Cell::new(0),
         }
     }
 
     /*
-    Changing resolution never requires rebuilding the graph - it just
-    updates the one shared value every operation reads through Context
-    on its next execute() call. Also updates width/height (still used
-    directly by add_video_source's own letterboxing target) so a
-    resize takes effect for future add_video_source calls even before
-    every operation reads its size from Context instead of a
-    constructor argument.
+    Changing resolution never requires rebuilding the graph - every
+    operation reads the graph's current size through Context on its
+    next execute() call.
     */
     pub fn set_resolution(&mut self, width: u32, height: u32) {
         self.graph.set_resolution(width, height);
-        self.width = width;
-        self.height = height;
     }
 
     /*
@@ -136,9 +126,10 @@ impl App {
     */
 
     /*
-    Letterboxed (containFit) to the project's own width/height, same
-    as every other node's fixed frame size - a video's native
-    resolution almost never matches it.
+    Letterboxed (containFit) to the graph's current render resolution
+    on every read, not a size fixed here - a video's native resolution
+    almost never matches it, and this must keep matching even after a
+    set_resolution() call with no graph rebuild.
     */
     pub fn add_video_source(&mut self, video: HtmlVideoElement) -> Result<usize, JsValue> {
         // rebuildGraph() re-adds a source for the same HtmlVideoElement
@@ -151,8 +142,6 @@ impl App {
         let pixels = VideoElementPixelSource {
             video,
             scratch_canvas: scratch,
-            target_width: self.width,
-            target_height: self.height,
         };
 
         let node = Node {
@@ -302,8 +291,6 @@ impl App {
 
     pub fn add_rings(
         &mut self,
-        width: u32,
-        height: u32,
         count: u32,
         rings_per_group: u32,
         spacing: f64,
@@ -316,8 +303,6 @@ impl App {
         ];
 
         let rings = Rings::new(
-            width,
-            height,
             count,
             rings_per_group,
             spacing,
@@ -343,13 +328,11 @@ impl App {
 
     pub fn add_text(
         &mut self,
-        width: u32,
-        height: u32,
         content: String,
         colour: String,
         size: f64,
     ) -> Result<usize, JsValue> {
-        let text = Text::new(width, height, content, colour, size)?;
+        let text = Text::new(content, colour, size)?;
 
         let node = Node { operation: Box::new(text), inputs: vec![] };
 

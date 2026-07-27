@@ -76,8 +76,6 @@ export class App {
         return ret >>> 0;
     }
     /**
-     * @param {number} width
-     * @param {number} height
      * @param {number} count
      * @param {number} rings_per_group
      * @param {number} spacing
@@ -85,27 +83,25 @@ export class App {
      * @param {number} stroke_width
      * @returns {number}
      */
-    add_rings(width, height, count, rings_per_group, spacing, size, stroke_width) {
-        const ret = wasm.app_add_rings(this.__wbg_ptr, width, height, count, rings_per_group, spacing, size, stroke_width);
+    add_rings(count, rings_per_group, spacing, size, stroke_width) {
+        const ret = wasm.app_add_rings(this.__wbg_ptr, count, rings_per_group, spacing, size, stroke_width);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ret[0] >>> 0;
     }
     /**
-     * @param {number} width
-     * @param {number} height
      * @param {string} content
      * @param {string} colour
      * @param {number} size
      * @returns {number}
      */
-    add_text(width, height, content, colour, size) {
+    add_text(content, colour, size) {
         const ptr0 = passStringToWasm0(content, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(colour, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        const ret = wasm.app_add_text(this.__wbg_ptr, width, height, ptr0, len0, ptr1, len1, size);
+        const ret = wasm.app_add_text(this.__wbg_ptr, ptr0, len0, ptr1, len1, size);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

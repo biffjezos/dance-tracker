@@ -22,18 +22,17 @@ pub struct Text {
 }
 
 impl Text {
-    pub fn new(width: u32, height: u32, content: String, colour: String, size: f64) -> Result<Text, JsValue> {
+    pub fn new(content: String, colour: String, size: f64) -> Result<Text, JsValue> {
         let document = web_sys::window()
             .expect("window should exist")
             .document()
             .expect("document should exist");
 
+        // Sized on the first execute() call, from Context::meta, not
+        // here - see execute() below.
         let canvas: HtmlCanvasElement = document
             .create_element("canvas")?
             .dyn_into::<HtmlCanvasElement>()?;
-
-        canvas.set_width(width);
-        canvas.set_height(height);
 
         let ctx = canvas
             .get_context("2d")?
@@ -82,9 +81,12 @@ impl Operation for Text {
 
     fn execute(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
+        self.canvas.set_width(ctx.meta.width);
+        self.canvas.set_height(ctx.meta.height);
+
         let width = self.canvas.width();
         let height = self.canvas.height();
 

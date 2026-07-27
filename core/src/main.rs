@@ -6,7 +6,7 @@ PixelSource stand-in for the real DOM-backed one (dom.rs, wasm32 only)
 pixel, not just that it runs without crashing.
 */
 
-use dance_tracker_core::compositor::{Context, Input, OperationError};
+use dance_tracker_core::compositor::{Context, Input, Meta, OperationError};
 use dance_tracker_core::graph::{Graph, Node};
 use dance_tracker_core::operations::composite::{BlendMode, Compose};
 use dance_tracker_core::operations::executor::{Execute, SimpleExecutor};
@@ -17,7 +17,7 @@ use dance_tracker_core::operations::{expect_frame, Frame};
 struct FixedPixelSource(Frame);
 
 impl PixelSource for FixedPixelSource {
-    fn read(&self) -> Result<Frame, OperationError> {
+    fn read(&self, _width: u32, _height: u32) -> Result<Frame, OperationError> {
         Ok(self.0.clone())
     }
 }
@@ -67,7 +67,10 @@ fn main() {
 
     println!("Graph contains {:?} nodes", graph.nodes.len());
 
-    let ctx = Context::default();
+    let ctx = Context {
+        meta: Meta { width: 1, height: 1, ..Meta::default() },
+        ..Context::default()
+    };
 
     let executor = SimpleExecutor;
     let values = executor
