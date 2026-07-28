@@ -24,6 +24,9 @@ impl ImageSource {
             image: None,
         }
     }
+    pub fn set_image(  &mut self, image: Arc<Image>, ) {
+        self.image = Some(image);
+    }
 }
 
 impl Operation for ImageSource {
@@ -64,9 +67,5 @@ impl Operation for ImageSource {
         Ok(vec![
             Value::Image(image)
         ])
-    }
-
-    pub fn set_image(  &mut self, image: Arc<Image>, ) {
-        self.image = Some(image);
     }
 }
