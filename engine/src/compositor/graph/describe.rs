@@ -19,7 +19,6 @@ pub struct NodeDescription {
     pub inputs: Vec<(Input, NodeId)>,
 }
 
-
 impl NodeDescription {
 
     pub fn from_node(

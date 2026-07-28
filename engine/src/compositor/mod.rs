@@ -8,9 +8,11 @@ pub mod input;
 pub mod metadata;
 pub mod operations;
 pub mod value;
+pub mod operation_descriptor;
 
 pub use context::Context;
 pub use error::OperationError;
 pub use input::Input;
 pub use operations::Operation;
 pub use value::Value;
+pub use operation_descriptor::OperationDescriptor;

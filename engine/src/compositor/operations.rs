@@ -10,6 +10,8 @@ use crate::compositor::{
 };
 
 pub trait Operation: Any {
+    fn descriptor(&self) -> OperationDescriptor;
+    
     fn execute(
         &self,
         ctx: &Context,
