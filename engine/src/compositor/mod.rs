@@ -11,7 +11,7 @@ pub mod operation_descriptor;
 pub mod registry;
 pub mod value;
 
-pub use context::Context;
+pub use context::{ Context, Meta };
 pub use error::OperationError;
 pub use input::Input;
 pub use operations::Operation;

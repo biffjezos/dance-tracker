@@ -7,14 +7,14 @@ use web_sys::{HtmlCanvasElement, HtmlVideoElement};
 use crate::compositor::{
     Context,
     executors::{
+        Execute,
         PreviewExecutor,
         RenderExecutor,
-        SimpleExecutor,
-        Execute
+        SimpleExecutor
     },
     graph::{ Graph, NodeId },
     Meta,
-    OperationError
+    OperationError,
     OperationRegistry
 };
 use crate::dom::write_frame_to_canvas;
