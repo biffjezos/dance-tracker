@@ -1,3 +1,8 @@
+
+use crate::compositor::{
+    find_input, Center, Context, Input, Operation, OperationCategory, OperationError, OperationMetadata,
+    OutputKind, Point2d, Value,
+};
 pub struct Lissajous {
     center: Center,
     amplitude_x: f64,

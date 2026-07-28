@@ -114,7 +114,7 @@ already relied on. wasm32-only for that reason, same as dom.rs.
 
 use std::cell::RefCell;
 use std::f64::consts::PI;
-use crate::compositor::{2dPoint, Center}
+
 
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
@@ -136,7 +136,7 @@ pub struct Rings {
 
 impl Rings {
     pub fn new(
-        centre: Point2D,
+        centre: Center,
         ring_count: u32,
         spacing: f64,
         radius: f64,

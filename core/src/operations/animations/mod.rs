@@ -1,1 +1,1 @@
-pub mod move;
+pub mod lissajous;

@@ -10,7 +10,7 @@ use wasm_bindgen::JsValue;
 
 pub struct SolidColor {
     pub color: Color,
-}
+}F
 
 impl SolidColor {
     pub fn new(color: Color) -> Result<SolidColor, JsValue> {
