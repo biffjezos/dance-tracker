@@ -1,12 +1,4 @@
-/*
-Real DOM-backed PixelSource implementations - wasm32 only, since these
-call web-sys, which needs an actual browser/JS environment underneath.
-Confirmed compiling against real web-sys signatures (not assumed):
-Rust can draw a live <video> element's current frame onto a canvas via
-draw_image_with_html_video_element, then read that canvas's pixels
-back via get_image_data - a source operation does both itself, once
-per tick, with no JS pixel-pushing involved.
-*/
+// src/dom.rs
 
 #![cfg(target_arch = "wasm32")]
 
@@ -30,11 +22,6 @@ fn canvas_2d(canvas: &HtmlCanvasElement) -> Result<CanvasRenderingContext2d, Ope
         .ok_or(OperationError::WrongValueType)
 }
 
-/*
-Letterboxed fit, same math as the old JS engine/fit.js containFit -
-scale to fit inside target_width/height preserving aspect ratio,
-centered, rather than stretching or cropping.
-*/
 fn contain_fit(source_w: f64, source_h: f64, target_w: f64, target_h: f64) -> (f64, f64, f64, f64) {
     if source_w <= 0.0 || source_h <= 0.0 {
         return (0.0, 0.0, target_w, target_h);
@@ -47,14 +34,6 @@ fn contain_fit(source_w: f64, source_h: f64, target_w: f64, target_h: f64) -> (f
     ((target_w - width) / 2.0, (target_h - height) / 2.0, width, height)
 }
 
-/*
-A video/camera source: draws the live <video> element's current frame
-onto its own scratch canvas (letterboxed to whatever width/height it's
-asked for - a video's native resolution almost never matches the
-graph's render resolution), then reads that canvas's pixels back - the
-canvas here is Rust's own working buffer, not something JS has to keep
-refreshing.
-*/
 pub struct VideoElementPixelSource {
     pub video: HtmlVideoElement,
     pub scratch_canvas: HtmlCanvasElement,
@@ -92,10 +71,6 @@ impl PixelSource for VideoElementPixelSource {
     }
 }
 
-/*
-Writes a composited Frame back onto the visible output canvas - the
-last step PreviewExecutor/RenderExecutor takes each tick.
-*/
 pub fn write_frame_to_canvas(
     canvas: &HtmlCanvasElement,
     frame: &Frame,

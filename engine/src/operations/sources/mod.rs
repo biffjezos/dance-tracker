@@ -1,9 +1,18 @@
 pub mod camera;
 pub mod image;
-pub mod pixel;
 pub mod video;
 
-// pub use image::CameraSource;
+use crate::{
+    compositor::error::OperationError,
+    operations::Frame,
+};
+
 pub use image::ImageSource;
-pub use pixel::PixelSource;
-// pub use image::VideoSource;
+
+pub trait PixelSource {
+    fn read(
+        &self,
+        width: u32,
+        height: u32,
+    ) -> Result<Frame, OperationError>;
+}

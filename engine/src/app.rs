@@ -9,14 +9,27 @@ use crate::compositor::{
     error::OperationError,
     graph::{Graph, NodeId},
 };
-
-use crate::compositor::executor::{PreviewExecutor, RenderExecutor, SimpleExecutor};
+use crate::compositor::executor::{
+    PreviewExecutor,
+    RenderExecutor,
+    SimpleExecutor,
+    Execute,
+};
 use crate::dom::write_frame_to_canvas;
 use crate::graphics::Frame;
-use crate::resources::ResourceManager;
+use crate::resources::manager::ResourceManager;
 
 fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
+}
+
+fn expect_frame(
+    value: Option<&crate::compositor::Value>,
+) -> Result<&Frame, OperationError> {
+    match value {
+        Some(crate::compositor::Value::Frame(frame)) => Ok(frame.as_ref()),
+        _ => Err(OperationError::WrongValueType),
+    }
 }
 
 #[wasm_bindgen]

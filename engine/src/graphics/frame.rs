@@ -1,3 +1,4 @@
+// src/graphics/frame.rs
 #[derive(Clone, Debug)]
 pub struct Frame {
     pub pixels: Vec<u8>,
