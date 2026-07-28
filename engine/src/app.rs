@@ -5,8 +5,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
 
 use crate::compositor::{
-    context::{ Context, Meta },
-    error::OperationError,
+    Context,
     executors::{
         PreviewExecutor,
         RenderExecutor,
@@ -14,6 +13,8 @@ use crate::compositor::{
         Execute
     },
     graph::{ Graph, NodeId },
+    Meta,
+    OperationError
     OperationRegistry
 };
 use crate::dom::write_frame_to_canvas;
