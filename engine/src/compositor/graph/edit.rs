@@ -1,4 +1,4 @@
-// graph/edit.rs
+// src/graph/edit.rs
 
 use crate::compositor::{
     error::OperationError,
@@ -12,9 +12,7 @@ use super::{
     validate::ValidationState,
 };
 
-
 impl Graph {
-
     pub fn add_node(
         &mut self,
         operation: Box<dyn Operation>,
@@ -163,5 +161,24 @@ impl Graph {
 
     pub fn output(&self) -> Option<NodeId> {
         self.output
+    }
+
+    pub fn validate(
+        &mut self,
+    ) -> Result<(), OperationError> {
+        super::validate::validate_graph(self)
+    }
+
+    pub fn resolution(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    pub fn set_resolution(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) {
+        self.width = width;
+        self.height = height;
     }
 }
