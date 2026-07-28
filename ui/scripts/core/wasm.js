@@ -24,7 +24,6 @@ export async function initWasm() {
     return wasmApp;
 }
 
-
 export function getWasmApp() {
     return wasmApp;
 }
