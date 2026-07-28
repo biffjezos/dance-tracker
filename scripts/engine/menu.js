@@ -205,11 +205,6 @@ export class MenuManager {
                     type: "fileInput",
                     accept: "video/*",
                     event: "addVideoLayer"
-                },
-                "ADD AUDIO SOURCE": {
-                    type: "fileInput",
-                    accept: "audio/*",
-                    event: "loadAudioFile"
                 }
             },
             /*
@@ -226,43 +221,7 @@ export class MenuManager {
             the universal row, and a composite's own settings live on
             COMPOSE's screen, not behind EDIT here).
             */
-            video: {
-                type: "layerEditor",
-                scope: "video",
-                MASK: {
-                    type: "maskPicker",
-                    scope: "video"
-                },
-                TRANSPORT: {
-                    "PLAY/STOP": null,
-                    TIME: {
-                        type: "display",
-                        id: "transport-display"
-                    },
-                    "MINUTE +": null,
-                    "MINUTE -": null,
-                    "SECOND +": null,
-                    "SECOND -": null,
-                    "FRAME +": null,
-                    "FRAME -": null
-                },
-                EDIT: {
-                    type: "instanceEditor",
-                    scope: "video",
-                    "RING COLOUR": {
-                        type: "ringColourPicker"
-                    },
-                    CONSTELLATION: ["CONSTELLATION ON/OFF", "DISTANCE +", "DISTANCE -"],
-                    "TEXT COLOUR": colourMenu("textColour"),
-                    "APPLY TO MASK": {
-                        type: "applyToMaskPicker"
-                    },
-                    "KEY COLOUR": {
-                        type: "keyColourPicker"
-                    },
-                    COLOUR: colourMenu("layerColour")
-                }
-            },
+            video: {},
             /*
             KEY is its own selector, scoped to masks only - a filtered
             view of the exact same mask entries NODES already lists
@@ -275,22 +234,7 @@ export class MenuManager {
             for these same entries from NODES, and a second copy under
             KEY was confusing (which one's real?), not useful.
             */
-            key: {
-                type: "layerEditor",
-                scope: "mask",
-                MASK: {
-                    type: "maskPicker",
-                    scope: "mask"
-                },
-                EDIT: {
-                    type: "instanceEditor",
-                    scope: "mask",
-                    "KEY COLOUR": {
-                        type: "keyColourPicker"
-                    },
-                    COLOUR: colourMenu("layerColour")
-                }
-            },
+            key: {},
             /*
             No default crap - one action per kind, mirrors INPUT's ADD
             VIDEO SOURCE/ADD AUDIO SOURCE exactly. Each click creates a
@@ -298,17 +242,8 @@ export class MenuManager {
             real entry in VIDEO - that's where it's edited (via EDIT),
             not here. Any number of each, same as video layers.
             */
-            generate: {
-                "ADD RINGS": null,
-                "ADD GHOST": null,
-                "ADD TEXT": null
-            },
-            animations: {
-                "LISSAJOUS": {
-                    event: "addOperation",
-                    operation: "Lissajous"
-                }
-            },
+            generate: {},
+            animations: {},
             /*
             The only place two nodes get drawn together - see
             CLAUDE.md. Not a "layerEditor" like NODES/KEY: a COMPOSITE
@@ -316,19 +251,9 @@ export class MenuManager {
             stepper and its foreground/background/blend controls all
             render on this one screen (renderComposePicker).
             */
-            compose: {
-                type: "composePicker"
-            },
-            transform: {
-                "COMING SOON": null
-            },
-            output: {
-                RECORDER: {
-                    "RECORD ON/OFF": null,
-                    "OUTPUT SIZE +": null,
-                    "OUTPUT SIZE -": null
-                }
-            }
+            compose: {},
+            transform: {},
+            output: {}
         };
     }
     init() {
@@ -984,8 +909,7 @@ export class MenuManager {
     trail history. A direct selector, not a stepper: one button per
     other real node that exists (any kind - video, mask, rings, text,
     another ghost), no hidden precondition like a required visibility
-    mode first. Empty only when nothing else has been added yet.
-    Different from MASKED BY, which masks Ghost's composited output
+    mode first. Different from MASKED BY, which masks Ghost's composited output
     and lives under VIDEO instead.
 
     Fetches fresh data every time it renders, synchronously, via a
