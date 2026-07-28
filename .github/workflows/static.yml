@@ -23,6 +23,10 @@ concurrency:
 
 jobs:
   # Single deploy job since we're just deploying
+  permissions:
+    contents: write
+    pages: write
+    id-token: write
   deploy:
     environment:
       name: github-pages
