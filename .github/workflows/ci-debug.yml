@@ -1,20 +1,32 @@
-name: Dev Build
+name: Rust Debug Build
 
 on:
   push:
-    branches:
-      - dev
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: engine
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - run: rustup target add wasm32-unknown-unknown
+      - name: Add WASM target
+        run: rustup target add wasm32-unknown-unknown
 
-      - run: cargo build
-      - run: cargo build --target wasm32-unknown-unknown
+      - name: Cargo check
+        run: cargo check
+
+      - name: Debug build
+        run: cargo build
+
+      - name: WASM debug build
+        run: cargo build --target wasm32-unknown-unknown
