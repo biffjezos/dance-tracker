@@ -6,6 +6,8 @@ pub mod metadata;
 pub mod operations;
 pub mod value;
 
+pub use context::Context;
+pub use error::OperationError;
 pub use input::Input;
 pub use operations::Operation;
 

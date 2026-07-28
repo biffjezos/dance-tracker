@@ -2,11 +2,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::compositor::{
-    context::Context,
-    error::OperationError,
-    input::Input,
-    operation::Operation,
-    metadata::{ OperationCategory,OperationMetadata, OutputKind },
+    Context,
+    OperationError,
+    Input,
+    Operation,
+    metadata::{ OperationCategory, OperationMetadata, OutputKind },
     value::Value
 };
 
