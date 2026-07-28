@@ -15,10 +15,19 @@ use crate::compositor::{
 use crate::graphics::Image;
 
 pub struct ImageSource {
-    pub image: Arc<Image>,
+    pub image: Option<Arc<Image>>,
+}
+
+impl ImageSource {
+    pub fn new() -> Self {
+        Self {
+            image: None,
+        }
+    }
 }
 
 impl Operation for ImageSource {
+    
     fn descriptor(&self) -> OperationDescriptor {
         OperationDescriptor {
             id: "image_source",
@@ -46,14 +55,18 @@ impl Operation for ImageSource {
     }
 
 
-    fn execute(
-        &self,
-        _ctx: &Context,
-        _inputs: &[(Input, Value)],
-    ) -> Result<Vec<Value>, OperationError> {
+    fn execute( &self, _ctx: &Context, _inputs: &[(Input, Value)], ) -> Result<Vec<Value>, OperationError> {
+        let image = self
+            .image
+            .clone()
+            .ok_or_else(|| OperationError::SourceNotFound("Image not loaded".to_string()))?;
 
         Ok(vec![
-            Value::Image(self.image.clone())
+            Value::Image(image)
         ])
+    }
+
+    pub fn set_image(  &mut self, image: Arc<Image>, ) {
+        self.image = Some(image);
     }
 }

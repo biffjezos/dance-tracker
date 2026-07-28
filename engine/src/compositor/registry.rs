@@ -5,24 +5,49 @@ use crate::compositor::{
     OperationDescriptor,
 };
 
+pub struct RegisteredOperation {
+    pub descriptor: OperationDescriptor,
+    pub constructor: fn() -> Box<dyn Operation>,
+}
+
 pub struct OperationRegistry {
-    operations: Vec<Box<dyn Operation>>,
+    operations: Vec<RegisteredOperation>,
 }
 
 impl OperationRegistry {
 
     pub fn new() -> Self {
-        Self { operations: Vec::new(), }
+        Self {
+            operations: Vec::new(),
+        }
     }
 
-    pub fn register(&mut self, operation: Box<dyn Operation>, ) {
-        self.operations.push(operation);
+    pub fn register(
+        &mut self,
+        constructor: fn() -> Box<dyn Operation>,
+    ) {
+        let operation = constructor();
+
+        self.operations.push(RegisteredOperation {
+            descriptor: operation.descriptor(),
+            constructor,
+        });
     }
 
     pub fn descriptors(&self) -> Vec<OperationDescriptor> {
         self.operations
             .iter()
-            .map(|operation| operation.descriptor())
+            .map(|op| op.descriptor.clone())
             .collect()
+    }
+
+    pub fn create(
+        &self,
+        id: &str,
+    ) -> Option<Box<dyn Operation>> {
+        self.operations
+            .iter()
+            .find(|op| op.descriptor.id == id)
+            .map(|op| (op.constructor)())
     }
 }

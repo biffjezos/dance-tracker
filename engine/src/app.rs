@@ -36,6 +36,7 @@ fn expect_frame(
 pub struct App {
     graph: Graph,
     resources: ResourceManager,
+    registry: OperationRegistry,
     frame_counter: u64,
 }
 
@@ -45,9 +46,12 @@ impl App {
 
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32) -> App {
+        let mut registry = OperationRegistry::new();
+        crate::operations::register::register_operations(&mut registry);
         App {
             graph: Graph::new(width, height),
             resources: ResourceManager::new(),
+            registry,
             frame_counter: 0,
         }
     }
