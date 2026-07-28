@@ -1,17 +1,8 @@
-/*
-A Node's inputs are named (Vec<(Input, NodeId)>), not positional - what
-each wire means is a label on the edge itself (e.g. Compose reads
-Input::Foreground and Input::Background) rather than a convention the
-caller and the operation had to independently agree on for position 0
-vs 1.
-*/
-
 use std::any::Any;
 
 use crate::compositor::{
     context::Context,
     error::OperationError,
-    graph::Graph,
     input::Input,
     metadata::Meta,
     node::{ NodeId, Node },
@@ -20,22 +11,6 @@ use crate::compositor::{
     value::Value
 };
 
-use crate::compositor::{
-
-};
-/*
-A plain usize index would go stale silently once node removal exists -
-reusing (or even just outliving) an index that now names a different
-node. generation guards against that: add_node always mints
-generation 0 for a brand new slot; remove_node (unused by anything
-today - deletion isn't implemented, this only proves the mechanism
-works) bumps the slot's generation without reusing it, so any NodeId
-minted before the removal stops resolving. from_index() is for
-boundary callers (app.rs) that only ever hand back an index they
-previously received - JS never deletes a node, so it always effectively
-means generation 0, and resolve() below still rejects it correctly if
-the graph's own generation for that slot has since moved on.
-*/
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId {
     index: u32,
@@ -63,13 +38,6 @@ impl Node {
     }
 }
 
-/*
-Everything a future save/load would need to reconstruct one node -
-see Graph::describe_node. Not a serialization format itself (no
-serde, no schema) - just proof the pieces (stable id, typed metadata,
-parameters as Value data, explicit input wiring) already compose into
-one self-describing snapshot.
-*/
 pub struct NodeDescription {
     pub id: NodeId,
     pub metadata: OperationMetadata,
@@ -77,12 +45,22 @@ pub struct NodeDescription {
     pub inputs: Vec<(Input, NodeId)>,
 }
 
-/*
-Owns the render resolution so it's one piece of state shared by every
-node's execution (via Context - see App::context), instead of each
-source/generator operation baking in its own fixed width/height at
-construction time and needing the whole graph rebuilt to change it.
-*/
+
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum VisitState {
+    Unvisited,
+    Visiting,
+    Visited,
+}
+
+#[derive(Clone)]
+enum ValidationState {
+    Dirty,
+    Valid,
+    Invalid(OperationError),
+}
+
 pub struct Graph {
     pub nodes: Vec<Node>,
     // Parallel to nodes - generations[i] is the current generation for
@@ -100,20 +78,6 @@ pub struct Graph {
     width: u32,
     height: u32,
     validation: ValidationState,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum VisitState {
-    Unvisited,
-    Visiting,
-    Visited,
-}
-
-#[derive(Clone)]
-enum ValidationState {
-    Dirty,
-    Valid,
-    Invalid(OperationError),
 }
 
 impl Graph {
@@ -153,15 +117,6 @@ impl Graph {
         NodeId { index, generation: 0 }
     }
 
-    /*
-    Not called from anywhere yet - app.rs/JS never removes a node today
-    (rebuildGraph() always just re-adds, leaving orphans, a known
-    accepted tradeoff). Exists so the generation mechanism is real and
-    tested rather than an unused type change: the slot stays in nodes
-    (a tombstone, not freed for reuse - an explicit free-list is its
-    own follow-up if slot reuse is ever wanted), but its generation
-    moves past whatever any already-minted NodeId for it remembers.
-    */
     pub fn remove_node(&mut self, node_id: NodeId) -> bool {
         let idx = node_id.index as usize;
 
@@ -194,31 +149,10 @@ impl Graph {
         }
     }
 
-    /*
-    Generalizes the as_any_mut/downcast_mut pattern already used for
-    live-editing a node's own concrete Operation (THRESHOLD +/-, text
-    content, ...) so a call site names the target type once instead of
-    repeating as_any_mut().downcast_mut::<T>() inline. None covers "no
-    node at this id" (unknown or stale), "wrong type" - callers that
-    already know node_id names a T only care that the edit happened,
-    not which reason a miss would be.
-    */
     pub fn operation_mut<T: Any>(&mut self, node_id: NodeId) -> Option<&mut T> {
         self.resolve_mut(node_id)?.operation.as_any_mut().downcast_mut::<T>()
     }
 
-    /*
-    Prepares (without implementing) graph save/load: bundles everything
-    a serializer would need for one node - a stable id, what kind of
-    operation it is (metadata), its current settings as data (walking
-    parameters() and reading each one back through get_parameter(),
-    not just the descriptor list), and its explicit connections
-    (inputs, unchanged). Nothing here reaches into a concrete Operation
-    type - describe_node works for any Operation purely through the
-    trait, which is the actual point: a future save/load or node
-    editor never needs a per-kind branch to know what a node is or
-    holds.
-    */
     pub fn describe_node(&self, node_id: NodeId) -> Option<NodeDescription> {
         let node = self.resolve(node_id)?;
 
@@ -237,18 +171,6 @@ impl Graph {
         })
     }
 
-    /*
-    Every executor walks Node::inputs with plain recursion and no
-    visited-set, so a cycle wouldn't error - it would recurse forever
-    and blow the stack, which aborts the whole wasm instance (a trap,
-    not a catchable Err) rather than failing one tick gracefully. Call
-    this before handing the graph to an executor whenever its shape
-    might have changed (app.rs does this in capture_background,
-    render_tick and preview_tick) - cheap to call every time since the
-    actual DFS below only re-runs when add_node marked the graph dirty
-    since the last validate() call; a validated-then-untouched graph
-    just returns the cached result.
-    */
     pub fn validate(&mut self) -> Result<(), OperationError> {
         if matches!(self.validation, ValidationState::Dirty) {
             let result = self.run_validation();
