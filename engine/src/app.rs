@@ -67,14 +67,26 @@ impl App {
     pub fn execute_operation(&mut self, id: &str) {
         println!("Execute operation: {}", id);
 
-        match id {
-            "load_image" => {
-                // TODO
+        let Some(operation) = self.registry.create(id) else {
+            println!("Operation not found: {}", id);
+            return;
+        };
+
+        let result = operation.execute(
+            &self.context,
+            &[]
+        );
+
+        match result {
+            Ok(values) => {
+                println!("Operation output: {:?}", values);
             }
-            _ => {}
+            Err(err) => {
+                println!("Operation failed: {:?}", err);
+            }
         }
     }
-    
+
     pub fn create_node( &mut self, operation_id: String, ) -> Result<u32, JsValue> {
         let operation = self
             .registry
