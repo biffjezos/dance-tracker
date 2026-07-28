@@ -103,13 +103,11 @@ export class MenuManager {
     render() {
         this.subMenu.innerHTML = "";
 
-        const ops = this.operations.filter(
-            op => op.category === this.category
-        );
+        console.log("MENU OPS:", this.operations);
 
-        ops.forEach(op => {
+        this.operations.forEach(op => {
             const button = document.createElement("button");
-            button.innerText = op.label;
+            button.innerText = op.label || op.name || op;
 
             button.onclick = () => {
                 window.dispatchEvent(
