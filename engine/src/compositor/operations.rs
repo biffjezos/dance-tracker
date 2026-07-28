@@ -3,7 +3,7 @@
 use std::any::Any;
 use crate::compositor::{
     Context,
-    OperationDescriptor
+    OperationDescriptor,
     OperationError,
     input::Input,
     metadata::{ OperationMetadata, ParameterDescriptor },
