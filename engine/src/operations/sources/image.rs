@@ -13,7 +13,6 @@ use crate::compositor::{
 };
 
 use crate::graphics::Image;
-use crate::operations::converters::image_to_frame::image_to_frame;
 
 pub struct ImageSource {
     pub image: Option<Arc<Image>>,
@@ -61,7 +60,7 @@ impl Operation for ImageSource {
             display_name: "Image Source",
             category: OperationCategory::Source,
             input_count: 0,
-            outputs: vec![OutputKind::Frame],
+            outputs: vec![OutputKind::Image],
         }
     }
 
@@ -72,11 +71,9 @@ impl Operation for ImageSource {
             .clone()
             .ok_or_else(|| OperationError::SourceNotFound("Image not loaded".to_string()))?;
 
-        // Convert Image to Frame for compatibility with preview/render system
-        let frame = Arc::new(image_to_frame(&image));
-
+        // Return Value::Image - conversion to Frame happens at the boundary (preview/render)
         Ok(vec![
-            Value::Frame(frame)
+            Value::Image(image)
         ])
     }
 }

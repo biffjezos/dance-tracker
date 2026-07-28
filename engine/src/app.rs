@@ -28,11 +28,20 @@ fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
 }
 
-fn expect_frame(
-    value: Option<&crate::compositor::Value>,
-) -> Result<&Frame, OperationError> {
+/// Convert a Value to a Frame, handling both Value::Frame and Value::Image
+/// This is the boundary where Image gets converted to Frame with timestamp 0.0
+fn value_to_frame(value: &Value) -> Result<Arc<Frame>, OperationError> {
     match value {
-        Some(crate::compositor::Value::Frame(frame)) => Ok(frame.as_ref()),
+        Value::Frame(frame) => Ok(frame.clone()),
+        Value::Image(image) => {
+            // Convert Image to Frame at the boundary
+            Ok(Arc::new(Frame {
+                pixels: image.pixels.clone(),
+                width: image.width,
+                height: image.height,
+                timestamp: 0.0, // Still images have no timestamp
+            }))
+        }
         _ => Err(OperationError::WrongValueType),
     }
 }
@@ -190,9 +199,14 @@ impl App {
             )
             .map_err(js_err)?;
 
-        let frame = expect_frame(values.first()).map_err(js_err)?;
+        // Get the first value and convert to Frame if needed
+        let first_value = values.first()
+            .ok_or_else(|| JsValue::from_str("No output value"))?;
+        
+        let frame = value_to_frame(first_value)
+            .map_err(|e| JsValue::from_str(&format!("Failed to get frame: {:?}", e)))?;
 
-        write_frame_to_canvas(&canvas, frame)
+        write_frame_to_canvas(&canvas, &frame)
     }
 
 
@@ -216,9 +230,14 @@ impl App {
             )
             .map_err(js_err)?;
 
-        let frame = expect_frame(values.first()).map_err(js_err)?;
+        // Get the first value and convert to Frame if needed
+        let first_value = values.first()
+            .ok_or_else(|| JsValue::from_str("No output value"))?;
+        
+        let frame = value_to_frame(first_value)
+            .map_err(|e| JsValue::from_str(&format!("Failed to get frame: {:?}", e)))?;
 
-        write_frame_to_canvas(&canvas, frame)
+        write_frame_to_canvas(&canvas, &frame)
     }
 
 
