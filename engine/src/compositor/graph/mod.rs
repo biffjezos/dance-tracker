@@ -5,12 +5,14 @@ use crate::compositor::{
     node::{Node, NodeId},
 };
 
-mod resolve;
-mod edit;
+
 mod describe;
+mod edit;
+pub mod node;
+mod resolve;
 mod validate;
 
-pub mod node;
+
 
 pub use node::{Node, NodeId};
 
