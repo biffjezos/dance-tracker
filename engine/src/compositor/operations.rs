@@ -5,7 +5,7 @@ use crate::compositor::{
     Context,
     OperationError,
     Input,
-    OperationDescriptor;
+    OperationDescriptor,
     metadata::{ OperationMetadata, ParameterDescriptor },
     value::Value
 };
