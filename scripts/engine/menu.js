@@ -267,7 +267,7 @@ export class MenuManager {
     }
     show(menuName) {
         this.path = [menuName];
-        this.render();
+        // this.render();
     }
     enter(category) {
         this.path.push(category);
