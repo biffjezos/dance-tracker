@@ -3,7 +3,7 @@ use crate::compositor::{
     context::Context,
     error::OperationError,
     input::Input,
-    metadata::{ OperationMetadata, ParameterDescriptor }
+    metadata::{ OperationMetadata, ParameterDescriptor },
     value::Value
 };
 /*

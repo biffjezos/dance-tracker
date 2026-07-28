@@ -1,4 +1,8 @@
-use crate::graphics::{ Frame, Image, Mask };
+use crate::graphics::{
+    frame::Frame,
+    image::Image,
+    mask::Mask
+};
 use crate::compositor::value::Value;
 /*
 Named input slots, shared across every Operation instead of each one

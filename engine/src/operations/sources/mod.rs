@@ -1,3 +1,3 @@
 pub mod camera;
-pub mod static;
+pub mod image;
 pub mod video;
