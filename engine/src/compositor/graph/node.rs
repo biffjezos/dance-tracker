@@ -1,4 +1,4 @@
-// graph/node.rs
+// src/compositor/graph/node.rs
 
 use crate::compositor::{
     input::Input,

@@ -1,15 +1,9 @@
-use crate::compositor::{Context, Input, OperationError, Value};
-use crate::graph::{Graph, NodeId};
-use crate::operations::executor::Execute;
+// src/compositor/executors/simple.rs
 
-/*
-Unchanged from the stub. Recomputes every input on every call, with no
-memoization - correct for a one-off (a control action, a single
-preview pull) but wasteful if the same node feeds two consumers (e.g.
-one VideoSource feeding both a Compose and a mask), since it would run
-twice. RenderExecutor is where that gets addressed once the full
-per-frame graph walk exists.
-*/
+use crate::compositor::{Context, Input, OperationError, Value};
+use crate::compositor::graph::{Graph, NodeId};
+use crate::compositor::executor::Execute;
+
 pub struct SimpleExecutor;
 
 impl Execute for SimpleExecutor {

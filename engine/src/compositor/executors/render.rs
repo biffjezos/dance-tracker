@@ -1,30 +1,12 @@
+// src/compositor/executors/render.rs
+
 use std::collections::HashMap;
 
 use crate::compositor::{Context, Input, OperationError, Value};
-use crate::graph::{Graph, NodeId};
-use crate::operations::executor::Execute;
+use crate::compositor::graph::{Graph, NodeId};
+use crate::compositor::executor::Execute;
 use crate::profiling::{measure_ms, Profile, ProfileEntry};
 
-/*
-Drives the main render/output canvas - confirmed as one of the two
-real-time executors (the other being PreviewExecutor), each tick
-evaluating the graph's final output node and writing the result to the
-output canvas (see dom::write_frame_to_canvas). SimpleExecutor is for
-one-off, non-per-frame evaluations instead (controls, ad hoc calls).
-
-Per-tick memoization (memo is fresh every execute() call, never
-persisted across ticks - values legitimately change every frame, e.g.
-a live video's current pixels). Confirmed real, not hypothetical: the
-full render graph combines every independently-visible thing, and
-app.js's own wiring lets a video be both independently visible *and*
-the Input::Source feeding a mask's Chroma/Difference - the exact
-"video that's both shown raw and keyed" case in the app - so a shared
-source node genuinely gets reached twice within one traversal. Left as
-plain recursion in PreviewExecutor and SimpleExecutor, where fan-out
-either can't happen (PreviewExecutor evaluates a single selected
-node's own dependency chain, typically linear) or doesn't matter (a
-one-off pull).
-*/
 pub struct RenderExecutor;
 
 impl Execute for RenderExecutor {
@@ -68,14 +50,6 @@ impl RenderExecutor {
         Ok(value)
     }
 
-    /*
-    TODO/3.md #6 - a separate entry point from execute() above, not a
-    branch inside it, so the real per-frame path is byte-for-byte what
-    it was before profiling existed. Not memo-shared with execute():
-    this walks its own HashMap because it's an occasional diagnostic
-    call, not something that needs to interoperate with a live render
-    tick.
-    */
     pub fn execute_profiled(
         &self,
         graph: &Graph,

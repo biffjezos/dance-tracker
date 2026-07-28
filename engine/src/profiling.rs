@@ -1,18 +1,4 @@
-/*
-TODO/3.md #6: lightweight, optional per-operation timing.
-
-Entirely opt-in - RenderExecutor::execute (the real per-frame path) is
-untouched by this file. execute_profiled is a separate entry point a
-caller reaches for only when it wants a breakdown, so profiling costs
-nothing unless something actually calls it, and there's no branch to
-skip in the render loop itself.
-
-measure_ms needs a platform split because std::time::Instant panics at
-runtime on wasm32-unknown-unknown (no OS clock) - the only place this
-ever actually runs in production is the browser, so the wasm32 arm
-using web_sys::Performance is the one that matters; the native arm
-exists so cargo test can exercise the same code path.
-*/
+// src/profiling.rs
 
 #[derive(Debug)]
 pub struct ProfileEntry {
