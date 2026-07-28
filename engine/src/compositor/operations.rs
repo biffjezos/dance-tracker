@@ -2,13 +2,14 @@
 
 use std::any::Any;
 use crate::compositor::{
-    context::Context,
-    error::OperationError,
-    input::Input,
+    Context,
+    OperationError,
+    Input,
+    OperationDescriptor;
     metadata::{ OperationMetadata, ParameterDescriptor },
     value::Value
 };
-
+use crate::compositor::;
 pub trait Operation: Any {
     fn descriptor(&self) -> OperationDescriptor;
     
