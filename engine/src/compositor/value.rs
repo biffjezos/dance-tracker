@@ -1,5 +1,11 @@
 use std::sync::Arc;
-use crate::graphics::{Center, Color, Frame, Image, Mask };
+use crate::graphics::{
+    color::Color,
+    frame::Frame,
+    geometry::Center,
+    image::Image,
+    mask::Mask
+};
 /*
 Clone is cheap for every variant that matters: Frame/Mask/Image clone
 an Arc (a refcount bump, never pixel data), Number/Boolean are Copy,
