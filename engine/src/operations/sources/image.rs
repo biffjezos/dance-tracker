@@ -7,12 +7,13 @@ use crate::compositor::{
     OperationError,
     Input,
     Operation,
-    OperationButton, OperationDescriptor,
+    OperationDescriptor,
     metadata::{ OperationCategory, OperationMetadata, OutputKind },
     Value
 };
 
 use crate::graphics::Image;
+use crate::operations::converters::image_to_frame::image_to_frame;
 
 pub struct ImageSource {
     pub image: Option<Arc<Image>>,
@@ -24,8 +25,13 @@ impl ImageSource {
             image: None,
         }
     }
-    pub fn set_image(  &mut self, image: Arc<Image>, ) {
+    
+    pub fn set_image(&mut self, image: Arc<Image>) {
         self.image = Some(image);
+    }
+    
+    pub fn get_image(&self) -> Option<Arc<Image>> {
+        self.image.clone()
     }
 }
 
@@ -33,26 +39,13 @@ impl Operation for ImageSource {
     
     fn descriptor(&self) -> OperationDescriptor {
         OperationDescriptor {
-            id: "load_image",
+            id: "image_source",
             menu: "INPUT",
             label: "LOAD IMAGE",
-
-            action: Some("load_image"),
+            action: None,
+            ui_action: Some("open_image_picker"),
             buttons: &[],
         }
-        /*OperationDescriptor {
-            id: "image_source",
-            menu: "NODES",
-            label: "IMAGE",
-
-            buttons: &[
-                OperationButton {
-                    label: "LOAD IMAGE",
-                    action: "load_image",
-                }
-            ],
-        }
-            */
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -68,19 +61,22 @@ impl Operation for ImageSource {
             display_name: "Image Source",
             category: OperationCategory::Source,
             input_count: 0,
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::Frame],
         }
     }
 
 
-    fn execute( &self, _ctx: &Context, _inputs: &[(Input, Value)], ) -> Result<Vec<Value>, OperationError> {
+    fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let image = self
             .image
             .clone()
             .ok_or_else(|| OperationError::SourceNotFound("Image not loaded".to_string()))?;
 
+        // Convert Image to Frame for compatibility with preview/render system
+        let frame = Arc::new(image_to_frame(&image));
+
         Ok(vec![
-            Value::Image(image)
+            Value::Frame(frame)
         ])
     }
 }

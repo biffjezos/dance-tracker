@@ -15,11 +15,14 @@ use crate::compositor::{
     graph::{ Graph, NodeId },
     Meta,
     OperationError,
-    OperationRegistry
+    OperationRegistry,
+    Value
 };
 use crate::dom::write_frame_to_canvas;
-use crate::graphics::Frame;
+use crate::graphics::{Frame, Image, ImageFormat};
+use crate::operations::sources::ImageSource;
 use crate::resources::manager::ResourceManager;
+use std::sync::Arc;
 
 fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
@@ -104,6 +107,46 @@ impl App {
         Ok(node_id.index())
     }
     
+    /// Create an image source node and return its ID
+    pub fn create_image_source_node(&mut self) -> Result<u32, JsValue> {
+        let operation = Box::new(ImageSource::new());
+        let node_id = self.graph.add_node(operation);
+        Ok(node_id.index())
+    }
+    
+    /// Set image data on a specific ImageSource node
+    /// Takes pixel data as Uint8Array, width, height
+    pub fn set_image_on_node(
+        &mut self,
+        node_id: u32,
+        pixels: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<(), JsValue> {
+        let node_id = NodeId::from_index(node_id);
+        
+        // Get the operation from the graph
+        let operation = self.graph.get_node_mut(&node_id)
+            .ok_or_else(|| JsValue::from_str(&format!("Node {} not found", node_id)))?;
+        
+        // Downcast to ImageSource
+        let image_source = operation.as_any_mut().downcast_mut::<ImageSource>()
+            .ok_or_else(|| JsValue::from_str(&format!("Node {} is not an ImageSource", node_id)))?;
+        
+        // Create Image from the pixel data
+        let image = Arc::new(Image {
+            pixels: pixels.to_vec(),
+            width,
+            height,
+            format: ImageFormat::Rgba8,
+        });
+        
+        // Set the image on the source
+        image_source.set_image(image);
+        
+        Ok(())
+    }
+
     pub fn set_resolution(&mut self, width: u32, height: u32) {
         self.graph.set_resolution(width, height);
     }

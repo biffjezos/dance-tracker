@@ -62,6 +62,14 @@ function buildVideoContent(layer) {
     return wasmApp.add_video_source(layer.videoEl);
 }
 
+function buildImageContent(layer) {
+    const wasmApp = getWasmApp();
+    if (!wasmApp || layer.imageNodeId === undefined) return null;
+    // Image nodes are already created with their data set
+    // Just return the node ID
+    return layer.imageNodeId;
+}
+
 function buildMaskContent(layer, contentIds) {
     const wasmApp = getWasmApp();
     const s = layer.settings;
@@ -131,6 +139,8 @@ function buildLayerNode(entry) {
     
     if (entry.kind === "video") {
         newNodeId = buildVideoContent(layer);
+    } else if (entry.kind === "image") {
+        newNodeId = buildImageContent(layer);
     } else if (entry.kind === "rings") {
         newNodeId = buildRingsContent(layer);
     } else if (entry.kind === "text") {
@@ -171,7 +181,7 @@ export function rebuildGraph() {
     Build primitive generators - these can be incrementally updated
     */
     all.forEach(entry => {
-        if (entry.kind === "video" || entry.kind === "rings" || entry.kind === "text") {
+        if (entry.kind === "video" || entry.kind === "rings" || entry.kind === "text" || entry.kind === "image") {
             const nodeId = buildLayerNode(entry);
             if (nodeId !== null) {
                 contentIds.set(entry.id, nodeId);

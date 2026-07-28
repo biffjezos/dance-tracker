@@ -119,13 +119,17 @@ export class MenuManager {
                     return;
                 }
 
-                console.log("action", op.action);
+                // Use ui_action if available, otherwise fall back to action
+                const action = op.ui_action || op.action;
+                console.log("action", action);
 
-                window.dispatchEvent(
-                    new CustomEvent("menuOperation", {
-                        detail: op.action
-                    })
-                );
+                if (action) {
+                    window.dispatchEvent(
+                        new CustomEvent("menuOperation", {
+                            detail: action
+                        })
+                    );
+                }
             };
             this.subMenu.appendChild(button);
         });

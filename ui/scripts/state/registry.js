@@ -11,12 +11,24 @@ export function defaultUniversalSettings() {
 }
 export function getAllRealEntries() {
     const list = [];
-    state.videoLayers.forEach(layer => list.push({
-        id: "video:" + layer.id,
-        label: layer.name,
-        kind: "video",
-        layer
-    }));
+    state.videoLayers.forEach(layer => {
+        // Check if this is an image layer (has imageNodeId)
+        if (layer.imageNodeId !== undefined) {
+            list.push({
+                id: "image:" + layer.id,
+                label: layer.name,
+                kind: "image",
+                layer
+            });
+        } else {
+            list.push({
+                id: "video:" + layer.id,
+                label: layer.name,
+                kind: "video",
+                layer
+            });
+        }
+    });
     state.maskLayers.forEach(layer => list.push({
         id: "mask:" + layer.id,
         label: layer.name,
@@ -51,7 +63,7 @@ export function getAllRealEntries() {
 }
 export function getVideoRegistry() {
     return getAllRealEntries().filter(entry => entry.kind === "video" || entry.kind === "rings" || entry.kind ===
-        "ghost" || entry.kind === "text" || entry.kind === "standaloneMask" || entry.kind === "composite");
+        "ghost" || entry.kind === "text" || entry.kind === "standaloneMask" || entry.kind === "composite" || entry.kind === "image");
 }
 export function getMaskRegistry() {
     return getAllRealEntries().filter(entry => entry.kind === "standaloneMask");

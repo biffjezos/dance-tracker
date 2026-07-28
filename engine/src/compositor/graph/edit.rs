@@ -1,4 +1,5 @@
 // src/graph/edit.rs
+//
 
 use crate::compositor::{
     error::OperationError,
@@ -49,12 +50,24 @@ impl Graph {
             }
         };
 
-
         self.validation = ValidationState::Dirty;
 
         id
     }
-
+    
+    /// Get a mutable reference to a node's operation
+    pub fn get_node_mut(
+        &mut self,
+        id: &NodeId,
+    ) -> Option<&mut dyn Operation> {
+        let index = id.index as usize;
+        
+        if self.generations.get(index)? != &id.generation {
+            return None;
+        }
+        
+        self.nodes.get_mut(index)?.as_mut().map(|node| node.operation.as_mut() as &mut dyn Operation)
+    }
 
     pub fn remove_node(
         &mut self,
