@@ -7,7 +7,7 @@ use crate::compositor::{
     Input,
     Operation,
     metadata::{ OperationCategory, OperationMetadata, OutputKind },
-    value::Value
+    Value
 };
 
 use crate::graphics::Image;

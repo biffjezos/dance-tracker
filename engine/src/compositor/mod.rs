@@ -10,6 +10,7 @@ pub use context::Context;
 pub use error::OperationError;
 pub use input::Input;
 pub use operations::Operation;
+pub use value::Value;
 
 /*
 Core, kind-agnostic contract every concrete operation implements.
