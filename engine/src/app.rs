@@ -63,6 +63,18 @@ impl App {
         )
         .unwrap()
     }
+
+    pub fn execute_operation(&mut self, id: &str) {
+        println!("Execute operation: {}", id);
+
+        match id {
+            "load_image" => {
+                // TODO
+            }
+            _ => {}
+        }
+    }
+    
     pub fn create_node( &mut self, operation_id: String, ) -> Result<u32, JsValue> {
         let operation = self
             .registry
