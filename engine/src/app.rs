@@ -57,7 +57,6 @@ impl App {
             frame_counter: 0,
         }
     }
-    #[wasm_bindgen]
     pub fn get_operations(&self) -> JsValue {
         serde_wasm_bindgen::to_value(
             &self.registry.descriptors()

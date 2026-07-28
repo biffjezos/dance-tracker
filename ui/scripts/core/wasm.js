@@ -10,7 +10,7 @@ instance used by graph/render/output modules.
 ==================================================
 */
 
-import init, { App } from "../../engine/pkg/dance_tracker_core.js";
+import init, { App } from "../../engine/pkg/dance_tracker_engine.js";
 import { WIDTH, HEIGHT } from "../engine/constants.js";
 
 export let wasmApp = null;
