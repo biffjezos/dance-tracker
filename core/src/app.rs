@@ -1,6 +1,6 @@
 /*
-The JS-callable surface. wasm-bindgen can't export Box<dyn Operation>
-or the Graph/Node types directly (no trait objects, no generic types
+The JS-callable surface. wasm-bindgen can't export Box<dyn Operation> nor
+the Graph/Node types directly (no trait objects, no generic types
 across the boundary), so this is a single opaque App struct JS holds a
 handle to, with plain methods (numbers/strings/DOM element handles in,
 a NodeId - just usize - out) that build the graph and drive the two
@@ -298,31 +298,35 @@ impl App {
         &mut self,
         center: Center,
         ring_count: u32,
-        spacing: f64,
-        radius: f64,
-        stroke_width: f64,
-        colour: Color,
-    ) -> Result<usize, JsValue> {
-        let rings = Rings::new(
-            center,
-            ring_count,
-            spacing,
-            radius,
-            stroke_width,
-            colour,
-        )?;
-
+        rings_per_group: u32,
+        spacing: u32,
+        size: u32,
+        width: u32,
+        colours: Vec<u8>,
+    ) -> usize {
         let node = Node {
-            operation: Box::new(rings),
+            operation: Box::new(Rings {
+                center,
+                count: ring_count,
+                rings_per_group,
+                spacing,
+                size,
+                width,
+                colours,
+            }),
             inputs: vec![],
         };
 
-        Ok(self.graph.add_node(node).index() as usize)
+        self.graph.add_node(node).index() as usize
     }
 
     pub fn add_ghost(&mut self, source: usize, count: usize, alpha: f32, delay_ticks: u32) -> usize {
         let node = Node {
-            operation: Box::new(Ghost::new(count, alpha, delay_ticks)),
+            operation: Box::new(Ghost {
+                count,
+                alpha,
+                delay_ticks,
+            }),
             inputs: vec![(Input::Source, NodeId::from_index(source as u32))],
         };
 
@@ -332,23 +336,35 @@ impl App {
     pub fn add_text(
         &mut self,
         content: String,
-        colour: String,
-        size: f64,
-    ) -> Result<usize, JsValue> {
-        let text = Text::new(content, colour, size)?;
+        colour: Color,
+        size: u32,
+    ) -> usize {
+        let node = Node {
+            operation: Box::new(Text {
+                content,
+                colour,
+                size,
+            }),
+            inputs: vec![],
+        };
 
-        let node = Node { operation: Box::new(text), inputs: vec![] };
-
-        Ok(self.graph.add_node(node).index() as usize)
+        self.graph.add_node(node).index() as usize
     }
 
-    pub fn set_text_content(&mut self, node_id: usize, content: String) {
-        if let Some(text) = self.graph.operation_mut::<Text>(NodeId::from_index(node_id as u32)) {
-            text.content = content;
+    pub fn set_text_content(&mut self, node_id: usize, content: String) -> Result<(), JsValue> {
+        let node_id = NodeId::from_index(node_id as u32);
+        self.graph
+            .operation_mut::<Text>(node_id)
+            .ok_or_else(|| JsValue::from_str("node not found or not a Text operation"))?;
+        
+        if let Some(node) = self.graph.operation_mut::<Text>(node_id) {
+            node.content = content;
+            Ok(())
+        } else {
+            Err(JsValue::from_str("node not found or not a Text operation"))
         }
     }
 
-    /* ANIMATIONS */
     pub fn add_lissajous(
         &mut self,
         center: Center,
@@ -357,54 +373,43 @@ impl App {
         frequency_x: f64,
         frequency_y: f64,
         phase: f64,
-    ) -> Result<usize, JsValue> {
-
-        let lissajous = Lissajous::new(
-            center,
-            amplitude_x,
-            amplitude_y,
-            frequency_x,
-            frequency_y,
-            phase,
-        );
-
+    ) -> usize {
         let node = Node {
-            operation: Box::new(lissajous),
+            operation: Box::new(crate::operations::animations::move::Lissajous {
+                center,
+                amplitude_x,
+                amplitude_y,
+                frequency_x,
+                frequency_y,
+                phase,
+            }),
             inputs: vec![],
         };
 
-        Ok(self.graph.add_node(node).index() as usize)
+        self.graph.add_node(node).index() as usize
     }
-    /*
-    CONTROLS (TRANSPORT)
 
-    Plain HtmlVideoElement calls, not graph Operations - these never
-    touch the graph, a Value, or a Context, so wrapping them in the
-    Operation trait bought nothing but as_any/as_any_mut boilerplate
-    for something JS could've called on the video element directly.
+    /*
+    ==================================================
+    TRANSPORT CONTROLS
+    ==================================================
     */
 
     pub fn play(&self, video: HtmlVideoElement) -> Result<(), JsValue> {
-        let _ = video.play()?;
-        Ok(())
+        video.play().map_err(|e| JsValue::from_str(&format!("{:?}", e)))
     }
 
     pub fn stop(&self, video: HtmlVideoElement) -> Result<(), JsValue> {
-        video.pause()?;
-        Ok(())
+        video.stop().map_err(|e| JsValue::from_str(&format!("{:?}", e)))
     }
 
-    /*
-    Covers MINUTE +/SECOND +/FRAME + alike - just different seconds
-    values (60.0, 1.0, 1.0/30.0) passed in from JS.
-    */
     pub fn forward(&self, video: HtmlVideoElement, seconds: f64) -> Result<(), JsValue> {
         video.set_current_time(video.current_time() + seconds);
         Ok(())
     }
 
     pub fn rewind(&self, video: HtmlVideoElement, seconds: f64) -> Result<(), JsValue> {
-        video.set_current_time((video.current_time() - seconds).max(0.0));
+        video.set_current_time(video.current_time() - seconds);
         Ok(())
     }
 
@@ -427,7 +432,7 @@ impl App {
 
         let frame = expect_frame(values.first()).map_err(js_err)?;
 
-        write_frame_to_canvas(&canvas, frame)
+        write_frame_to_canvas(&canvas, frame)?
     }
 
     pub fn preview_tick(&mut self, node: usize, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
@@ -442,7 +447,6 @@ impl App {
 
         let frame = expect_frame(values.first()).map_err(js_err)?;
 
-        write_frame_to_canvas(&canvas, frame)
+        write_frame_to_canvas(&canvas, frame)?
     }
 }
-
