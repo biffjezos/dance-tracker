@@ -1,3 +1,5 @@
+use crate::operations::{Frame, Image, Mask};
+
 /*
 Named input slots, shared across every Operation instead of each one
 inventing its own meaning for position 0 vs 1 (Compose's inputs[0]
@@ -15,4 +17,8 @@ pub enum Input {
     Mask,
     Foreground,
     Background,
+}
+
+pub fn find_input(inputs: &[(Input, Value)], key: Input) -> Option<&Value> {
+    inputs.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
 }
