@@ -3,13 +3,12 @@
 use std::any::Any;
 use crate::compositor::{
     Context,
+    OperationDescriptor
     OperationError,
-    Input,
-    OperationDescriptor,
+    input::Input,
     metadata::{ OperationMetadata, ParameterDescriptor },
-    value::Value
+    Value
 };
-use crate::compositor::;
 pub trait Operation: Any {
     fn descriptor(&self) -> OperationDescriptor;
     
