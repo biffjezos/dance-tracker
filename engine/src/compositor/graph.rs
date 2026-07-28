@@ -9,13 +9,20 @@ vs 1.
 use std::any::Any;
 
 use crate::compositor::{
+    context::Context,
     error::OperationError,
+    graph::Graph,
     input::Input,
+    metadata::Meta,
+    node::{ NodeId, Node },
     operations::{ Operation }, 
     metadata::OperationMetadata,
     value::Value
 };
 
+use crate::compositor::{
+
+};
 /*
 A plain usize index would go stale silently once node removal exists -
 reusing (or even just outliving) an index that now names a different
