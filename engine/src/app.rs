@@ -72,8 +72,10 @@ impl App {
             return;
         };
 
+        let ctx = self.context(true);
+
         let result = operation.execute(
-            &self.context(),
+            &ctx,
             &[]
         );
 
