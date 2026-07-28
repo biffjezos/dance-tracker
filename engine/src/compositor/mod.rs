@@ -7,12 +7,15 @@ pub mod graph;
 pub mod input;
 pub mod metadata;
 pub mod operations;
-pub mod value;
 pub mod operation_descriptor;
+pub mod registry;
+pub mod value;
 
 pub use context::Context;
 pub use error::OperationError;
 pub use input::Input;
 pub use operations::Operation;
-pub use value::Value;
+
 pub use operation_descriptor::OperationDescriptor;
+pub use registry::OperationRegistry;
+pub use value::Value;
