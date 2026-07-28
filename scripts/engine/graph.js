@@ -363,8 +363,8 @@ export function rebuildGraph() {
 }
 
 // Legacy exports for compatibility
-export const cachedContentIds = new Map();
-export const cachedWiredIds = new Map();
+export let cachedContentIds = new Map();
+export let cachedWiredIds = new Map();
 
 export function updateOutputNodeId() {
     if (state.outputEntryId === null) {
