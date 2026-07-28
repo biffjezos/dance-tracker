@@ -7,7 +7,7 @@ use crate::compositor::{
     OperationError,
     Input,
     Operation,
-    OperationDescriptor,
+    OpertationButton, OperationDescriptor,
     metadata::{ OperationCategory, OperationMetadata, OutputKind },
     Value
 };
