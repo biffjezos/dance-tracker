@@ -110,11 +110,16 @@ export class MenuManager {
             button.innerText = op.label || op.name || op;
 
             button.onclick = () => {
+                console.log(op);
+
                 if (op.buttons && op.buttons.length) {
+                    console.log("submenu");
                     this.buttons = op.buttons;
                     this.renderButtons();
                     return;
                 }
+
+                console.log("action", op.action);
 
                 window.dispatchEvent(
                     new CustomEvent("menuOperation", {
@@ -122,7 +127,6 @@ export class MenuManager {
                     })
                 );
             };
-
             this.subMenu.appendChild(button);
         });
     }
