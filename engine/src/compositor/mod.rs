@@ -7,7 +7,7 @@ pub mod operations;
 pub mod value;
 
 pub use input::Input;
-pub use operation::Operation;
+pub use operations::Operation;
 
 /*
 Core, kind-agnostic contract every concrete operation implements.

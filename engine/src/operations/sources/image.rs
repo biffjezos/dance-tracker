@@ -16,7 +16,6 @@ pub struct ImageSource {
     pub image: Arc<Image>,
 }
 
-
 impl Operation for ImageSource {
 
     fn as_any(&self) -> &dyn Any {
