@@ -1,4 +1,4 @@
-// graph/resolve.rs
+// src/graph/resolve.rs
 
 use super::{
     Graph,
