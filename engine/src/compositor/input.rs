@@ -1,4 +1,4 @@
-use crate::operations::{Frame, Image, Mask};
+use crate::graphics::{ Frame, Image, Mask };
 
 /*
 Named input slots, shared across every Operation instead of each one

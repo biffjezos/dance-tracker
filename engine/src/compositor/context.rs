@@ -1,3 +1,5 @@
+use crate::resources::ResourceManager;
+
 /*
 Draft trades fidelity for speed (e.g. an operation could skip
 antialiasing or subsample); Full is always correct. Nothing branches

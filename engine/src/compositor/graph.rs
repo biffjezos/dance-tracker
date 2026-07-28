@@ -8,7 +8,11 @@ vs 1.
 
 use std::any::Any;
 
-use crate::compositor::{Input, Operation, OperationError, OperationMetadata, Value};
+use crate::compositor::{
+    input::Input,
+    operation::{ Operation, OperationError, OperationMetadata} 
+    value::Value
+}
 
 /*
 A plain usize index would go stale silently once node removal exists -
