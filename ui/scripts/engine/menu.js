@@ -84,6 +84,14 @@ export class MenuManager {
             g: 255,
             b: 0
         };
+
+        this.operations = [];
+
+        window.addEventListener("operationsLoaded", e => {
+            this.operations = e.detail;
+            this.render();
+        });
+
         window.addEventListener("bodyKeyColour", e => {
             this.keyColour = {
                 r: e.detail.r,
