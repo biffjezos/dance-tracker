@@ -110,9 +110,15 @@ export class MenuManager {
             button.innerText = op.label || op.name || op;
 
             button.onclick = () => {
+                if (op.buttons && op.buttons.length) {
+                    this.buttons = op.buttons;
+                    this.renderButtons();
+                    return;
+                }
+
                 window.dispatchEvent(
                     new CustomEvent("menuOperation", {
-                        detail: op
+                        detail: op.action
                     })
                 );
             };

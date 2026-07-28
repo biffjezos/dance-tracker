@@ -6,7 +6,8 @@ pub struct OperationDescriptor {
     pub id: &'static str,
     pub menu: &'static str,
     pub label: &'static str,
-    pub buttons: &'static [OperationButton],
+    pub action: Option<&'static str>,              // direct action
+    pub buttons: &'static [OperationButton],       // submenu
 }
 
 #[derive(Clone, Debug, Serialize)]
