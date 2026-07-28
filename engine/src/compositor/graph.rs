@@ -12,7 +12,7 @@ use crate::compositor::{
     error::OperationError,
     input::Input,
     operations::{ Operation }, 
-    metadata::OperationMetadata
+    metadata::OperationMetadata,
     value::Value
 };
 
