@@ -2,14 +2,12 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::compositor::{
-    Context,
-    Input,
-    Operation,
-    OperationCategory,
-    OperationError,
-    OperationMetadata,
-    OutputKind,
-    Value,
+    context::Context,
+    error::OperationError,
+    input::Input,
+    operation::Operation,
+    metadata::{ OperationCategory,OperationMetadata, OutputKind },
+    value::Value
 };
 
 use crate::graphics::Image;
