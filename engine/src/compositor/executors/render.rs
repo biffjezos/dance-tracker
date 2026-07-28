@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::compositor::{Context, Input, OperationError, Value};
 use crate::compositor::graph::{Graph, NodeId};
-use crate::compositor::executor::Execute;
+use super::Execute;
 use crate::profiling::{measure_ms, Profile, ProfileEntry};
 
 pub struct RenderExecutor;
