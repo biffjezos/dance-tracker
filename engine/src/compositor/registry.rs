@@ -12,19 +12,12 @@ pub struct OperationRegistry {
 impl OperationRegistry {
 
     pub fn new() -> Self {
-        Self {
-            operations: Vec::new(),
-        }
+        Self { operations: Vec::new(), }
     }
 
-
-    pub fn register(
-        &mut self,
-        operation: Box<dyn Operation>,
-    ) {
+    pub fn register(&mut self, operation: Box<dyn Operation>, ) {
         self.operations.push(operation);
     }
-
 
     pub fn descriptors(&self) -> Vec<OperationDescriptor> {
         self.operations
