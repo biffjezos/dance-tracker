@@ -2,7 +2,7 @@
 
 pub mod context;
 pub mod error;
-pub mod executor;
+pub mod executors;
 pub mod graph;
 pub mod input;
 pub mod metadata;
