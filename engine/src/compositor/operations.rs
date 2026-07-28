@@ -1,3 +1,11 @@
+use std::any::Any;
+use crate::compositor::{
+    context::Context,
+    error::OperationError,
+    input::Input,
+    metadata::{ OperationMetadata, ParameterDescriptor
+    value::Value
+};
 /*
 as_any/as_any_mut aren't in the original stub - added so the
 wasm-bindgen layer can downcast a Box<dyn Operation> back to its

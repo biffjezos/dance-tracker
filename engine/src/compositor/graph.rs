@@ -9,8 +9,10 @@ vs 1.
 use std::any::Any;
 
 use crate::compositor::{
+    error::OperationError,
     input::Input,
-    operations::{ Operation, OperationError, OperationMetadata}, 
+    operations::{ Operation }, 
+    metadata::OperationMetadata
     value::Value
 };
 

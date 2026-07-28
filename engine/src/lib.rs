@@ -1,7 +1,6 @@
 pub mod compositor;
 pub mod graphics;
 pub mod operations;
-pub mod resources;
 pub mod profiling;
 pub mod resources;
 
