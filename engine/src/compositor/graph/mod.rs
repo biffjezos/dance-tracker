@@ -1,18 +1,10 @@
 // graph/mod.rs
 
-use crate::compositor::{
-    error::OperationError,
-    node::{Node, NodeId},
-};
-
-
 mod describe;
 mod edit;
 pub mod node;
 mod resolve;
 mod validate;
-
-
 
 pub use node::{Node, NodeId};
 
@@ -26,7 +18,7 @@ pub struct Graph {
     pub width: u32,
     pub height: u32,
 
-    validation: validate::ValidationState,
+    pub(crate) validation: validate::ValidationState,
 }
 
 impl Graph {
