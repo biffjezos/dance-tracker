@@ -1,8 +1,9 @@
 pub mod compositor;
-pub mod graph;
+pub mod graphics;
 pub mod operations;
+pub mod resources;
 pub mod profiling;
-pub mod resource_manager;
+pub mod resources;
 
 #[cfg(target_arch = "wasm32")]
 pub mod dom;

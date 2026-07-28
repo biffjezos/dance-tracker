@@ -1,5 +1,5 @@
 use crate::graphics::{ Frame, Image, Mask };
-
+use crate::compositor::value::Value;
 /*
 Named input slots, shared across every Operation instead of each one
 inventing its own meaning for position 0 vs 1 (Compose's inputs[0]

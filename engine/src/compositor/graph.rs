@@ -10,9 +10,9 @@ use std::any::Any;
 
 use crate::compositor::{
     input::Input,
-    operation::{ Operation, OperationError, OperationMetadata} 
+    operations::{ Operation, OperationError, OperationMetadata}, 
     value::Value
-}
+};
 
 /*
 A plain usize index would go stale silently once node removal exists -

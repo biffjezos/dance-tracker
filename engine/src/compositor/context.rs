@@ -1,4 +1,4 @@
-use crate::resources::ResourceManager;
+use crate::resources::manager::ResourceManager;
 
 /*
 Draft trades fidelity for speed (e.g. an operation could skip
