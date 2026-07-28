@@ -73,7 +73,7 @@ impl App {
         };
 
         let result = operation.execute(
-            &self.context,
+            &self.context(),
             &[]
         );
 

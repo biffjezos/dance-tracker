@@ -20,9 +20,7 @@ const camera = new Camera(settings);
 
 const menu = new MenuManager();
 menu.init();
-window.addEventListener("menuOperation", e => {
-    executeOperation(e.detail);
-});
+window.addEventListener("menuOperation", e => { executeOperation(e.detail); });
 document.getElementById("master-layer").width = WIDTH;
 document.getElementById("master-layer").height = HEIGHT;
 
