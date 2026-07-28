@@ -34,9 +34,15 @@ impl Operation for ImageSource {
     fn descriptor(&self) -> OperationDescriptor {
         OperationDescriptor {
             id: "image_source",
-            menu: "INPUT",
-            label: "Load Image",
-            action: "image_source_open",
+            menu: "NODES",
+            label: "Image Source",
+
+            buttons: &[
+                OperationButton {
+                    label: "LOAD IMAGE",
+                    action: "load_image",
+                }
+            ],
         }
     }
     fn as_any(&self) -> &dyn Any {

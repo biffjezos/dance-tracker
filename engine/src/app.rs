@@ -57,8 +57,28 @@ impl App {
             frame_counter: 0,
         }
     }
+    #[wasm_bindgen]
+    pub fn get_operations(&self) -> JsValue {
+        serde_wasm_bindgen::to_value(
+            &self.registry.descriptors()
+        )
+        .unwrap()
+    }
+    pub fn create_node( &mut self, operation_id: String, ) -> Result<u32, JsValue> {
+        let operation = self
+            .registry
+            .create(&operation_id)
+            .ok_or_else(|| {
+                JsValue::from_str(
+                    &format!("Unknown operation: {}", operation_id)
+                )
+            })?;
 
+        let node_id = self.graph.add_node(operation);
 
+        Ok(node_id.index())
+    }
+    
     pub fn set_resolution(&mut self, width: u32, height: u32) {
         self.graph.set_resolution(width, height);
     }
