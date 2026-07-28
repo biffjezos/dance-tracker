@@ -9,7 +9,7 @@ use crate::compositor::{
     error::OperationError,
     graph::{Graph, NodeId},
 };
-use crate::compositor::executor::{
+use crate::compositor::executors::{
     PreviewExecutor,
     RenderExecutor,
     SimpleExecutor,
@@ -128,12 +128,10 @@ impl App {
     }
 
 
-    pub fn play(
-        &self,
-        video: HtmlVideoElement,
-    ) -> Result<(), JsValue> {
+    pub fn play( &self, video: HtmlVideoElement, ) -> Result<(), JsValue> {
         video
             .play()
+            .map(|_| ())
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
     }
 
