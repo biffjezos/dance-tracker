@@ -1,5 +1,5 @@
 // app.js
-import { getOperations } from "./core/operations.js";
+import { getOperations, executeOperation } from "./core/operations.js";
 import { initWasm } from "./core/wasm.js";
 
 import { WIDTH, HEIGHT } from "./engine/constants.js";
