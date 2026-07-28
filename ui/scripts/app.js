@@ -20,7 +20,15 @@ const camera = new Camera(settings);
 
 const menu = new MenuManager();
 menu.init();
+window.addEventListener("menuOperation", e => {
+    console.log("MENU ACTION:", e.detail);
 
+    switch (e.detail) {
+        case "load_image":
+            window.dispatchEvent(new Event("loadImage"));
+            break;
+    }
+});
 document.getElementById("master-layer").width = WIDTH;
 document.getElementById("master-layer").height = HEIGHT;
 
