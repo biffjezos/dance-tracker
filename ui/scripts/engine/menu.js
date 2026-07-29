@@ -81,6 +81,7 @@ export class MenuManager {
         this.category = null;
 
         window.addEventListener("operationsLoaded", e => {
+            console.log("Operations loaded:", e.detail);
             this.operations = e.detail;
         });
     }
@@ -88,21 +89,26 @@ export class MenuManager {
     init() {
         document.querySelectorAll(".main-menu button").forEach(button => {
             button.addEventListener("click", () => {
+                console.log("Main menu clicked:", button.dataset.menu);
                 this.show(button.dataset.menu);
             });
         });
     }
 
     show(category) {
+        console.log("Showing category:", category);
         this.category = category;
         this.render();
     }
 
     render() {
+        console.log("Rendering menu. Category:", this.category, "Operations count:", this.operations.length);
+
         this.subMenu.innerHTML = "";
 
         // Don't render if operations aren't loaded or no category selected
         if (this.operations.length === 0 || this.category === null) {
+            console.log("Not rendering: no operations or no category");
             return;
         }
 
@@ -110,15 +116,23 @@ export class MenuManager {
         const filteredOps = this.operations.filter(op => {
             const opMenu = (op.menu || op.Menu || "").toUpperCase();
             const category = (this.category || "").toUpperCase();
-            return opMenu === category;
+            const match = opMenu === category;
+            console.log(`Filtering op: menu="${op.menu || op.Menu}" vs category="${this.category}" -> ${match}`);
+            return match;
         });
 
+        console.log("Filtered operations:", filteredOps);
+
         filteredOps.forEach(op => {
+            console.log("Creating button for:", op.label || op.name || op);
             const button = document.createElement("button");
             button.innerText = op.label || op.name || op;
 
             button.onclick = () => {
+                console.log("Operation button clicked:", op);
+
                 if (op.buttons && op.buttons.length) {
+                    console.log("Showing submenu buttons");
                     this.buttons = op.buttons;
                     this.renderButtons();
                     return;
@@ -126,6 +140,7 @@ export class MenuManager {
 
                 // Use ui_action if available, otherwise fall back to action
                 const action = op.ui_action || op.action;
+                console.log("Dispatching action:", action);
 
                 if (action) {
                     window.dispatchEvent(
@@ -140,6 +155,7 @@ export class MenuManager {
     }
 
     renderButtons() {
+        console.log("Rendering buttons submenu");
         this.subMenu.innerHTML = "";
 
         this.buttons.forEach(btn => {
@@ -147,6 +163,7 @@ export class MenuManager {
             button.innerText = btn.label || btn.name || btn;
 
             button.onclick = () => {
+                console.log("Submenu button clicked, action:", btn.action);
                 const action = btn.action;
 
                 if (action) {
