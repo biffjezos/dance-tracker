@@ -1,48 +1,112 @@
-# Simple workflow for deploying static content to GitHub Pages
 name: Deploy static content to Pages
 
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ["dev"]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      wasm: ${{ steps.filter.outputs.wasm }}
+      ui: ${{ steps.filter.outputs.ui }}
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'engine/src/**'
+              - 'engine/Cargo.toml'
+              - 'engine/Cargo.lock'
+
+            wasm:
+              - 'engine/src/**'
+              - 'engine/Cargo.toml'
+              - 'engine/Cargo.lock'
+              - 'engine/**'
+
+            ui:
+              - 'ui/**'
+
+
+  build-wasm:
+    needs: changes
+    if: needs.changes.outputs.wasm == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            engine/target
+          key: rust-${{ runner.os }}-${{ hashFiles('engine/Cargo.lock') }}
+
       - name: Install wasm-pack
         run: cargo install wasm-pack
-      - name: Build wasm
+
+      - name: Build WASM
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
         run: wasm-pack build engine --target web
-      - name: Copy wasm package
-        run: mkdir -p ui/engine/pkg && cp -r engine/pkg/* ui/engine/pkg/
+
+      - name: Upload WASM
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-package
+          path: engine/pkg
+
+
+  deploy:
+    needs:
+      - changes
+      - build-wasm
+
+    if: always()
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Download WASM package
+        if: needs.build-wasm.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-package
+          path: ui/engine/pkg
+
+      - name: Write build metadata
+        run: echo "${GITHUB_SHA}" > ui/build-version.txt
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './ui'
-      - name: Deploy to GitHub Pages
+          path: ./ui
+
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5
