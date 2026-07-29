@@ -200,7 +200,7 @@ export class MenuManager {
         this.subMenu.appendChild(minusButton);
 
         const channelLabel = document.createElement("span");
-        channelLabel.innerText = ` CHANNEL `;
+        channelLabel.innerText = ` ${selectionState.getSelectedChannel()} `;
         this.subMenu.appendChild(channelLabel);
 
         const plusButton = document.createElement("button");
