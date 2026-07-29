@@ -9,7 +9,7 @@ AMIGA TWO ROW MENU SYSTEM
 
 import { nodeSelectionState } from "./nodeSelection.js";
 import { nodeEditContextRegistry } from "./nodeEditContexts.js";
-import { getAllRealEntries } from " ../state/registry.js";
+import { getAllRealEntries } from "../state/registry.js";
 
 // MenuContext: Represents a menu in the hierarchy
 class MenuContext {
