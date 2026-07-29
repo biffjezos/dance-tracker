@@ -78,11 +78,18 @@ export class MenuManager {
     constructor() {
         this.subMenu = document.getElementById("sub-menu");
         this.operations = [];
-        this.category = "input";
+        this.category = null;
+        this.initialized = false;
 
         window.addEventListener("operationsLoaded", e => {
             this.operations = e.detail;
-            this.render();
+            // If we haven't initialized yet, initialize now
+            if (!this.initialized) {
+                this.initialized = true;
+                this.show("input");
+            } else {
+                this.render();
+            }
         });
     }
 
@@ -92,8 +99,6 @@ export class MenuManager {
                 this.show(button.dataset.menu);
             });
         });
-
-        this.show("input");
     }
 
     show(category) {
@@ -102,11 +107,20 @@ export class MenuManager {
     }
 
     render() {
+        // Don't render if operations aren't loaded yet
+        if (this.operations.length === 0 && this.category !== null) {
+            return;
+        }
+
         this.subMenu.innerHTML = "";
+
+        // If no category selected or no operations, show nothing
+        if (!this.category || this.operations.length === 0) {
+            return;
+        }
 
         // Filter operations by the selected category (menu field)
         const filteredOps = this.operations.filter(op => {
-            // Check both possible field names (menu or Menu)
             const opMenu = (op.menu || op.Menu || "").toUpperCase();
             const category = (this.category || "").toUpperCase();
             return opMenu === category;
@@ -117,7 +131,7 @@ export class MenuManager {
             button.innerText = op.label || op.name || op;
 
             button.onclick = () => {
-                console.log(op);
+                console.log("Operation clicked:", op);
 
                 if (op.buttons && op.buttons.length) {
                     console.log("submenu");
