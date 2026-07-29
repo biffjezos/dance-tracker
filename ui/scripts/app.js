@@ -9,6 +9,7 @@ import { startRenderLoop } from "./engine/render.js";
 import { applyOutputSize } from "./features/output.js";
 import { reportSelection } from "./engine/status.js";
 import { nodeSelectionState } from "./engine/nodeSelection.js";
+import "./engine/nodeEditContexts.js";
 
 // Import image feature to register event listeners
 import "./features/image.js";

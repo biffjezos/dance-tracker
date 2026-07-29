@@ -8,6 +8,7 @@ AMIGA TWO ROW MENU SYSTEM
 */
 
 import { nodeSelectionState } from "./nodeSelection.js";
+import { nodeEditContextRegistry } from "./nodeEditContexts.js";
 import { getAllRealEntries } from "../../state/registry.js";
 
 // MenuContext: Represents a menu in the hierarchy
@@ -310,11 +311,20 @@ export class MenuManager {
             // Render UP button
             if (this.currentContext.parent !== null) {
                 this.renderUpButton();
+                const separator = document.createElement("span");
+                separator.innerText = " | ";
+                this.subMenu.appendChild(separator);
             }
-            // For now, show a placeholder - node-specific editors will be implemented later
-            const editLabel = document.createElement("span");
-            editLabel.innerText = " NODE EDIT CONTEXT ";
-            this.subMenu.appendChild(editLabel);
+            
+            // Render node-specific edit context
+            const selectedNode = nodeSelectionState.getSelectedNode();
+            if (selectedNode) {
+                nodeEditContextRegistry.renderContext(this, selectedNode);
+            } else {
+                const editLabel = document.createElement("span");
+                editLabel.innerText = " NODE EDIT CONTEXT ";
+                this.subMenu.appendChild(editLabel);
+            }
             return;
         }
 
