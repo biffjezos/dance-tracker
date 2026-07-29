@@ -21,6 +21,7 @@ jobs:
 
     outputs:
       wasm: ${{ steps.filter.outputs.wasm }}
+      rust: ${{ steps.filter.outputs.rust }}
       ui: ${{ steps.filter.outputs.ui }}
 
     steps:
@@ -31,11 +32,18 @@ jobs:
         with:
           filters: |
             wasm:
+              - 'engine/src/operations/**'
+              - 'engine/src/app.rs'
+              - 'engine/src/dom.rs'
+              - 'engine/Cargo.toml'
+              - 'engine/Cargo.lock'
+              - 'ui/scripts/core/wasm.js'
+              - 'ui/scripts/core/operations.js'
+
+            rust:
               - 'engine/src/**'
               - 'engine/Cargo.toml'
               - 'engine/Cargo.lock'
-              - 'ui/core/wasm.js'
-              - 'ui/core/operations.js'
 
             ui:
               - 'ui/**'
@@ -62,7 +70,9 @@ jobs:
         with:
           path: engine/pkg
           key: wasm-${{ runner.os }}-${{ hashFiles(
-            'engine/src/**',
+            'engine/src/operations/**',
+            'engine/src/app.rs',
+            'engine/src/dom.rs',
             'engine/Cargo.toml',
             'engine/Cargo.lock'
           ) }}
@@ -76,10 +86,31 @@ jobs:
         run: wasm-pack build engine --target web
 
 
+  build-rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.wasm != 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            engine/target
+          key: rust-${{ runner.os }}-${{ hashFiles('engine/Cargo.lock') }}
+
+      - name: Build Rust
+        run: cargo build
+
+
   deploy:
     needs:
       - changes
       - build-wasm
+      - build-rust
     if: always()
 
     runs-on: ubuntu-latest
@@ -88,20 +119,42 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Restore WASM package
+      - name: Restore WASM package from cache
         uses: actions/cache@v4
+        id: wasm-cache
         with:
           path: engine/pkg
           key: wasm-${{ runner.os }}-${{ hashFiles(
-            'engine/src/**',
+            'engine/src/operations/**',
+            'engine/src/app.rs',
+            'engine/src/dom.rs',
             'engine/Cargo.toml',
             'engine/Cargo.lock'
           ) }}
 
-      - name: Copy WASM package
+      - name: Check if WASM files exist
+        id: wasm-exists
         run: |
-          mkdir -p ui/engine/pkg
-          cp -r engine/pkg/* ui/engine/pkg/
+          if [ -f "engine/pkg/dance_tracker_core_bg.wasm" ] && \
+             [ -f "engine/pkg/dance_tracker_core.js" ] && \
+             [ -f "engine/pkg/dance_tracker_core.d.ts" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Copy WASM package
+        if: steps.wasm-exists.outputs.exists == 'true' || steps.wasm-cache.outputs.cache-hit == 'true'
+        run: |
+          mkdir -p ui/scripts/engine/pkg
+          cp -r engine/pkg/* ui/scripts/engine/pkg/
+
+      - name: Restore Rust build from cache
+        if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.wasm == 'true'
+        uses: actions/cache@v4
+        with:
+          path: engine/target
+          key: rust-${{ runner.os }}-${{ hashFiles('engine/Cargo.lock') }}
 
       - name: Write build metadata
         run: echo "${GITHUB_SHA}" > ui/build-version.txt
