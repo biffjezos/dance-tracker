@@ -18,8 +18,8 @@ jobs:
 
   changes:
     runs-on: ubuntu-latest
+
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
       wasm: ${{ steps.filter.outputs.wasm }}
       ui: ${{ steps.filter.outputs.ui }}
 
@@ -30,16 +30,12 @@ jobs:
         id: filter
         with:
           filters: |
-            rust:
-              - 'engine/src/**'
-              - 'engine/Cargo.toml'
-              - 'engine/Cargo.lock'
-
             wasm:
               - 'engine/src/**'
               - 'engine/Cargo.toml'
               - 'engine/Cargo.lock'
-              - 'engine/**'
+              - 'ui/core/wasm.js'
+              - 'ui/core/operations.js'
 
             ui:
               - 'ui/**'
@@ -47,6 +43,7 @@ jobs:
 
   build-wasm:
     needs: changes
+    if: needs.changes.outputs.wasm == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -77,7 +74,9 @@ jobs:
 
   deploy:
     needs:
+      - changes
       - build-wasm
+    if: always()
 
     runs-on: ubuntu-latest
 
@@ -86,6 +85,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download WASM package
+        if: needs.changes.outputs.wasm == 'true'
         uses: actions/download-artifact@v4
         with:
           name: wasm-package
