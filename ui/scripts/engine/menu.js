@@ -115,6 +115,14 @@ export class MenuManager {
         this.render();
     }
 
+    renderUpButton() {
+        const upButton = document.createElement("button");
+        upButton.innerText = "[UP]";
+        upButton.className = "up-button";
+        upButton.onclick = () => this.goUp();
+        this.subMenu.appendChild(upButton);
+    }
+
     render() {
         console.log("Rendering menu. Category:", this.category, "Operations count:", this.operations.length);
 
@@ -124,6 +132,14 @@ export class MenuManager {
         if (this.operations.length === 0 || this.category === null) {
             console.log("Not rendering: no operations or no category");
             return;
+        }
+
+        // Render UP button if currentContext has a parent
+        if (this.currentContext && this.currentContext.parent !== null) {
+            this.renderUpButton();
+            const separator = document.createElement("span");
+            separator.innerText = " | ";
+            this.subMenu.appendChild(separator);
         }
 
         // Filter operations by the selected category (menu field)
@@ -172,6 +188,14 @@ export class MenuManager {
         console.log("Rendering buttons submenu");
         this.subMenu.innerHTML = "";
 
+        // Render UP button if currentContext has a parent
+        if (this.currentContext && this.currentContext.parent !== null) {
+            this.renderUpButton();
+            const separator = document.createElement("span");
+            separator.innerText = " | ";
+            this.subMenu.appendChild(separator);
+        }
+
         this.buttons.forEach(btn => {
             const button = document.createElement("button");
             button.innerText = btn.label || btn.name || btn;
@@ -190,5 +214,12 @@ export class MenuManager {
             };
             this.subMenu.appendChild(button);
         });
+    }
+
+    goUp() {
+        if (this.currentContext && this.currentContext.parent) {
+            this.currentContext = this.currentContext.parent;
+            this.render();
+        }
     }
 }
