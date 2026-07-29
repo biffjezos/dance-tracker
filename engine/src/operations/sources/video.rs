@@ -1,34 +1,22 @@
 use std::sync::Arc;
 
 use crate::compositor::OperationError;
-use crate::graphics::Image;
+use crate::graphics::Video;
 use crate::operations::sources::PixelSource;
 
 #[derive(Clone)]
-pub struct Video {
-    source: Arc<dyn PixelSource>,
+pub struct VideoSource {
+    video: Arc<Video>,
 }
 
-impl Video {
-    pub fn new(source: Arc<dyn PixelSource>) -> Self {
+impl VideoSource {
+    pub fn new(video: Arc<Video>) -> Self {
         Self {
-            source,
+            video,
         }
     }
 
-    pub fn image_at(
-        &self,
-        width: u32,
-        height: u32,
-    ) -> Result<Arc<Image>, OperationError> {
-
-        let frame = self.source.read(width, height)?;
-
-        Ok(Arc::new(Image {
-            pixels: frame.pixels,
-            width: frame.width,
-            height: frame.height,
-            format: crate::graphics::ImageFormat::Rgba8,
-        }))
+    pub fn video(&self) -> Arc<Video> {
+        self.video.clone()
     }
 }

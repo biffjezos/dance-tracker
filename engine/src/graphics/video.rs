@@ -1,5 +1,3 @@
-// src/graphics/video.rs
-
 use std::sync::Arc;
 
 use crate::compositor::OperationError;
@@ -26,9 +24,15 @@ impl Video {
             ));
         }
 
+        if time <= 0.0 {
+            return Ok(self.frames[0].clone());
+        }
+
         let index = (time * self.fps as f64).floor() as usize;
 
-        let index = index.min(self.frames.len() - 1);
+        if index >= self.frames.len() {
+            return Ok(self.frames[self.frames.len() - 1].clone());
+        }
 
         Ok(self.frames[index].clone())
     }
