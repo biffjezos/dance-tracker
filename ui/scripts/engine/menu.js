@@ -7,6 +7,9 @@ AMIGA TWO ROW MENU SYSTEM
 ==================================================
 */
 
+import { nodeSelectionState } from "./nodeSelection.js";
+import { getAllRealEntries } from "../../state/registry.js";
+
 // MenuContext: Represents a menu in the hierarchy
 class MenuContext {
     constructor(id, parent = null) {
@@ -148,6 +151,121 @@ export class MenuManager {
         this.subMenu.appendChild(upButton);
     }
 
+    renderNodeSelector() {
+        const selectionState = nodeSelectionState;
+        
+        // Create the node selector button group
+        const minusButton = document.createElement("button");
+        minusButton.innerText = "[-]";
+        minusButton.onclick = () => {
+            this.selectPreviousNode();
+        };
+        this.subMenu.appendChild(minusButton);
+
+        const nodeLabel = document.createElement("span");
+        nodeLabel.innerText = ` NODE SELECTOR `;
+        this.subMenu.appendChild(nodeLabel);
+
+        const plusButton = document.createElement("button");
+        plusButton.innerText = "[+]";
+        plusButton.onclick = () => {
+            this.selectNextNode();
+        };
+        this.subMenu.appendChild(plusButton);
+    }
+
+    renderChannelSelector() {
+        const selectionState = nodeSelectionState;
+        
+        // Create separator
+        const separator = document.createElement("span");
+        separator.innerText = " | ";
+        this.subMenu.appendChild(separator);
+
+        // Create the channel selector button group
+        const minusButton = document.createElement("button");
+        minusButton.innerText = "[-]";
+        minusButton.onclick = () => {
+            selectionState.selectPreviousChannel();
+            this.render();
+        };
+        this.subMenu.appendChild(minusButton);
+
+        const channelLabel = document.createElement("span");
+        channelLabel.innerText = ` CHANNEL `;
+        this.subMenu.appendChild(channelLabel);
+
+        const plusButton = document.createElement("button");
+        plusButton.innerText = "[+]";
+        plusButton.onclick = () => {
+            selectionState.selectNextChannel();
+            this.render();
+        };
+        this.subMenu.appendChild(plusButton);
+    }
+
+    renderEditButton() {
+        const selectionState = nodeSelectionState;
+        
+        if (selectionState.supportsEdit()) {
+            // Create separator
+            const separator = document.createElement("span");
+            separator.innerText = " | ";
+            this.subMenu.appendChild(separator);
+
+            const editButton = document.createElement("button");
+            editButton.innerText = "EDIT";
+            editButton.onclick = () => {
+                this.currentContext = editMenu;
+                this.render();
+                this.updateStatusBar();
+            };
+            this.subMenu.appendChild(editButton);
+        }
+    }
+
+    selectNextNode() {
+        const selectionState = nodeSelectionState;
+        const entries = getAllRealEntries();
+        
+        if (entries.length === 0) return;
+        
+        const currentNode = selectionState.getSelectedNode();
+        let currentIndex = -1;
+        
+        // Find current index
+        if (currentNode) {
+            currentIndex = entries.findIndex(entry => entry.id === currentNode.id);
+        }
+        
+        // Select next node (wrap around)
+        const nextIndex = (currentIndex + 1) % entries.length;
+        selectionState.setSelectedNode(entries[nextIndex]);
+        
+        this.render();
+    }
+
+    selectPreviousNode() {
+        const selectionState = nodeSelectionState;
+        const entries = getAllRealEntries();
+        
+        if (entries.length === 0) return;
+        
+        const currentNode = selectionState.getSelectedNode();
+        let currentIndex = -1;
+        
+        // Find current index
+        if (currentNode) {
+            currentIndex = entries.findIndex(entry => entry.id === currentNode.id);
+        }
+        
+        // Select previous node (wrap around)
+        const prevIndex = (currentIndex - 1 + entries.length) % entries.length;
+        selectionState.setSelectedNode(entries[prevIndex]);
+        
+        this.render();
+    }
+
     render() {
         console.log("Rendering menu. Category:", this.category, "Operations count:", this.operations.length);
 
@@ -156,6 +274,26 @@ export class MenuManager {
         // Don't render if operations aren't loaded or no category selected
         if (this.operations.length === 0 || this.category === null) {
             console.log("Not rendering: no operations or no category");
+            return;
+        }
+
+        // Special handling for NODES menu
+        if (this.category === "nodes") {
+            // Render UP button if currentContext has a parent
+            if (this.currentContext && this.currentContext.parent !== null) {
+                this.renderUpButton();
+                const separator = document.createElement("span");
+                separator.innerText = " | ";
+                this.subMenu.appendChild(separator);
+            }
+
+            // Render node selector and channel selector
+            this.renderNodeSelector();
+            this.renderChannelSelector();
+            
+            // Render EDIT button if supported
+            this.renderEditButton();
+            
             return;
         }
 
@@ -250,6 +388,12 @@ export class MenuManager {
     goUp() {
         if (this.currentContext && this.currentContext.parent) {
             this.currentContext = this.currentContext.parent;
+            // If going up from nodes menu, reset category
+            if (this.currentContext.id === "root") {
+                this.category = null;
+            } else {
+                this.category = this.currentContext.id;
+            }
             this.render();
             this.updateStatusBar();
         }
