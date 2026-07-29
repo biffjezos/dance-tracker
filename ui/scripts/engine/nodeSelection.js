@@ -94,7 +94,9 @@ export class NodeSelectionState {
             "standaloneMask",  // Mask nodes will have threshold, feather, invert controls
             "composite",       // Composite nodes will have mode, opacity controls
             "rings",           // Rings will have animation/parameter controls
-            "ghost"            // Ghost will have speed, loop, parameters
+            "ghost",
+            "image",           // Image nodes will have load, reload controls
+            "video"            // Video nodes will have animation controls
         ];
         
         return editableNodeTypes.includes(this.selectedNode.kind);
