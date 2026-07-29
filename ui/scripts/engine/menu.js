@@ -15,6 +15,10 @@ class MenuContext {
     }
 }
 
+const rootMenu = new MenuContext("root");
+const nodesMenu = new MenuContext("nodes", rootMenu);
+const editMenu = new MenuContext("node_edit", nodesMenu);
+
 const VISIBILITY_MODE_LABELS = {
     on: "ON",
     alpha: "ALPHA",
