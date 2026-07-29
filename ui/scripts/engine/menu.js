@@ -6,6 +6,15 @@ DANCE TRACKER 5000
 AMIGA TWO ROW MENU SYSTEM
 ==================================================
 */
+
+// MenuContext: Represents a menu in the hierarchy
+class MenuContext {
+    constructor(id, parent = null) {
+        this.id = id;
+        this.parent = parent;
+    }
+}
+
 const VISIBILITY_MODE_LABELS = {
     on: "ON",
     alpha: "ALPHA",
