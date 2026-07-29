@@ -130,6 +130,12 @@ export class MenuManager {
     show(category) {
         console.log("Showing category:", category);
         this.category = category;
+        // Set currentContext to the corresponding menu
+        if (category === "nodes") {
+            this.currentContext = nodesMenu;
+        } else {
+            this.currentContext = new MenuContext(category, rootMenu);
+        }
         this.render();
         this.updateStatusBar();
     }
@@ -183,7 +189,11 @@ export class MenuManager {
                 if (op.buttons && op.buttons.length) {
                     console.log("Showing submenu buttons");
                     this.buttons = op.buttons;
-                    this.currentContext = editMenu;
+                    // Create a child MenuContext for the submenu
+                    this.currentContext = new MenuContext(
+                        op.id || op.label.toLowerCase().replace(/\s+/g, "_"),
+                        this.currentContext
+                    );
                     this.renderButtons();
                     this.updateStatusBar();
                     return;
