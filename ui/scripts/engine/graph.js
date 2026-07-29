@@ -13,6 +13,9 @@ import {
 import {
     state
 } from "./state.js";
+import {
+    nodeSelectionState
+} from "./nodeSelection.js";
 
 // Track WASM node IDs for each layer to enable incremental updates
 const layerNodeIds = new Map(); // layerId -> wasmNodeId
@@ -389,6 +392,14 @@ export function getOutputNodeId() {
 }
 
 export function currentPreviewContentId() {
+    // Check if there's an active node selection from the NODES menu
+    const selectedNode = nodeSelectionState.getSelectedNode();
+    if (selectedNode && selectedNode.id) {
+        // Use the selected node's ID
+        return cachedWiredIds.get(selectedNode.id) ?? cachedContentIds.get(selectedNode.id) ?? layerNodeIds.get(selectedNode.id);
+    }
+    
+    // Fall back to scope-based preview (for legacy compatibility)
     const entry = scopedEntry(lastPreviewScope);
     if (!entry.id) return null;
     return cachedWiredIds.get(entry.id) ?? cachedContentIds.get(entry.id) ?? layerNodeIds.get(entry.id);
