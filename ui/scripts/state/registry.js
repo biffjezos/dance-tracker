@@ -59,17 +59,26 @@ export function getAllRealEntries() {
         kind: "text",
         layer
     }));
+    state.shuffleLayers.forEach(layer => list.push({
+        id: "shuffle:" + layer.id,
+        label: layer.name,
+        kind: "shuffle",
+        layer
+    }));
     return list;
 }
 export function getVideoRegistry() {
     return getAllRealEntries().filter(entry => entry.kind === "video" || entry.kind === "rings" || entry.kind ===
-        "ghost" || entry.kind === "text" || entry.kind === "standaloneMask" || entry.kind === "composite" || entry.kind === "image");
+        "ghost" || entry.kind === "text" || entry.kind === "standaloneMask" || entry.kind === "composite" || entry.kind === "image" || entry.kind === "shuffle");
 }
 export function getMaskRegistry() {
     return getAllRealEntries().filter(entry => entry.kind === "standaloneMask");
 }
 export function getCompositeRegistry() {
     return getAllRealEntries().filter(entry => entry.kind === "composite");
+}
+export function getShuffleRegistry() {
+    return getAllRealEntries().filter(entry => entry.kind === "shuffle");
 }
 const EMPTY_ENTRY = {
     label: null,

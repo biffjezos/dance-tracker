@@ -11,12 +11,14 @@ import { nodeSelectionState } from "./nodeSelection.js";
 import { nodeEditContextRegistry } from "./nodeEditContexts.js";
 import { getAllRealEntries } from "../state/registry.js";
 import { createNode } from "../core/operations.js";
+import { state } from "./state.js";
 
 // MenuContext: Represents a menu in the hierarchy
 class MenuContext {
     constructor(id, parent = null) {
         this.id = id;
         this.parent = parent;
+        this.opId = null; // For create_node context, stores the operation ID
     }
 }
 
@@ -448,15 +450,42 @@ export class MenuManager {
         createNode(operationId).then(nodeId => {
             console.log("Node created with ID:", nodeId);
             
-            // For now, we'll add the node to the state
-            // This is a placeholder - actual node tracking needs to be implemented
+            // Add the node to the appropriate layer array based on operation type
+            let layerId, layerName, layerKind;
+            if (operationId === "shuffle") {
+                layerId = `shuffle:${state.nextShuffleNumber++}`;
+                layerName = `SHUFFLE ${state.nextShuffleNumber - 1}`;
+                layerKind = "shuffle";
+                
+                const newLayer = {
+                    id: layerId,
+                    name: layerName,
+                    nodeId: nodeId,
+                    settings: {}
+                };
+                state.shuffleLayers.push(newLayer);
+            } else {
+                // Fallback for other node types
+                console.warn("Unknown node type for creation:", operationId);
+                return;
+            }
+            
+            // Create the entry
+            const newEntry = {
+                id: layerId,
+                label: layerName,
+                kind: layerKind,
+                layer: { id: layerId, name: layerName, nodeId: nodeId, settings: {} }
+            };
+            
+            // Select the new node
+            nodeSelectionState.setSelectedNode(newEntry);
             
             // Go back to nodes menu
             this.currentContext = nodesMenu;
             this.category = "nodes";
             
-            // Refresh the node list and select the new node
-            // This will be properly implemented in commit 2
+            // Refresh the menu
             this.render();
             this.updateStatusBar();
         }).catch(err => {
