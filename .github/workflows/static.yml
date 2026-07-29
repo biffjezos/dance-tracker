@@ -37,6 +37,7 @@ jobs:
               - 'engine/src/dom.rs'
               - 'engine/Cargo.toml'
               - 'engine/Cargo.lock'
+              - 'ui/scripts/engine/**'
 
             rust:
               - 'engine/src/**'
@@ -62,8 +63,18 @@ jobs:
             ~/.cargo
             engine/target
           key: rust-${{ runner.os }}-${{ hashFiles('engine/Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
 
-      - name: Cache WASM package
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      - name: Build WASM
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: wasm-pack build engine --target web
+
+      - name: Save WASM package
         uses: actions/cache@v4
         with:
           path: engine/pkg
@@ -74,14 +85,6 @@ jobs:
             'engine/Cargo.toml',
             'engine/Cargo.lock'
           ) }}
-
-      - name: Install wasm-pack
-        run: cargo install wasm-pack
-
-      - name: Build WASM
-        env:
-          BUILD_COMMIT: ${{ github.sha }}
-        run: wasm-pack build engine --target web
 
 
   build-rust:
@@ -99,9 +102,11 @@ jobs:
             ~/.cargo
             engine/target
           key: rust-${{ runner.os }}-${{ hashFiles('engine/Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
 
       - name: Build Rust
-        run: cargo build
+        run: cargo build --manifest-path engine/Cargo.toml
 
 
   deploy:
@@ -117,9 +122,10 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Restore WASM package from cache
-        uses: actions/cache@v4
+
+      - name: Restore WASM package
         id: wasm-cache
+        uses: actions/cache@v4
         with:
           path: engine/pkg
           key: wasm-${{ runner.os }}-${{ hashFiles(
@@ -129,42 +135,65 @@ jobs:
             'engine/Cargo.toml',
             'engine/Cargo.lock'
           ) }}
+          restore-keys: |
+            wasm-${{ runner.os }}-
 
-      - name: Check if WASM files exist
-        id: wasm-exists
+
+      - name: Verify WASM exists
         run: |
-          if [ -f "engine/pkg/dance_tracker_core_bg.wasm" ] && \
-             [ -f "engine/pkg/dance_tracker_core.js" ] && \
-             [ -f "engine/pkg/dance_tracker_core.d.ts" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
+          if [ ! -f "engine/pkg/dance_tracker_core_bg.wasm" ]; then
+            echo "ERROR: WASM package missing"
+            exit 1
           fi
 
+          if [ ! -f "engine/pkg/dance_tracker_core.js" ]; then
+            echo "ERROR: WASM JS loader missing"
+            exit 1
+          fi
+
+
       - name: Copy WASM package
-        if: steps.wasm-exists.outputs.exists == 'true' || steps.wasm-cache.outputs.cache-hit == 'true'
         run: |
           mkdir -p ui/scripts/engine/pkg
-          cp -r engine/pkg/* ui/scripts/engine/pkg/
+          rm -rf ui/scripts/engine/pkg/*
+          cp -a engine/pkg/. ui/scripts/engine/pkg/
 
-      - name: Restore Rust build from cache
-        if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.wasm == 'true'
-        uses: actions/cache@v4
-        with:
-          path: engine/target
-          key: rust-${{ runner.os }}-${{ hashFiles('engine/Cargo.lock') }}
 
       - name: Write build metadata
         run: echo "${GITHUB_SHA}" > ui/build-version.txt
 
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./ui
 
+
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5
+
+
+  cleanup:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: write
+
+    steps:
+
+      - name: Delete workflow runs older than 30 days
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list \
+            --repo ${{ github.repository }} \
+            --limit 1000 \
+            --json databaseId,createdAt \
+            --jq '.[] | select(.createdAt < (now - 2592000 | strftime("%Y-%m-%dT%H:%M:%SZ"))) | .databaseId' \
+          | xargs -r -n 1 gh run delete --repo ${{ github.repository }}
