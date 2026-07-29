@@ -165,7 +165,7 @@ impl App {
         
         // Try to downcast to Shuffle and update parameter
         if let Some(shuffle) = operation.as_any_mut().downcast_mut::<Shuffle>() {
-            let channel = match parameter.as_str() {
+            match parameter.as_str() {
                 "red" => {
                     shuffle.red = parse_shuffle_channel(&value)
                         .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
@@ -281,13 +281,18 @@ impl App {
 }
 
 // Helper function to parse shuffle channel values
-fn parse_shuffle_channel(value: &str) -> Option<u8> {
-    match value {
-        "R" => Some(0),
-        "G" => Some(1),
-        "B" => Some(2),
-        "A" => Some(3),
-        "OFF" => Some(4),
+fn parse_shuffle_channel(s: &str) -> Option<crate::operations::transform::shuffle::ShuffleChannel> {
+    use crate::operations::transform::shuffle::ShuffleChannel;
+    match s.to_lowercase().as_str() {
+        "red" => Some(ShuffleChannel::Red),
+        "r" => Some(ShuffleChannel::Red),
+        "green" => Some(ShuffleChannel::Green),
+        "g" => Some(ShuffleChannel::Green),
+        "blue" => Some(ShuffleChannel::Blue),
+        "b" => Some(ShuffleChannel::Blue),
+        "alpha" => Some(ShuffleChannel::Alpha),
+        "a" => Some(ShuffleChannel::Alpha),
+        "off" => Some(ShuffleChannel::Off),
         _ => None,
     }
 }

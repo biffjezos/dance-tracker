@@ -24,34 +24,34 @@ impl Graph {
             inputs: Vec::new(),
         };
 
-		let id = if let Some(index) = self.free.pop() {
-		
-			let generation =
-				self.generations[index as usize];
-		
-			self.nodes[index as usize] = Some(node);
-		
-			NodeId {
-				index,
-				generation,
-			}
-		
-		} else {
-		
-			let index = self.nodes.len() as u32;
-		
-			self.nodes.push(Some(node));
-			self.generations.push(0);
-		
-			NodeId {
-				index,
-				generation: 0,
-			}
-		};
-		
-		self.validation = ValidationState::Dirty;
-		
-		id
+        let id = if let Some(index) = self.free.pop() {
+
+            let generation =
+                self.generations[index as usize];
+
+            self.nodes[index as usize] = Some(node);
+
+            NodeId {
+                index,
+                generation,
+            }
+
+        } else {
+
+            let index = self.nodes.len() as u32;
+
+            self.nodes.push(Some(node));
+            self.generations.push(0);
+
+            NodeId {
+                index,
+                generation: 0,
+            }
+        };
+
+        self.validation = ValidationState::Dirty;
+
+        id
     }
     
     /// Get an immutable reference to a node's operation
@@ -86,14 +86,14 @@ impl Graph {
         &mut self,
         id: NodeId,
     ) -> Result<(), OperationError> {
-		
-		let index = id.index as usize;
-		
-		if self.resolve(id).is_none() {
-			return Err(OperationError::UnknownNode);
-		}
-		
-		self.nodes[index] = None;
+
+        let index = id.index as usize;
+
+        if self.resolve(id).is_none() {
+            return Err(OperationError::UnknownNode);
+        }
+
+        self.nodes[index] = None;
         self.generations[index] =
             self.generations[index].wrapping_add(1);
 
@@ -121,24 +121,24 @@ impl Graph {
         input: Input,
         source: NodeId,
     ) -> Result<(), OperationError> {
-		
-		if self.resolve(node).is_none()
-			|| self.resolve(source).is_none()
-		{
-			return Err(OperationError::UnknownNode);
-		}
-		
-		let target =
-			self.resolve_mut(node)
-			.ok_or(OperationError::UnknownNode)?;
-		
-		target.inputs.retain(|(key, _)| *key != input);
-		
-		target.inputs.push((input, source));
-		
-		self.validation = ValidationState::Dirty;
-		
-		Ok(())
+
+        if self.resolve(node).is_none()
+            || self.resolve(source).is_none()
+        {
+            return Err(OperationError::UnknownNode);
+        }
+
+        let target =
+            self.resolve_mut(node)
+            .ok_or(OperationError::UnknownNode)?;
+
+        target.inputs.retain(|(key, _)| *key != input);
+
+        target.inputs.push((input, source));
+
+        self.validation = ValidationState::Dirty;
+
+        Ok(())
     }
 
     pub fn disconnect(
@@ -146,26 +146,26 @@ impl Graph {
         node: NodeId,
         input: Input,
     ) -> Result<(), OperationError> {
-		
-		let target =
-			self.resolve_mut(node)
-			.ok_or(OperationError::UnknownNode)?;
-		
-		target.inputs.retain(|(key, _)| *key != input);
-		
-		self.validation = ValidationState::Dirty;
-		
-		Ok(())
+
+        let target =
+            self.resolve_mut(node)
+            .ok_or(OperationError::UnknownNode)?;
+
+        target.inputs.retain(|(key, _)| *key != input);
+
+        self.validation = ValidationState::Dirty;
+
+        Ok(())
     }
 
     pub fn set_output(
         &mut self,
         id: NodeId,
     ) -> Result<(), OperationError> {
-		
-		if self.resolve(id).is_none() {
-			return Err(OperationError::UnknownNode);
-		}
+
+        if self.resolve(id).is_none() {
+            return Err(OperationError::UnknownNode);
+        }
 
         self.output = Some(id);
 
