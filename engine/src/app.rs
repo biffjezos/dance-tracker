@@ -14,6 +14,7 @@ use crate::compositor::{
     },
     graph::{ Graph, NodeId },
     Meta,
+    Operation,
     OperationError,
     OperationRegistry,
     Value
@@ -105,6 +106,14 @@ impl App {
         let operation = Box::new(ImageSource::new());
         let node_id = self.graph.add_node(operation);
         Ok(node_id.index())
+    }
+    
+    /// Check if a node supports editing (has editable parameters)
+    pub fn node_supports_edit(&self, node_id: u32) -> bool {
+        let node_id = NodeId::from_index(node_id);
+        self.graph.get_node(&node_id)
+            .map(|op| op.supports_edit())
+            .unwrap_or(false)
     }
     
     /// Set image data on a specific ImageSource node
@@ -269,59 +278,16 @@ impl App {
 
         write_frame_to_canvas(&canvas, &frame)
     }
-
-
-    pub fn play( &self, video: HtmlVideoElement, ) -> Result<(), JsValue> {
-        video
-            .play()
-            .map(|_| ())
-            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
-    }
-
-
-    pub fn stop(
-        &self,
-        video: HtmlVideoElement,
-    ) -> Result<(), JsValue> {
-        video
-            .pause()
-            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
-    }
-
-
-    pub fn forward(
-        &self,
-        video: HtmlVideoElement,
-        seconds: f64,
-    ) -> Result<(), JsValue> {
-        video.set_current_time(video.current_time() + seconds);
-        Ok(())
-    }
-
-
-    pub fn rewind(
-        &self,
-        video: HtmlVideoElement,
-        seconds: f64,
-    ) -> Result<(), JsValue> {
-        video.set_current_time(video.current_time() - seconds);
-        Ok(())
-    }
 }
 
-/// Parse a string into ShuffleChannel
-fn parse_shuffle_channel(s: &str) -> Option<crate::operations::transform::shuffle::ShuffleChannel> {
-    use crate::operations::transform::shuffle::ShuffleChannel;
-    match s.to_lowercase().as_str() {
-        "red" => Some(ShuffleChannel::Red),
-        "r" => Some(ShuffleChannel::Red),
-        "green" => Some(ShuffleChannel::Green),
-        "g" => Some(ShuffleChannel::Green),
-        "blue" => Some(ShuffleChannel::Blue),
-        "b" => Some(ShuffleChannel::Blue),
-        "alpha" => Some(ShuffleChannel::Alpha),
-        "a" => Some(ShuffleChannel::Alpha),
-        "off" => Some(ShuffleChannel::Off),
+// Helper function to parse shuffle channel values
+fn parse_shuffle_channel(value: &str) -> Option<u8> {
+    match value {
+        "R" => Some(0),
+        "G" => Some(1),
+        "B" => Some(2),
+        "A" => Some(3),
+        "OFF" => Some(4),
         _ => None,
     }
 }

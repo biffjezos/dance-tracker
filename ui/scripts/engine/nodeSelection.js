@@ -1,7 +1,7 @@
 // nodeSelection.js
 // Node selection state for the NODES menu context
 
-import { nodeEditContextRegistry } from "./nodeEditContexts.js";
+import { getWasmApp } from "../core/wasm.js";
 
 /**
  * NodeSelectionState manages the currently selected node
@@ -45,15 +45,21 @@ export class NodeSelectionState {
 
     /**
      * Check if the selected node supports editing
-     * This checks if the node has a registered edit context in the registry.
-     * It means: "Does this node have an edit context?" NOT "Does this node modify pixels?"
-     * @returns {boolean} True if the node has a registered edit context
+     * This queries the Rust WASM app to check if the node's operation supports edit.
+     * @returns {boolean} True if the node supports editing
      */
     supportsEdit() {
-        if (!this.selectedNode) return false;
+        if (!this.selectedNode || !this.selectedNode.layer || this.selectedNode.layer.nodeId === undefined) {
+            return false;
+        }
         
-        // Check if the node's kind has a registered edit context
-        return nodeEditContextRegistry.hasContext(this.selectedNode.kind);
+        const wasmApp = getWasmApp();
+        if (!wasmApp) {
+            return false;
+        }
+        
+        // Query Rust to check if this node supports editing
+        return wasmApp.node_supports_edit(this.selectedNode.layer.nodeId);
     }
 }
 

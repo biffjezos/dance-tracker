@@ -35,4 +35,9 @@ pub trait Operation: Any {
     fn set_parameter(&mut self, name: &str, _value: Value) -> Result<(), OperationError> {
         Err(OperationError::UnknownParameter(name.to_string()))
     }
+
+    /// Returns true if this operation supports editing (has parameters that can be modified)
+    fn supports_edit(&self) -> bool {
+        !self.parameters().is_empty()
+    }
 }
