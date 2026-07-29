@@ -154,7 +154,7 @@ export class MenuManager {
 
     renderUpButton() {
         const upButton = document.createElement("button");
-        upButton.innerText = "[UP]";
+        upButton.innerText = "UP";
         upButton.className = "up-button";
         upButton.onclick = () => this.goUp();
         this.subMenu.appendChild(upButton);
@@ -165,7 +165,7 @@ export class MenuManager {
         
         // Create the node selector button group
         const minusButton = document.createElement("button");
-        minusButton.innerText = "[-]";
+        minusButton.innerText = "-";
         minusButton.onclick = () => {
             this.selectPreviousNode();
         };
@@ -177,7 +177,7 @@ export class MenuManager {
         this.subMenu.appendChild(nodeLabel);
 
         const plusButton = document.createElement("button");
-        plusButton.innerText = "[+]";
+        plusButton.innerText = "+";
         plusButton.onclick = () => {
             this.selectNextNode();
         };
@@ -195,7 +195,7 @@ export class MenuManager {
 
         // Create the channel selector button group
         const minusButton = document.createElement("button");
-        minusButton.innerText = "[-]";
+        minusButton.innerText = "-";
         minusButton.onclick = () => {
             selectionState.selectPreviousChannel();
             this.render();
@@ -208,7 +208,7 @@ export class MenuManager {
         this.subMenu.appendChild(channelLabel);
 
         const plusButton = document.createElement("button");
-        plusButton.innerText = "[+]";
+        plusButton.innerText = "+";
         plusButton.onclick = () => {
             selectionState.selectNextChannel();
             this.render();
