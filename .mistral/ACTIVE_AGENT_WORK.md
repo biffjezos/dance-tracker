@@ -1,52 +1,49 @@
 # ACTIVE AGENT WORK
 
-## input-menu-fix-agent
+## video-source-agent
 
 STATUS:
 DONE
 
 TASK:
-Fix INPUT menu operations (CAMERA, VIDEO, LOAD IMAGE) to match requirements:
-- None of the INPUT operations should have a [ADD] button
-- A click on "LOAD IMAGE" opens the file browser
-- VIDEO button should read "LOAD VIDEO" and opens file browser with video type files
-- CAMERA source should use browser's Camera stream API
-- None of the source operations should have a menu context
+Implement VideoSource operation based on ImageSource implementation.
 
 OWNERSHIP:
 The following files are reserved and must not be modified by other agents:
 
-- engine/src/operations/sources/image.rs
 - engine/src/operations/sources/video.rs
-- engine/src/operations/sources/camera.rs
-- ui/scripts/features/image.js
+- engine/src/operations/sources/mod.rs
+- engine/src/app.rs
 - ui/scripts/features/video.js
-- ui/scripts/engine/camera.js
-- ui/scripts/app.js
 
 RULES:
-- Do not edit these files.
-- Do not refactor surrounding code in these files.
-- Do not rename public APIs.
-- Do not create alternative registration systems.
+- Do not edit other source files unless necessary for VideoSource to work
+- Follow the same pattern as ImageSource
+- Use appropriate naming (video_source, LOAD VIDEO, Video Source)
+- Keep the same descriptor structure but with video-specific labels
 
 DEPENDENCY CONTRACT:
 When complete, this agent will provide:
 
-- Fixed INPUT menu operations without [ADD] buttons
-- LOAD IMAGE opens file browser for images
-- LOAD VIDEO opens file browser for videos
-- CAMERA uses browser Camera API
-- No menu context for source operations
+- A working VideoSource operation that mirrors ImageSource functionality
+- Proper registration in the inventory system
+- Appropriate metadata and descriptors
+- WASM bindings for creating video source nodes and setting video data
+- UI handler for loading video files and extracting frames
 
-Other agents should treat the final API as the integration point.
+Other agents should treat the VideoSource as a source operation similar to ImageSource.
 
 COMPLETED:
-- Removed create_node from all three source operations (image, video, camera)
-- Changed VIDEO label to "LOAD VIDEO"
-- Changed camera ui_action to "open_camera_stream"
-- Added open_video_picker handler in video.js
-- Added open_camera_stream handler in video.js
+- Implemented VideoSource struct with image storage (Option<Arc<Image>>)
+- Added set_image and get_image methods to VideoSource
+- Implemented Operation trait for VideoSource with proper descriptor and metadata
+- Exported VideoSource from sources/mod.rs
+- Added VideoSource import to app.rs
+- Added create_video_source_node method to App
+- Added set_video_on_node method to App
+- Updated video.js to use WASM VideoSource node
+- Added extractVideoFrame helper function
+- Video files are now loaded, first frame extracted, and set on VideoSource node
 - All changes committed and pushed to dev branch
 
 ---

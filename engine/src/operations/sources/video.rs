@@ -1,5 +1,6 @@
 // src/operations/sources/video.rs
 use std::any::Any;
+use std::sync::Arc;
 
 use crate::compositor::{
     Context,
@@ -11,16 +12,25 @@ use crate::compositor::{
     Value
 };
 
-/// Video source operation (stub implementation)
+use crate::graphics::Image;
+
 pub struct VideoSource {
-    // Placeholder for video state
+    pub image: Option<Arc<Image>>,
 }
 
 impl VideoSource {
     pub fn new() -> Self {
         Self {
-            // Initialize video state
+            image: None,
         }
+    }
+    
+    pub fn set_image(&mut self, image: Arc<Image>) {
+        self.image = Some(image);
+    }
+    
+    pub fn get_image(&self) -> Option<Arc<Image>> {
+        self.image.clone()
     }
 }
 
@@ -37,7 +47,6 @@ impl Operation for VideoSource {
             buttons: &[],
         }
     }
-    
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -45,6 +54,7 @@ impl Operation for VideoSource {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+
 
     fn metadata(&self) -> OperationMetadata {
         OperationMetadata {
@@ -55,9 +65,17 @@ impl Operation for VideoSource {
         }
     }
 
+
     fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
-        // Stub implementation - returns an error for now
-        Err(OperationError::NotImplemented("Video source not yet implemented".to_string()))
+        let image = self
+            .image
+            .clone()
+            .ok_or_else(|| OperationError::SourceNotFound("Video not loaded".to_string()))?;
+
+        // Return Value::Image - conversion to Frame happens at the boundary (preview/render)
+        Ok(vec![
+            Value::Image(image)
+        ])
     }
 }
 

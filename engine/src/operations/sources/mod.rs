@@ -8,6 +8,7 @@ use crate::{
 };
 
 pub use image::ImageSource;
+pub use video::VideoSource;
 
 pub trait PixelSource {
     fn read(
