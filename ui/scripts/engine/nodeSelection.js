@@ -25,6 +25,12 @@ export class NodeSelectionState {
      */
     setSelectedNode(nodeEntry) {
         this.selectedNode = nodeEntry;
+        // Dispatch event to notify that node selection changed
+        window.dispatchEvent(new CustomEvent("nodeSelectionChanged", {
+            detail: {
+                node: nodeEntry
+            }
+        }));
     }
 
     /**

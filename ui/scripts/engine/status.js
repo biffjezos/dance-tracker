@@ -13,6 +13,7 @@ import {
 import {
     renderPreview
 } from "./render.js";
+import { nodeSelectionState } from "./nodeSelection.js";
 const CAMERA_PANEL_DEFAULT_TITLE = "CAMERA INPUT";
 
 function updateLayerStatusDisplay(entry) {
@@ -27,6 +28,25 @@ function updateLayerStatusDisplay(entry) {
         bar.children[3].innerText = "TYPE: " + (entry.kind ? entry.kind.toUpperCase() : "NONE");
     }
 }
+
+function updateNodeSelectionDisplay() {
+    const selectedNode = nodeSelectionState.getSelectedNode();
+    const panelTitle = document.getElementById("camera-panel-title");
+    if (panelTitle) {
+        panelTitle.innerText = selectedNode ? selectedNode.label : CAMERA_PANEL_DEFAULT_TITLE;
+    }
+    
+    // Also update status bar if needed
+    const bar = document.querySelector(".statusbar");
+    if (bar && selectedNode) {
+        bar.children[2].innerText = "VISIBILITY: " + (selectedNode.id !== null && selectedNode.id === state.outputEntryId ? "ON" : "OFF");
+        bar.children[3].innerText = "TYPE: " + (selectedNode.kind ? selectedNode.kind.toUpperCase() : "NONE");
+    }
+    
+    // Trigger preview render
+    renderPreview();
+}
+
 let lastPreviewScope = "video";
 export function reportSelection(scope) {
     lastPreviewScope = scope;
@@ -61,3 +81,8 @@ export function reportSelection(scope) {
     }));
     renderPreview();
 }
+
+// Listen for node selection changes
+window.addEventListener("nodeSelectionChanged", (e) => {
+    updateNodeSelectionDisplay();
+});
