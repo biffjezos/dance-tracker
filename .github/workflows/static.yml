@@ -37,8 +37,6 @@ jobs:
               - 'engine/src/dom.rs'
               - 'engine/Cargo.toml'
               - 'engine/Cargo.lock'
-              - 'ui/scripts/core/wasm.js'
-              - 'ui/scripts/core/operations.js'
 
             rust:
               - 'engine/src/**'
