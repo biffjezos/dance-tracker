@@ -261,7 +261,6 @@ export function renderShuffleEditContext(menuManager, nodeEntry) {
 
 // Register all known edit contexts
 // These map node kinds to their respective edit UIs
-nodeEditContextRegistry.register("image", renderImageEditContext);
 nodeEditContextRegistry.register("blur", renderBlurEditContext);
 nodeEditContextRegistry.register("standaloneMask", renderMaskEditContext);
 nodeEditContextRegistry.register("composite", renderCompositeEditContext);
