@@ -1,8 +1,10 @@
 // nodeSelection.js
 // Node selection state for the NODES menu context
 
+import { nodeEditContextRegistry } from "./nodeEditContexts.js";
+
 /**
- * NodeSelectionState manages the currently selected node and preview channel
+ * NodeSelectionState manages the currently selected node
  * This is UI state only - it does not modify the graph or create operations
  */
 export class NodeSelectionState {
@@ -82,24 +84,15 @@ export class NodeSelectionState {
 
     /**
      * Check if the selected node supports editing
-     * This will be extended as node-specific editors are implemented
-     * @returns {boolean} True if the node supports editing
+     * This checks if the node has a registered edit context in the registry.
+     * It means: "Does this node have an edit context?" NOT "Does this node modify pixels?"
+     * @returns {boolean} True if the node has a registered edit context
      */
     supportsEdit() {
         if (!this.selectedNode) return false;
         
-        // For now, only certain node types support editing
-        // This will be expanded as editors are implemented
-        const editableNodeTypes = [
-            "standaloneMask",  // Mask nodes will have threshold, feather, invert controls
-            "composite",       // Composite nodes will have mode, opacity controls
-            "rings",           // Rings will have animation/parameter controls
-            "ghost",
-            "image",           // Image nodes will have load, reload controls
-            "video"            // Video nodes will have animation controls
-        ];
-        
-        return editableNodeTypes.includes(this.selectedNode.kind);
+        // Check if the node's kind has a registered edit context
+        return nodeEditContextRegistry.hasContext(this.selectedNode.kind);
     }
 
     /**
