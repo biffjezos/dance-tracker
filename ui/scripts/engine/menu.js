@@ -305,6 +305,19 @@ export class MenuManager {
             return;
         }
 
+        // Special handling for EDIT context
+        if (this.currentContext && this.currentContext.id === "node_edit") {
+            // Render UP button
+            if (this.currentContext.parent !== null) {
+                this.renderUpButton();
+            }
+            // For now, show a placeholder - node-specific editors will be implemented later
+            const editLabel = document.createElement("span");
+            editLabel.innerText = " NODE EDIT CONTEXT ";
+            this.subMenu.appendChild(editLabel);
+            return;
+        }
+
         // Render UP button if currentContext has a parent
         if (this.currentContext && this.currentContext.parent !== null) {
             this.renderUpButton();
