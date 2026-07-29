@@ -3,7 +3,7 @@
 ## shuffle-agent
 
 STATUS:
-IN PROGRESS
+DONE
 
 TASK:
 Implement SHUFFLE operation as a normal graph operation with proper channel routing.
@@ -31,5 +31,14 @@ When complete, this agent will provide:
 - Integration with existing operation architecture
 
 Other agents should treat the Shuffle operation as a normal graph operation.
+
+COMPLETED:
+- Added Color category to OperationCategory enum in metadata.rs
+- Updated ShuffleChannel enum to use single-letter format (R, G, B, A, OFF)
+- Added to_str() and from_str() methods for proper serialization
+- Renamed parameters from red/green/blue/alpha to red_channel/green_channel/blue_channel/alpha_channel
+- Updated metadata category from Composite to Color
+- Updated get_parameter and set_parameter to use new serialization format
+- All changes committed and pushed to dev branch
 
 ---
