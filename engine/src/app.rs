@@ -106,7 +106,10 @@ impl App {
     pub fn create_image_source_node(&mut self) -> Result<u32, JsValue> {
         let operation = Box::new(ImageSource::new());
         let node_id = self.graph.add_node(operation);
+
+        Ok(node_id.index())
     }
+
     /// Create a video source node and return its ID
     pub fn create_video_source_node(&mut self) -> Result<u32, JsValue> {
         let operation = Box::new(VideoSource::new());
@@ -114,7 +117,7 @@ impl App {
 
         Ok(node_id.index())
     }
-    
+        
     /// Check if a node supports editing (has editable parameters)
     pub fn node_supports_edit(&self, node_id: u32) -> bool {
         let node_id = NodeId::from_index(node_id);
@@ -158,47 +161,44 @@ impl App {
 
     /// Set image data on a specific VideoSource node
     /// Takes pixel data as Uint8Array, width, height
-    pub fn set_video_element_on_node(
-        &mut self,
-        node_id: u32,
-        video: HtmlVideoElement,
-        scratch_canvas: HtmlCanvasElement,
-    ) -> Result<(), JsValue> {
+    /// Set video element on a specific VideoSource node
+pub fn set_video_element_on_node(
+    &mut self,
+    node_id: u32,
+    video: HtmlVideoElement,
+    scratch_canvas: HtmlCanvasElement,
+) -> Result<(), JsValue> {
 
-        let node_id = NodeId::from_index(node_id);
+    let node_id = NodeId::from_index(node_id);
 
-        let operation = self.graph
-            .get_node_mut(&node_id)
-            .ok_or_else(|| {
-                JsValue::from_str(
-                    &format!("Node {:?} not found", node_id)
-                )
-            })?;
+    let operation = self.graph
+        .get_node_mut(&node_id)
+        .ok_or_else(|| {
+            JsValue::from_str(
+                &format!("Node {:?} not found", node_id)
+            )
+        })?;
 
-        let video_source = operation
-            .as_any_mut()
-            .downcast_mut::<VideoSource>()
-            .ok_or_else(|| {
-                JsValue::from_str(
-                    "Node is not a VideoSource"
-                )
-            })?;
+    let video_source = operation
+        .as_any_mut()
+        .downcast_mut::<VideoSource>()
+        .ok_or_else(|| {
+            JsValue::from_str(
+                "Node is not a VideoSource"
+            )
+        })?;
 
-        let pixel_source = VideoElementPixelSource {
-            video,
-            scratch_canvas,
-        };
+    let pixel_source = VideoElementPixelSource {
+        video,
+        scratch_canvas,
+    };
 
-        let video = Video::new(
-            Arc::new(pixel_source)
-        );
+    video_source.set_source(
+        Arc::new(pixel_source)
+    );
 
-        video_source.set_video(
-            Arc::new(video)
-        );
-
-        Ok(())
-    }
+    Ok(())
+}
     
     /// Update a parameter on a specific node
     /// Takes node_id, parameter name, and value as string
