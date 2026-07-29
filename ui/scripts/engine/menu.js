@@ -136,6 +136,14 @@ export class MenuManager {
         // Set currentContext to the corresponding menu
         if (category === "nodes") {
             this.currentContext = nodesMenu;
+            // Initialize node selection if not already set
+            const selectionState = nodeSelectionState;
+            if (!selectionState.getSelectedNode()) {
+                const entries = getAllRealEntries();
+                if (entries.length > 0) {
+                    selectionState.setSelectedNode(entries[0]);
+                }
+            }
         } else {
             this.currentContext = new MenuContext(category, rootMenu);
         }
@@ -163,7 +171,7 @@ export class MenuManager {
         this.subMenu.appendChild(minusButton);
 
         const nodeLabel = document.createElement("span");
-        nodeLabel.innerText = ` NODE SELECTOR `;
+        nodeLabel.innerText = ` ${selectionState.getSelectedNodeName()} `;
         this.subMenu.appendChild(nodeLabel);
 
         const plusButton = document.createElement("button");
