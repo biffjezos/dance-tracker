@@ -7,6 +7,7 @@ mod resolve;
 mod validate;
 
 pub use node::{Node, NodeId};
+pub use validate::{NodeValidation, ValidationState};
 
 pub struct Graph {
     pub(crate) nodes: Vec<Option<Node>>,
@@ -19,6 +20,8 @@ pub struct Graph {
     pub height: u32,
 
     pub(crate) validation: validate::ValidationState,
+    /// Per-node validation states, indexed by node index
+    pub(crate) node_validation: Vec<validate::NodeValidation>,
 }
 
 impl Graph {
@@ -31,6 +34,7 @@ impl Graph {
             width,
             height,
             validation: validate::ValidationState::Dirty,
+            node_validation: Vec::new(),
         }
     }
 }
