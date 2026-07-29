@@ -22,7 +22,6 @@ jobs:
     outputs:
       wasm: ${{ steps.filter.outputs.wasm }}
       rust: ${{ steps.filter.outputs.rust }}
-      ui: ${{ steps.filter.outputs.ui }}
 
     steps:
       - uses: actions/checkout@v4
@@ -37,15 +36,12 @@ jobs:
               - 'engine/src/dom.rs'
               - 'engine/Cargo.toml'
               - 'engine/Cargo.lock'
-              - 'ui/scripts/engine/**'
+              - 'ui/core/**'
 
             rust:
               - 'engine/src/**'
               - 'engine/Cargo.toml'
               - 'engine/Cargo.lock'
-
-            ui:
-              - 'ui/**'
 
 
   build-wasm:
@@ -74,17 +70,13 @@ jobs:
           BUILD_COMMIT: ${{ github.sha }}
         run: wasm-pack build engine --target web
 
-      - name: Save WASM package
+      - name: Cache WASM package
         uses: actions/cache@v4
         with:
           path: engine/pkg
-          key: wasm-${{ runner.os }}-${{ hashFiles(
-            'engine/src/operations/**',
-            'engine/src/app.rs',
-            'engine/src/dom.rs',
-            'engine/Cargo.toml',
-            'engine/Cargo.lock'
-          ) }}
+          key: wasm-${{ runner.os }}-${{ hashFiles('engine/src/operations/**', 'engine/src/app.rs', 'engine/src/dom.rs', 'engine/Cargo.toml', 'engine/Cargo.lock') }}
+          restore-keys: |
+            wasm-${{ runner.os }}-
 
 
   build-rust:
@@ -122,56 +114,35 @@ jobs:
 
       - uses: actions/checkout@v4
 
-
       - name: Restore WASM package
-        id: wasm-cache
         uses: actions/cache@v4
         with:
           path: engine/pkg
-          key: wasm-${{ runner.os }}-${{ hashFiles(
-            'engine/src/operations/**',
-            'engine/src/app.rs',
-            'engine/src/dom.rs',
-            'engine/Cargo.toml',
-            'engine/Cargo.lock'
-          ) }}
+          key: wasm-${{ runner.os }}-${{ hashFiles('engine/src/operations/**', 'engine/src/app.rs', 'engine/src/dom.rs', 'engine/Cargo.toml', 'engine/Cargo.lock') }}
           restore-keys: |
             wasm-${{ runner.os }}-
 
-
       - name: Verify WASM exists
         run: |
-          if [ ! -f "engine/pkg/dance_tracker_core_bg.wasm" ]; then
-            echo "ERROR: WASM package missing"
-            exit 1
-          fi
-
-          if [ ! -f "engine/pkg/dance_tracker_core.js" ]; then
-            echo "ERROR: WASM JS loader missing"
-            exit 1
-          fi
-
+          test -f engine/pkg/dance_tracker_core_bg.wasm
+          test -f engine/pkg/dance_tracker_core.js
 
       - name: Copy WASM package
         run: |
-          mkdir -p ui/scripts/engine/pkg
-          rm -rf ui/scripts/engine/pkg/*
-          cp -a engine/pkg/. ui/scripts/engine/pkg/
-
+          mkdir -p ui/core/pkg
+          rm -rf ui/core/pkg/*
+          cp -a engine/pkg/. ui/core/pkg/
 
       - name: Write build metadata
         run: echo "${GITHUB_SHA}" > ui/build-version.txt
 
-
       - name: Setup Pages
         uses: actions/configure-pages@v5
-
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./ui
-
 
       - name: Deploy
         id: deployment
@@ -192,8 +163,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh run list \
-            --repo ${{ github.repository }} \
+            --repo "${{ github.repository }}" \
             --limit 1000 \
             --json databaseId,createdAt \
             --jq '.[] | select(.createdAt < (now - 2592000 | strftime("%Y-%m-%dT%H:%M:%SZ"))) | .databaseId' \
-          | xargs -r -n 1 gh run delete --repo ${{ github.repository }}
+          | xargs -r -n 1 gh run delete --repo "${{ github.repository }}"
