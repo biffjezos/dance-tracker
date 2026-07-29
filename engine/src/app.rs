@@ -106,7 +106,7 @@ impl App {
     pub fn create_image_source_node(&mut self) -> Result<u32, JsValue> {
         let operation = Box::new(ImageSource::new());
         let node_id = self.graph.add_node(operation);
-
+    }
     /// Create a video source node and return its ID
     pub fn create_video_source_node(&mut self) -> Result<u32, JsValue> {
         let operation = Box::new(VideoSource::new());
