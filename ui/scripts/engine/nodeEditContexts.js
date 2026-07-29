@@ -233,17 +233,22 @@ export function renderShuffleEditContext(menuManager, nodeEntry) {
             button.innerText = source;
             button.className = "channel-btn";
             button.onclick = () => {
-                // Dispatch parameter update event
-                const nodeId = nodeEntry.id;
-                window.dispatchEvent(
-                    new CustomEvent("updateNodeParameter", {
-                        detail: {
-                            nodeId: nodeId,
-                            parameter: channel,
-                            value: source
-                        }
-                    })
-                );
+                // Dispatch parameter update event with numeric nodeId
+                // nodeEntry.layer.nodeId contains the numeric node ID from the graph
+                const numericNodeId = nodeEntry.layer ? nodeEntry.layer.nodeId : null;
+                if (numericNodeId !== null && numericNodeId !== undefined) {
+                    window.dispatchEvent(
+                        new CustomEvent("updateNodeParameter", {
+                            detail: {
+                                nodeId: numericNodeId,
+                                parameter: channel,
+                                value: source
+                            }
+                        })
+                    );
+                } else {
+                    console.error("No nodeId found for node:", nodeEntry);
+                }
             };
             menuManager.subMenu.appendChild(button);
         });
