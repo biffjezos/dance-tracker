@@ -22,6 +22,13 @@ impl OperationRegistry {
         }
     }
 
+    /// Create a new registry pre-populated with all inventory-registered operations
+    pub fn with_inventory() -> Self {
+        let mut registry = Self::new();
+        crate::operations::inventory::populate_registry(&mut registry);
+        registry
+    }
+
     pub fn register(
         &mut self,
         constructor: fn() -> Box<dyn Operation>,
@@ -32,6 +39,11 @@ impl OperationRegistry {
             descriptor: operation.descriptor(),
             constructor,
         });
+    }
+
+    /// Register all operations from inventory
+    pub fn register_from_inventory(&mut self) {
+        crate::operations::inventory::populate_registry(self);
     }
 
     pub fn descriptors(&self) -> Vec<OperationDescriptor> {

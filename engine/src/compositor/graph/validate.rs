@@ -115,7 +115,7 @@ pub fn validate_graph(
 fn operation_error_from_node_validation(index: usize, state: NodeValidation) -> OperationError {
     match state {
         NodeValidation::MissingInput(_) => {
-            OperationError::MissingInput
+            OperationError::MissingInput("Node missing input".to_string())
         }
         NodeValidation::UnknownInput(_) => {
             OperationError::UnknownNode

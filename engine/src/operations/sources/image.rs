@@ -43,6 +43,7 @@ impl Operation for ImageSource {
             label: "LOAD IMAGE",
             action: None,
             ui_action: Some("open_image_picker"),
+            create_node: Some("image_source"),
             buttons: &[],
         }
     }
@@ -75,5 +76,12 @@ impl Operation for ImageSource {
         Ok(vec![
             Value::Image(image)
         ])
+    }
+}
+
+// Inventory registration for ImageSource
+inventory::submit! {
+    crate::operations::inventory::OperationInfo {
+        constructor: || Box::new(ImageSource::new())
     }
 }

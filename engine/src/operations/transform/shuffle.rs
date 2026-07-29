@@ -7,10 +7,10 @@ use crate::compositor::{
     Input,
     Operation,
     OperationDescriptor,
-    metadata::{ OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor },
+    metadata::{ OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind },
     Value
 };
-use crate::graphics::{Frame, Image, ImageFormat};
+use crate::graphics::{Image, ImageFormat};
 use std::sync::Arc;
 
 /// Channel selection for Shuffle operation
@@ -88,7 +88,7 @@ impl Operation for Shuffle {
     fn metadata(&self) -> OperationMetadata {
         OperationMetadata {
             display_name: "Shuffle",
-            category: OperationCategory::Transform,
+            category: OperationCategory::Composite,
             input_count: 1,
             outputs: vec![OutputKind::Image],
         }
@@ -98,43 +98,35 @@ impl Operation for Shuffle {
         vec![
             ParameterDescriptor {
                 name: "red",
-                display_name: "Red Channel",
-                parameter_type: "ShuffleChannel",
-                default_value: "Red",
+                kind: ParameterKind::Text,
             },
             ParameterDescriptor {
                 name: "green",
-                display_name: "Green Channel",
-                parameter_type: "ShuffleChannel",
-                default_value: "Green",
+                kind: ParameterKind::Text,
             },
             ParameterDescriptor {
                 name: "blue",
-                display_name: "Blue Channel",
-                parameter_type: "ShuffleChannel",
-                default_value: "Blue",
+                kind: ParameterKind::Text,
             },
             ParameterDescriptor {
                 name: "alpha",
-                display_name: "Alpha Channel",
-                parameter_type: "ShuffleChannel",
-                default_value: "Alpha",
+                kind: ParameterKind::Text,
             },
         ]
     }
 
     fn get_parameter(&self, name: &str) -> Option<Value> {
         match name {
-            "red" => Some(Value::String(format!("{:?}", self.red))),
-            "green" => Some(Value::String(format!("{:?}", self.green))),
-            "blue" => Some(Value::String(format!("{:?}", self.blue))),
-            "alpha" => Some(Value::String(format!("{:?}", self.alpha))),
+            "red" => Some(Value::Text(format!("{:?}", self.red))),
+            "green" => Some(Value::Text(format!("{:?}", self.green))),
+            "blue" => Some(Value::Text(format!("{:?}", self.blue))),
+            "alpha" => Some(Value::Text(format!("{:?}", self.alpha))),
             _ => None,
         }
     }
 
     fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
-        if let Value::String(s) = value {
+        if let Value::Text(s) = value {
             match name {
                 "red" => {
                     self.red = parse_shuffle_channel(&s)
@@ -215,5 +207,12 @@ fn parse_shuffle_channel(s: &str) -> Option<ShuffleChannel> {
         "alpha" => Some(ShuffleChannel::Alpha),
         "off" => Some(ShuffleChannel::Off),
         _ => None,
+    }
+}
+
+// Inventory registration for Shuffle
+inventory::submit! {
+    crate::operations::inventory::OperationInfo {
+        constructor: || Box::new(Shuffle::new())
     }
 }

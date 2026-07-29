@@ -1,7 +1,9 @@
 // src/operations/mod.rs
 pub mod converters;
+pub mod inventory;
 pub mod register;
 pub mod sources;
 pub mod transform;
 
 pub use crate::graphics::frame::Frame;
+pub use inventory::{initialize_inventory, get_all_descriptors, get_constructor, create_operation, populate_registry};
