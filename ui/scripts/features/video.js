@@ -38,6 +38,87 @@ function getOriginalVideoLayer() {
     return originalVideoLayer;
 }
 
+// Handle the open_video_picker action from menu
+window.addEventListener("menuOperation", e => {
+    if (e.detail !== "open_video_picker") return;
+
+    // Create file input element for video
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/*";
+    input.style.display = "none";
+
+    // Handle file selection
+    input.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const video = document.createElement("video");
+            video.muted = true;
+            video.loop = true;
+            video.playsInline = true;
+            video.style.display = "none";
+
+            document.body.appendChild(video);
+
+            video.src = URL.createObjectURL(file);
+            await video.play();
+
+            const number = state.nextVideoNumber++;
+
+            const layer = {
+                id: "video-" + number,
+                number,
+                name: "VIDEO " + number,
+                videoEl: video,
+                settings: defaultUniversalSettings()
+            };
+
+            state.videoLayers.push(layer);
+            state.transportPlaying = true;
+
+            rebuildGraph();
+            reportSelection("video");
+
+        } catch (error) {
+            console.error("Error loading video:", error);
+        } finally {
+            // Clean up
+            document.body.removeChild(input);
+        }
+    });
+
+    // Add to DOM and trigger click
+    document.body.appendChild(input);
+    input.click();
+});
+
+// Handle the open_camera_stream action from menu
+window.addEventListener("menuOperation", e => {
+    if (e.detail !== "open_camera_stream") return;
+
+    const camera = getCamera();
+    if (!camera) return;
+
+    state.cameraOn = true;
+
+    const layer = getOriginalVideoLayer();
+    if (!layer) return;
+
+    if (!state.cameraActivated) {
+        state.cameraActivated = true;
+        layer.number = state.nextVideoNumber++;
+        layer.name = "VIDEO " + layer.number;
+        state.videoLayers.push(layer);
+        rebuildGraph();
+        reportSelection("video");
+    }
+
+    state.transportPlaying = true;
+    camera.start();
+});
+
 window.addEventListener("toggleCamera", () => {
     const camera = getCamera();
     if (!camera) return;

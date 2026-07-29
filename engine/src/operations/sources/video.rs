@@ -30,10 +30,10 @@ impl Operation for VideoSource {
         OperationDescriptor {
             id: "video_source",
             menu: "INPUT",
-            label: "VIDEO",
+            label: "LOAD VIDEO",
             action: None,
             ui_action: Some("open_video_picker"),
-            create_node: Some("video_source"),
+            create_node: None,
             buttons: &[],
         }
     }

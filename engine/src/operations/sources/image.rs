@@ -43,7 +43,7 @@ impl Operation for ImageSource {
             label: "LOAD IMAGE",
             action: None,
             ui_action: Some("open_image_picker"),
-            create_node: Some("image_source"),
+            create_node: None,
             buttons: &[],
         }
     }

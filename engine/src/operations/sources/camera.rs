@@ -32,8 +32,8 @@ impl Operation for CameraSource {
             menu: "INPUT",
             label: "CAMERA",
             action: None,
-            ui_action: Some("open_camera_picker"),
-            create_node: Some("camera_source"),
+            ui_action: Some("open_camera_stream"),
+            create_node: None,
             buttons: &[],
         }
     }
