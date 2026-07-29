@@ -173,6 +173,7 @@ export class MenuManager {
 
         const nodeLabel = document.createElement("span");
         nodeLabel.innerText = ` ${selectionState.getSelectedNodeName()} `;
+        nodeLabel.className = "node-selector-label";
         this.subMenu.appendChild(nodeLabel);
 
         const plusButton = document.createElement("button");
@@ -189,6 +190,7 @@ export class MenuManager {
         // Create separator
         const separator = document.createElement("span");
         separator.innerText = " | ";
+        separator.className = "menu-separator";
         this.subMenu.appendChild(separator);
 
         // Create the channel selector button group
@@ -202,6 +204,7 @@ export class MenuManager {
 
         const channelLabel = document.createElement("span");
         channelLabel.innerText = ` ${selectionState.getSelectedChannel()} `;
+        channelLabel.className = "node-selector-label";
         this.subMenu.appendChild(channelLabel);
 
         const plusButton = document.createElement("button");
@@ -220,6 +223,7 @@ export class MenuManager {
             // Create separator
             const separator = document.createElement("span");
             separator.innerText = " | ";
+            separator.className = "menu-separator";
             this.subMenu.appendChild(separator);
 
             const editButton = document.createElement("button");
@@ -293,6 +297,7 @@ export class MenuManager {
                 this.renderUpButton();
                 const separator = document.createElement("span");
                 separator.innerText = " | ";
+                separator.className = "menu-separator";
                 this.subMenu.appendChild(separator);
             }
 
@@ -313,6 +318,7 @@ export class MenuManager {
                 this.renderUpButton();
                 const separator = document.createElement("span");
                 separator.innerText = " | ";
+                separator.className = "menu-separator";
                 this.subMenu.appendChild(separator);
             }
             
@@ -323,6 +329,7 @@ export class MenuManager {
             } else {
                 const editLabel = document.createElement("span");
                 editLabel.innerText = " NODE EDIT CONTEXT ";
+                editLabel.className = "node-selector-label";
                 this.subMenu.appendChild(editLabel);
             }
             return;
@@ -333,6 +340,7 @@ export class MenuManager {
             this.renderUpButton();
             const separator = document.createElement("span");
             separator.innerText = " | ";
+            separator.className = "menu-separator";
             this.subMenu.appendChild(separator);
         }
 
@@ -393,6 +401,7 @@ export class MenuManager {
             this.renderUpButton();
             const separator = document.createElement("span");
             separator.innerText = " | ";
+            separator.className = "menu-separator";
             this.subMenu.appendChild(separator);
         }
 

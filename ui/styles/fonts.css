@@ -1,0 +1,13 @@
+/* ========================================== DANCE TRACKER 5000 FONT VARIABLES ========================================== */
+
+:root {
+    /* Font families */
+    --font-family-primary: "Courier New", monospace;
+    
+    /* Font sizes */
+    --font-size-title: 22px;
+    --font-size-subtitle: 12px;
+    --font-size-panel-title: 13px;
+    --font-size-body: 12px;
+    --font-size-status: 12px;
+}

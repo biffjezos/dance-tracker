@@ -99,6 +99,7 @@ export function renderMaskEditContext(menuManager, nodeEntry) {
     // - INVERT control
     const thresholdLabel = document.createElement("span");
     thresholdLabel.innerText = " MASK EDIT: THRESHOLD, FEATHER, INVERT ";
+    thresholdLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(thresholdLabel);
 }
 
@@ -111,6 +112,7 @@ export function renderCompositeEditContext(menuManager, nodeEntry) {
     // - OPACITY control
     const compositeLabel = document.createElement("span");
     compositeLabel.innerText = " COMPOSITE EDIT: MODE, OPACITY ";
+    compositeLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(compositeLabel);
 }
 
@@ -123,6 +125,7 @@ export function renderRingsEditContext(menuManager, nodeEntry) {
     // - Parameter controls
     const ringsLabel = document.createElement("span");
     ringsLabel.innerText = " RINGS EDIT: ANIMATION, PARAMETERS ";
+    ringsLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(ringsLabel);
 }
 
@@ -136,6 +139,7 @@ export function renderGhostEditContext(menuManager, nodeEntry) {
     // - PARAMETERS control
     const ghostLabel = document.createElement("span");
     ghostLabel.innerText = " GHOST EDIT: SPEED, LOOP, PARAMETERS ";
+    ghostLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(ghostLabel);
 }
 
@@ -148,6 +152,7 @@ export function renderImageEditContext(menuManager, nodeEntry) {
     // - RELOAD
     const imageLabel = document.createElement("span");
     imageLabel.innerText = " IMAGE EDIT: LOAD, RELOAD ";
+    imageLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(imageLabel);
 }
 
@@ -159,6 +164,7 @@ export function renderVideoEditContext(menuManager, nodeEntry) {
     // - Animation controls
     const videoLabel = document.createElement("span");
     videoLabel.innerText = " VIDEO EDIT: ANIMATION CONTROLS ";
+    videoLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(videoLabel);
 }
 

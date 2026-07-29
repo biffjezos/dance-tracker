@@ -1,0 +1,45 @@
+/* ========================================== DANCE TRACKER 5000 COLOR VARIABLES ========================================== */
+
+:root {
+    /* Background colors */
+    --color-bg-page: #001020;
+    --color-bg-app: #101010;
+    --color-bg-panel: #000;
+    --color-bg-menu: #202020;
+    --color-bg-titlebar: #202060;
+    --color-bg-statusbar: #202060;
+    --color-bg-button: #101010;
+    --color-bg-button-hover: #ff00ff;
+    --color-bg-input: #101010;
+    --color-bg-ring-display: #101010;
+    --color-bg-screen: #000;
+    
+    /* Text colors */
+    --color-text-primary: #ffffff;
+    --color-text-titlebar: #ffff00;
+    --color-text-subtitle: #00ffff;
+    --color-text-panel-title: #ffff00;
+    --color-text-statusbar: #00ffff;
+    --color-text-button: #ffffff;
+    --color-text-button-hover: #000;
+    --color-text-input: #fff;
+    --color-text-input-placeholder: #557;
+    --color-text-ring-display: #ffff00;
+    
+    /* Border colors */
+    --color-border-app: #00ffff;
+    --color-border-panel: #00ffff;
+    --color-border-button: #ff00ff;
+    --color-border-button-up: #00ffff;
+    --color-border-ring-display: #444;
+    --color-border-titlebar-bottom: #ff00ff;
+    --color-border-statusbar-top: #ff00ff;
+    --color-border-menu-bottom: #444;
+    
+    /* Gradient colors */
+    --color-gradient-titlebar-start: #303080;
+    --color-gradient-titlebar-end: #101040;
+    
+    /* Shadow colors */
+    --color-shadow-app: #00ffff;
+}
