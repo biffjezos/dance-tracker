@@ -30,6 +30,7 @@ pub enum OperationCategory {
     Mask,
     Composite,
     Reference,
+    Color,
 }
 
 /*

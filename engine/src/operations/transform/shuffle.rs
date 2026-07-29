@@ -14,18 +14,44 @@ use crate::graphics::{Image, ImageFormat};
 use std::sync::Arc;
 
 /// Channel selection for Shuffle operation
+/// Uses uppercase single-letter format for serialization: R, G, B, A, OFF
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ShuffleChannel {
-    Red,
-    Green,
-    Blue,
-    Alpha,
+    R,
+    G,
+    B,
+    A,
     Off,
 }
 
 impl Default for ShuffleChannel {
     fn default() -> Self {
-        ShuffleChannel::Red
+        ShuffleChannel::R
+    }
+}
+
+impl ShuffleChannel {
+    /// Convert to serialization format (uppercase single letter or "OFF")
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            ShuffleChannel::R => "R",
+            ShuffleChannel::G => "G",
+            ShuffleChannel::B => "B",
+            ShuffleChannel::A => "A",
+            ShuffleChannel::Off => "OFF",
+        }
+    }
+
+    /// Parse from serialization format
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_uppercase().as_str() {
+            "R" => Some(ShuffleChannel::R),
+            "G" => Some(ShuffleChannel::G),
+            "B" => Some(ShuffleChannel::B),
+            "A" => Some(ShuffleChannel::A),
+            "OFF" => Some(ShuffleChannel::Off),
+            _ => None,
+        }
     }
 }
 
@@ -40,10 +66,10 @@ pub struct Shuffle {
 impl Shuffle {
     pub fn new() -> Self {
         Self {
-            red: ShuffleChannel::Red,
-            green: ShuffleChannel::Green,
-            blue: ShuffleChannel::Blue,
-            alpha: ShuffleChannel::Alpha,
+            red: ShuffleChannel::R,
+            green: ShuffleChannel::G,
+            blue: ShuffleChannel::B,
+            alpha: ShuffleChannel::A,
         }
     }
     
@@ -54,10 +80,10 @@ impl Shuffle {
             return 0;
         }
         match channel {
-            ShuffleChannel::Red => input.pixels[index],
-            ShuffleChannel::Green => input.pixels[index + 1],
-            ShuffleChannel::Blue => input.pixels[index + 2],
-            ShuffleChannel::Alpha => input.pixels[index + 3],
+            ShuffleChannel::R => input.pixels[index],
+            ShuffleChannel::G => input.pixels[index + 1],
+            ShuffleChannel::B => input.pixels[index + 2],
+            ShuffleChannel::A => input.pixels[index + 3],
             ShuffleChannel::Off => 0,
         }
     }
@@ -88,7 +114,7 @@ impl Operation for Shuffle {
     fn metadata(&self) -> OperationMetadata {
         OperationMetadata {
             display_name: "Shuffle",
-            category: OperationCategory::Composite,
+            category: OperationCategory::Color,
             input_count: 1,
             outputs: vec![OutputKind::Image],
         }
@@ -97,19 +123,19 @@ impl Operation for Shuffle {
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![
             ParameterDescriptor {
-                name: "red",
+                name: "red_channel",
                 kind: ParameterKind::Text,
             },
             ParameterDescriptor {
-                name: "green",
+                name: "green_channel",
                 kind: ParameterKind::Text,
             },
             ParameterDescriptor {
-                name: "blue",
+                name: "blue_channel",
                 kind: ParameterKind::Text,
             },
             ParameterDescriptor {
-                name: "alpha",
+                name: "alpha_channel",
                 kind: ParameterKind::Text,
             },
         ]
@@ -117,10 +143,10 @@ impl Operation for Shuffle {
 
     fn get_parameter(&self, name: &str) -> Option<Value> {
         match name {
-            "red" => Some(Value::Text(format!("{:?}", self.red))),
-            "green" => Some(Value::Text(format!("{:?}", self.green))),
-            "blue" => Some(Value::Text(format!("{:?}", self.blue))),
-            "alpha" => Some(Value::Text(format!("{:?}", self.alpha))),
+            "red_channel" => Some(Value::Text(self.red.to_str().to_string())),
+            "green_channel" => Some(Value::Text(self.green.to_str().to_string())),
+            "blue_channel" => Some(Value::Text(self.blue.to_str().to_string())),
+            "alpha_channel" => Some(Value::Text(self.alpha.to_str().to_string())),
             _ => None,
         }
     }
@@ -128,20 +154,20 @@ impl Operation for Shuffle {
     fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
         if let Value::Text(s) = value {
             match name {
-                "red" => {
-                    self.red = parse_shuffle_channel(&s)
+                "red_channel" => {
+                    self.red = ShuffleChannel::from_str(&s)
                         .ok_or_else(|| OperationError::InvalidParameterValue(name.to_string(), s))?;
                 }
-                "green" => {
-                    self.green = parse_shuffle_channel(&s)
+                "green_channel" => {
+                    self.green = ShuffleChannel::from_str(&s)
                         .ok_or_else(|| OperationError::InvalidParameterValue(name.to_string(), s))?;
                 }
-                "blue" => {
-                    self.blue = parse_shuffle_channel(&s)
+                "blue_channel" => {
+                    self.blue = ShuffleChannel::from_str(&s)
                         .ok_or_else(|| OperationError::InvalidParameterValue(name.to_string(), s))?;
                 }
-                "alpha" => {
-                    self.alpha = parse_shuffle_channel(&s)
+                "alpha_channel" => {
+                    self.alpha = ShuffleChannel::from_str(&s)
                         .ok_or_else(|| OperationError::InvalidParameterValue(name.to_string(), s))?;
                 }
                 _ => return Err(OperationError::UnknownParameter(name.to_string())),
@@ -195,18 +221,6 @@ impl Operation for Shuffle {
         });
 
         Ok(vec![Value::Image(output_image)])
-    }
-}
-
-/// Parse a string into ShuffleChannel
-fn parse_shuffle_channel(s: &str) -> Option<ShuffleChannel> {
-    match s.to_lowercase().as_str() {
-        "red" => Some(ShuffleChannel::Red),
-        "green" => Some(ShuffleChannel::Green),
-        "blue" => Some(ShuffleChannel::Blue),
-        "alpha" => Some(ShuffleChannel::Alpha),
-        "off" => Some(ShuffleChannel::Off),
-        _ => None,
     }
 }
 
