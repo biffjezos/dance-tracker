@@ -165,7 +165,7 @@ impl App {
         
         // Try to downcast to Shuffle and update parameter
         if let Some(shuffle) = operation.as_any_mut().downcast_mut::<Shuffle>() {
-            let channel = match parameter.as_str() {
+            match parameter.as_str() {
                 "red" => {
                     shuffle.red = parse_shuffle_channel(&value)
                         .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
