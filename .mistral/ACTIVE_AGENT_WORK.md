@@ -48,3 +48,38 @@ COMPLETED:
 - Added open_video_picker handler in video.js
 - Added open_camera_stream handler in video.js
 - All changes committed and pushed to dev branch
+
+---
+
+## preview-canvas-agent
+
+STATUS:
+IN PROGRESS
+
+TASK:
+Fix preview canvas not updating when NODE SELECTOR under menu NODES selects a different Node. The preview canvas must display the selected node's output, and the TITLE of the canvas must change to the NAME of the active NODE. If the node has no visuals (e.g., unconnected shuffle operation), display nothing in the canvas.
+
+OWNERSHIP:
+The following files are reserved and must not be modified by other agents:
+
+- ui/scripts/engine/nodeSelection.js
+- ui/scripts/engine/menu.js
+- ui/scripts/engine/render.js
+- ui/scripts/engine/graph.js
+- ui/scripts/engine/status.js
+- ui/index.html
+
+RULES:
+- Do not edit these files.
+- Do not refactor surrounding code in these files.
+- Do not rename public APIs.
+- Do not create alternative node selection systems.
+
+DEPENDENCY CONTRACT:
+When complete, this agent will provide:
+
+- Preview canvas updates when node selection changes
+- Camera panel title updates to show selected node name
+- Proper handling of nodes with no visual output
+
+Other agents should treat the final API as the integration point.
