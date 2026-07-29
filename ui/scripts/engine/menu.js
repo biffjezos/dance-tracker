@@ -296,6 +296,31 @@ export class MenuManager {
             return;
         }
 
+        // Special handling for node-specific contexts (e.g., "image:1", "video:2")
+        // These are created when EDIT is clicked on a node
+        if (this.currentContext && this.currentContext.parent && 
+            this.currentContext.parent.id === "nodes") {
+            // This is a node context (child of nodes menu)
+            // Render UP button
+            if (this.currentContext.parent !== null) {
+                this.renderUpButton();
+                const separator = document.createElement("span");
+                separator.innerText = " | ";
+                separator.className = "menu-separator";
+                this.subMenu.appendChild(separator);
+            }
+            
+            // Show node name
+            const selectedNode = nodeSelectionState.getSelectedNode();
+            if (selectedNode) {
+                const nodeLabel = document.createElement("span");
+                nodeLabel.innerText = ` ${selectedNode.label} `;
+                nodeLabel.className = "node-selector-label";
+                this.subMenu.appendChild(nodeLabel);
+            }
+            return;
+        }
+
         // Special handling for EDIT context
         if (this.currentContext && this.currentContext.id === "node_edit") {
             // Render UP button
@@ -416,6 +441,8 @@ export class MenuManager {
             // If going up from nodes menu, reset category
             if (this.currentContext.id === "root") {
                 this.category = null;
+            } else if (this.currentContext.id === "nodes") {
+                this.category = "nodes";
             } else {
                 this.category = this.currentContext.id;
             }
