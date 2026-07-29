@@ -78,18 +78,11 @@ export class MenuManager {
     constructor() {
         this.subMenu = document.getElementById("sub-menu");
         this.operations = [];
-        this.category = null;
-        this.initialized = false;
+        this.category = "input";
 
         window.addEventListener("operationsLoaded", e => {
             this.operations = e.detail;
-            // If we haven't initialized yet, initialize now
-            if (!this.initialized) {
-                this.initialized = true;
-                this.show("input");
-            } else {
-                this.render();
-            }
+            this.render();
         });
     }
 
@@ -107,15 +100,10 @@ export class MenuManager {
     }
 
     render() {
-        // Don't render if operations aren't loaded yet
-        if (this.operations.length === 0 && this.category !== null) {
-            return;
-        }
-
         this.subMenu.innerHTML = "";
 
-        // If no category selected or no operations, show nothing
-        if (!this.category || this.operations.length === 0) {
+        // Don't render if operations aren't loaded yet
+        if (this.operations.length === 0) {
             return;
         }
 
@@ -131,10 +119,7 @@ export class MenuManager {
             button.innerText = op.label || op.name || op;
 
             button.onclick = () => {
-                console.log("Operation clicked:", op);
-
                 if (op.buttons && op.buttons.length) {
-                    console.log("submenu");
                     this.buttons = op.buttons;
                     this.renderButtons();
                     return;
@@ -142,7 +127,6 @@ export class MenuManager {
 
                 // Use ui_action if available, otherwise fall back to action
                 const action = op.ui_action || op.action;
-                console.log("action", action);
 
                 if (action) {
                     window.dispatchEvent(
@@ -165,7 +149,6 @@ export class MenuManager {
 
             button.onclick = () => {
                 const action = btn.action;
-                console.log("button action", action);
 
                 if (action) {
                     window.dispatchEvent(
