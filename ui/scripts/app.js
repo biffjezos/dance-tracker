@@ -1,5 +1,5 @@
 // app.js
-import { getOperations, executeOperation } from "./core/operations.js";
+import { getOperations, executeOperation, createNode } from "./core/operations.js";
 import { initWasm } from "./core/wasm.js";
 
 import { WIDTH, HEIGHT } from "./engine/constants.js";
@@ -25,7 +25,24 @@ const camera = new Camera(settings);
 
 const menu = new MenuManager();
 menu.init();
-window.addEventListener("menuOperation", e => { executeOperation(e.detail); });
+
+// Handle menu operations
+window.addEventListener("menuOperation", e => { 
+    executeOperation(e.detail); 
+});
+
+// Handle node parameter updates from edit contexts
+window.addEventListener("updateNodeParameter", e => {
+    const { nodeId, parameter, value } = e.detail;
+    console.log("Update node parameter:", nodeId, parameter, value);
+    
+    // Find the node in state and update its parameters
+    // This will be handled by the Rust backend
+    if (window.wasmApp) {
+        window.wasmApp.update_node_parameter(nodeId, parameter, value);
+    }
+});
+
 document.getElementById("master-layer").width = WIDTH;
 document.getElementById("master-layer").height = HEIGHT;
 

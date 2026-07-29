@@ -21,6 +21,7 @@ use crate::compositor::{
 use crate::dom::write_frame_to_canvas;
 use crate::graphics::{Frame, Image, ImageFormat};
 use crate::operations::sources::ImageSource;
+use crate::operations::transform::Shuffle;
 use crate::renderer::to_render_frame;
 use crate::resources::manager::ResourceManager;
 use std::sync::Arc;
@@ -137,6 +138,50 @@ impl App {
         image_source.set_image(image);
         
         Ok(())
+    }
+    
+    /// Update a parameter on a specific node
+    /// Takes node_id, parameter name, and value as string
+    pub fn update_node_parameter(
+        &mut self,
+        node_id: u32,
+        parameter: String,
+        value: String,
+    ) -> Result<(), JsValue> {
+        let node_id = NodeId::from_index(node_id);
+        
+        // Get the operation from the graph
+        let operation = self.graph.get_node_mut(&node_id)
+            .ok_or_else(|| JsValue::from_str(&format!("Node {:?} not found", node_id)))?;
+        
+        // Try to downcast to Shuffle and update parameter
+        if let Some(shuffle) = operation.as_any_mut().downcast_mut::<Shuffle>() {
+            let channel = match parameter.as_str() {
+                "red" => {
+                    shuffle.red = parse_shuffle_channel(&value)
+                        .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
+                    return Ok(());
+                }
+                "green" => {
+                    shuffle.green = parse_shuffle_channel(&value)
+                        .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
+                    return Ok(());
+                }
+                "blue" => {
+                    shuffle.blue = parse_shuffle_channel(&value)
+                        .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
+                    return Ok(());
+                }
+                "alpha" => {
+                    shuffle.alpha = parse_shuffle_channel(&value)
+                        .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
+                    return Ok(());
+                }
+                _ => return Err(JsValue::from_str(&format!("Unknown parameter: {}", parameter))),
+            };
+        }
+        
+        Err(JsValue::from_str(&format!("Node {:?} does not support parameter updates", node_id)))
     }
 
     pub fn set_resolution(&mut self, width: u32, height: u32) {
@@ -261,5 +306,22 @@ impl App {
     ) -> Result<(), JsValue> {
         video.set_current_time(video.current_time() - seconds);
         Ok(())
+    }
+}
+
+/// Parse a string into ShuffleChannel
+fn parse_shuffle_channel(s: &str) -> Option<crate::operations::transform::shuffle::ShuffleChannel> {
+    use crate::operations::transform::shuffle::ShuffleChannel;
+    match s.to_lowercase().as_str() {
+        "red" => Some(ShuffleChannel::Red),
+        "r" => Some(ShuffleChannel::Red),
+        "green" => Some(ShuffleChannel::Green),
+        "g" => Some(ShuffleChannel::Green),
+        "blue" => Some(ShuffleChannel::Blue),
+        "b" => Some(ShuffleChannel::Blue),
+        "alpha" => Some(ShuffleChannel::Alpha),
+        "a" => Some(ShuffleChannel::Alpha),
+        "off" => Some(ShuffleChannel::Off),
+        _ => None,
     }
 }
