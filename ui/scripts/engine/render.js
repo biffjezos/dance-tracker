@@ -10,11 +10,22 @@ export function renderPreview() {
     if (!wasmApp) return;
     const canvas = document.getElementById("camera-preview");
     const id = currentPreviewContentId();
-    if (id === null || id === undefined) return;
+    if (id === null || id === undefined) {
+        // Clear the canvas if there's no valid preview ID
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        return;
+    }
     try {
         wasmApp.preview_tick(id, canvas);
     } catch (error) {
-        // expected transient failure
+        // If preview fails (e.g., node has no visuals), clear the canvas
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
     }
 }
 
