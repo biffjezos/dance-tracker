@@ -105,7 +105,12 @@ export class MenuManager {
 
         console.log("MENU OPS:", this.operations);
 
-        this.operations.forEach(op => {
+        // Filter operations by the selected category (menu field)
+        const filteredOps = this.operations.filter(op => 
+            op.menu.toUpperCase() === this.category.toUpperCase()
+        );
+
+        filteredOps.forEach(op => {
             const button = document.createElement("button");
             button.innerText = op.label || op.name || op;
 
@@ -122,6 +127,29 @@ export class MenuManager {
                 // Use ui_action if available, otherwise fall back to action
                 const action = op.ui_action || op.action;
                 console.log("action", action);
+
+                if (action) {
+                    window.dispatchEvent(
+                        new CustomEvent("menuOperation", {
+                            detail: action
+                        })
+                    );
+                }
+            };
+            this.subMenu.appendChild(button);
+        });
+    }
+
+    renderButtons() {
+        this.subMenu.innerHTML = "";
+
+        this.buttons.forEach(btn => {
+            const button = document.createElement("button");
+            button.innerText = btn.label || btn.name || btn;
+
+            button.onclick = () => {
+                const action = btn.action;
+                console.log("button action", action);
 
                 if (action) {
                     window.dispatchEvent(
