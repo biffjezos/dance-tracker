@@ -78,11 +78,10 @@ export class MenuManager {
     constructor() {
         this.subMenu = document.getElementById("sub-menu");
         this.operations = [];
-        this.category = "input";
+        this.category = null;
 
         window.addEventListener("operationsLoaded", e => {
             this.operations = e.detail;
-            this.render();
         });
     }
 
@@ -102,8 +101,8 @@ export class MenuManager {
     render() {
         this.subMenu.innerHTML = "";
 
-        // Don't render if operations aren't loaded yet
-        if (this.operations.length === 0) {
+        // Don't render if operations aren't loaded or no category selected
+        if (this.operations.length === 0 || this.category === null) {
             return;
         }
 
