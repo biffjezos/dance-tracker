@@ -3,7 +3,7 @@
 ## input-menu-fix-agent
 
 STATUS:
-IN PROGRESS
+DONE
 
 TASK:
 Fix INPUT menu operations (CAMERA, VIDEO, LOAD IMAGE) to match requirements:
@@ -40,3 +40,11 @@ When complete, this agent will provide:
 - No menu context for source operations
 
 Other agents should treat the final API as the integration point.
+
+COMPLETED:
+- Removed create_node from all three source operations (image, video, camera)
+- Changed VIDEO label to "LOAD VIDEO"
+- Changed camera ui_action to "open_camera_stream"
+- Added open_video_picker handler in video.js
+- Added open_camera_stream handler in video.js
+- All changes committed and pushed to dev branch
