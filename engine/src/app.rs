@@ -280,7 +280,7 @@ impl App {
     }
 }
 
-// Helper function to parse shuffle channel values
+/// Parse a string into ShuffleChannel
 fn parse_shuffle_channel(s: &str) -> Option<crate::operations::transform::shuffle::ShuffleChannel> {
     use crate::operations::transform::shuffle::ShuffleChannel;
     match s.to_lowercase().as_str() {
