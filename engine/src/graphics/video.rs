@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::compositor::OperationError;
 use crate::graphics::Image;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Video {
     pub frames: Vec<Arc<Image>>,
     pub fps: f32,

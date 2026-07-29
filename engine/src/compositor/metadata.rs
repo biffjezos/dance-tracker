@@ -44,6 +44,7 @@ pub enum OutputKind {
     Frame,
     Mask,
     Image,
+    Video,
     Number,
     Boolean,
     Text,

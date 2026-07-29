@@ -1,3 +1,4 @@
+// src/operations/sources/video.rs
 use std::any::Any;
 use std::sync::Arc;
 
@@ -16,15 +17,18 @@ use crate::compositor::{
 };
 
 use crate::graphics::Video;
+use crate::operations::sources::PixelSource;
 
 pub struct VideoSource {
     pub video: Option<Arc<Video>>,
+    pub pixel_source: Option<Arc<dyn PixelSource>>,
 }
 
 impl VideoSource {
     pub fn new() -> Self {
         Self {
             video: None,
+            pixel_source: None,
         }
     }
 
@@ -34,6 +38,14 @@ impl VideoSource {
 
     pub fn get_video(&self) -> Option<Arc<Video>> {
         self.video.clone()
+    }
+
+    pub fn set_source(&mut self, source: Arc<dyn PixelSource>) {
+        self.pixel_source = Some(source);
+    }
+
+    pub fn get_source(&self) -> Option<Arc<dyn PixelSource>> {
+        self.pixel_source.clone()
     }
 }
 
@@ -70,10 +82,18 @@ impl Operation for VideoSource {
 
     fn execute(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
+        // Try pixel source first (live video from HTMLVideoElement)
+        if let Some(source) = &self.pixel_source {
+            let width = ctx.meta.width;
+            let height = ctx.meta.height;
+            let frame = source.read(width, height)?;
+            return Ok(vec![Value::Frame(Arc::new(frame))]);
+        }
 
+        // Fall back to pre-loaded video
         let video = self
             .video
             .clone()

@@ -6,7 +6,8 @@ use crate::graphics::{
     frame::Frame,
     geometry::Center,
     image::Image,
-    mask::Mask
+    mask::Mask,
+    video::Video
 };
 
 #[derive(Debug, Clone)]
@@ -14,6 +15,7 @@ pub enum Value {
     Frame(Arc<Frame>),
     Mask(Arc<Mask>),
     Image(Arc<Image>),
+    Video(Arc<Video>),
     Number(f64),
     Boolean(bool),
     Text(String),

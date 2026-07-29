@@ -12,7 +12,7 @@
 
 use std::sync::Arc;
 use crate::compositor::Value;
-use crate::graphics::{Frame, Image, mask::Mask};
+use crate::graphics::{Frame, Image, mask::Mask, video::Video};
 use crate::compositor::OperationError;
 
 /// Trait for types that can be converted to a Frame for rendering.
@@ -40,6 +40,7 @@ pub fn to_render_frame(value: &Value) -> Result<Arc<Frame>, OperationError> {
         Value::Frame(frame) => frame.to_render_frame(),
         Value::Image(image) => image.to_render_frame(),
         Value::Mask(mask) => mask.to_render_frame(),
+        Value::Video(video) => video.to_render_frame(),
         _ => Err(OperationError::WrongValueType),
     }
 }
@@ -83,6 +84,28 @@ impl ToRenderFrame for Arc<Mask> {
             pixels,
             width: self.width,
             height: self.height,
+            timestamp: 0.0,
+        }))
+    }
+}
+
+// Implement ToRenderFrame for Video (extract current frame)
+// For now, we'll extract the first frame. In the future, this should use the current time.
+impl ToRenderFrame for Arc<Video> {
+    fn to_render_frame(&self) -> Result<Arc<Frame>, OperationError> {
+        // Get the first frame from the video
+        // In a real implementation, this would use the current playback time
+        // to select the appropriate frame
+        if self.frames.is_empty() {
+            return Err(OperationError::SourceNotFound("Video contains no frames".to_string()));
+        }
+        
+        // For now, just convert the first image to a frame
+        let first_image = &self.frames[0];
+        Ok(Arc::new(Frame {
+            pixels: first_image.pixels.clone(),
+            width: first_image.width,
+            height: first_image.height,
             timestamp: 0.0,
         }))
     }
