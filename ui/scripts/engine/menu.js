@@ -78,7 +78,7 @@ export class MenuManager {
     constructor() {
         this.subMenu = document.getElementById("sub-menu");
         this.operations = [];
-        this.category = "input"; // Initialize with default category
+        this.category = "input";
 
         window.addEventListener("operationsLoaded", e => {
             this.operations = e.detail;
@@ -104,19 +104,13 @@ export class MenuManager {
     render() {
         this.subMenu.innerHTML = "";
 
-        console.log("Rendering menu for category:", this.category);
-        console.log("All operations:", this.operations);
-
         // Filter operations by the selected category (menu field)
         const filteredOps = this.operations.filter(op => {
-            const opMenu = op.menu ? op.menu.toUpperCase() : "";
-            const category = this.category ? this.category.toUpperCase() : "";
-            const match = opMenu === category;
-            console.log(`Filtering: op.menu="${op.menu}" (${opMenu}) vs category="${this.category}" (${category}) -> ${match}`);
-            return match;
+            // Check both possible field names (menu or Menu)
+            const opMenu = (op.menu || op.Menu || "").toUpperCase();
+            const category = (this.category || "").toUpperCase();
+            return opMenu === category;
         });
-
-        console.log("Filtered operations:", filteredOps);
 
         filteredOps.forEach(op => {
             const button = document.createElement("button");
