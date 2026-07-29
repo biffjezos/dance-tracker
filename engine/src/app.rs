@@ -206,22 +206,22 @@ impl App {
         // Try to downcast to Shuffle and update parameter
         if let Some(shuffle) = operation.as_any_mut().downcast_mut::<Shuffle>() {
             match parameter.as_str() {
-                "red" => {
+                "red_channel" => {
                     shuffle.red = parse_shuffle_channel(&value)
                         .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
                     return Ok(());
                 }
-                "green" => {
+                "green_channel" => {
                     shuffle.green = parse_shuffle_channel(&value)
                         .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
                     return Ok(());
                 }
-                "blue" => {
+                "blue_channel" => {
                     shuffle.blue = parse_shuffle_channel(&value)
                         .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
                     return Ok(());
                 }
-                "alpha" => {
+                "alpha_channel" => {
                     shuffle.alpha = parse_shuffle_channel(&value)
                         .ok_or_else(|| JsValue::from_str(&format!("Invalid channel value: {}", value)))?;
                     return Ok(());
@@ -324,14 +324,14 @@ impl App {
 fn parse_shuffle_channel(s: &str) -> Option<crate::operations::transform::shuffle::ShuffleChannel> {
     use crate::operations::transform::shuffle::ShuffleChannel;
     match s.to_lowercase().as_str() {
-        "red" => Some(ShuffleChannel::Red),
-        "r" => Some(ShuffleChannel::Red),
-        "green" => Some(ShuffleChannel::Green),
-        "g" => Some(ShuffleChannel::Green),
-        "blue" => Some(ShuffleChannel::Blue),
-        "b" => Some(ShuffleChannel::Blue),
-        "alpha" => Some(ShuffleChannel::Alpha),
-        "a" => Some(ShuffleChannel::Alpha),
+        "red" => Some(ShuffleChannel::R),
+        "r" => Some(ShuffleChannel::R),
+        "green" => Some(ShuffleChannel::G),
+        "g" => Some(ShuffleChannel::G),
+        "blue" => Some(ShuffleChannel::B),
+        "b" => Some(ShuffleChannel::B),
+        "alpha" => Some(ShuffleChannel::A),
+        "a" => Some(ShuffleChannel::A),
         "off" => Some(ShuffleChannel::Off),
         _ => None,
     }
