@@ -21,7 +21,6 @@ class MenuContext {
 
 const rootMenu = new MenuContext("root");
 const nodesMenu = new MenuContext("nodes", rootMenu);
-const editMenu = new MenuContext("node_edit", nodesMenu);
 
 const VISIBILITY_MODE_LABELS = {
     on: "ON",
@@ -197,7 +196,26 @@ export class MenuManager {
             const editButton = document.createElement("button");
             editButton.innerText = "EDIT";
             editButton.onclick = () => {
-                this.currentContext = editMenu;
+                // Create a new edit context with the current node context as parent
+                const selectedNode = selectionState.getSelectedNode();
+                if (selectedNode) {
+                    // Create a node-specific context first
+                    const nodeContext = new MenuContext(
+                        selectedNode.id,
+                        this.currentContext
+                    );
+                    // Then create edit context with node context as parent
+                    this.currentContext = new MenuContext(
+                        "node_edit",
+                        nodeContext
+                    );
+                } else {
+                    // Fallback: create edit context with nodes menu as parent
+                    this.currentContext = new MenuContext(
+                        "node_edit",
+                        this.currentContext
+                    );
+                }
                 this.render();
                 this.updateStatusBar();
             };
