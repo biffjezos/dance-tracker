@@ -88,6 +88,7 @@ export class MenuManager {
         this.subMenu = document.getElementById("sub-menu");
         this.operations = [];
         this.category = null;
+        this.currentContext = null;
 
         window.addEventListener("operationsLoaded", e => {
             console.log("Operations loaded:", e.detail);
