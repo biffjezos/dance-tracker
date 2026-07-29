@@ -109,10 +109,29 @@ export class MenuManager {
         });
     }
 
+    getContextPath() {
+        const pathParts = [];
+        let current = this.currentContext;
+        while (current && current.id !== "root") {
+            pathParts.push(current.id);
+            current = current.parent;
+        }
+        return pathParts.reverse().join(" > ");
+    }
+
+    updateStatusBar() {
+        const statusBar = document.querySelector(".statusbar span:first-child");
+        if (statusBar) {
+            const path = this.getContextPath();
+            statusBar.textContent = `STATUS: ${path || "NO CONTEXT"}`;
+        }
+    }
+
     show(category) {
         console.log("Showing category:", category);
         this.category = category;
         this.render();
+        this.updateStatusBar();
     }
 
     renderUpButton() {
@@ -164,7 +183,9 @@ export class MenuManager {
                 if (op.buttons && op.buttons.length) {
                     console.log("Showing submenu buttons");
                     this.buttons = op.buttons;
+                    this.currentContext = editMenu;
                     this.renderButtons();
+                    this.updateStatusBar();
                     return;
                 }
 
@@ -220,6 +241,7 @@ export class MenuManager {
         if (this.currentContext && this.currentContext.parent) {
             this.currentContext = this.currentContext.parent;
             this.render();
+            this.updateStatusBar();
         }
     }
 }
