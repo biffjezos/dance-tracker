@@ -28,13 +28,19 @@ fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
 }
 
-/// Convert a Value to a Frame, handling both Value::Frame and Value::Image
-/// This is the boundary where Image gets converted to Frame with timestamp 0.0
-fn value_to_frame(value: &Value) -> Result<Arc<Frame>, OperationError> {
+/// Renderer boundary adapter: converts Image to Frame for display.
+/// 
+/// This adapter is ONLY used at the rendering boundary (preview_tick, render_tick).
+/// Graph operations should work with Value::Image directly and NOT use this adapter.
+/// 
+/// Still images don't have temporal information, so we assign timestamp 0.0
+/// when converting to Frame for the renderer. This keeps the graph free of
+/// rendering-specific concepts like timestamps.
+fn renderable_to_frame(value: &Value) -> Result<Arc<Frame>, OperationError> {
     match value {
         Value::Frame(frame) => Ok(frame.clone()),
         Value::Image(image) => {
-            // Convert Image to Frame at the boundary
+            // Convert Image to Frame at the renderer boundary
             Ok(Arc::new(Frame {
                 pixels: image.pixels.clone(),
                 width: image.width,
@@ -199,11 +205,12 @@ impl App {
             )
             .map_err(js_err)?;
 
-        // Get the first value and convert to Frame if needed
+        // Get the first value and convert to Frame at the renderer boundary
         let first_value = values.first()
             .ok_or_else(|| JsValue::from_str("No output value"))?;
         
-        let frame = value_to_frame(first_value)
+        // Renderer boundary: convert Value::Image to Frame for display
+        let frame = renderable_to_frame(first_value)
             .map_err(|e| JsValue::from_str(&format!("Failed to get frame: {:?}", e)))?;
 
         write_frame_to_canvas(&canvas, &frame)
@@ -230,11 +237,12 @@ impl App {
             )
             .map_err(js_err)?;
 
-        // Get the first value and convert to Frame if needed
+        // Get the first value and convert to Frame at the renderer boundary
         let first_value = values.first()
             .ok_or_else(|| JsValue::from_str("No output value"))?;
         
-        let frame = value_to_frame(first_value)
+        // Renderer boundary: convert Value::Image to Frame for display
+        let frame = renderable_to_frame(first_value)
             .map_err(|e| JsValue::from_str(&format!("Failed to get frame: {:?}", e)))?;
 
         write_frame_to_canvas(&canvas, &frame)
