@@ -10,7 +10,7 @@ use crate::compositor::{
 use super::{
     Graph,
     node::NodeId,
-    validate::ValidationState,
+    validate::{ValidationState, NodeValidation},
 };
 
 impl Graph {
@@ -30,6 +30,13 @@ impl Graph {
                 self.generations[index as usize];
 
             self.nodes[index as usize] = Some(node);
+            
+            // Ensure node_validation vector is large enough
+            if index as usize >= self.node_validation.len() {
+                self.node_validation.resize(index as usize + 1, NodeValidation::Valid);
+            } else {
+                self.node_validation[index as usize] = NodeValidation::Valid;
+            }
 
             NodeId {
                 index,
@@ -42,6 +49,7 @@ impl Graph {
 
             self.nodes.push(Some(node));
             self.generations.push(0);
+            self.node_validation.push(NodeValidation::Valid);
 
             NodeId {
                 index,
@@ -108,6 +116,13 @@ impl Graph {
         if self.output == Some(id) {
             self.output = None;
         }
+
+        // Ensure node_validation vector is large enough
+        if index >= self.node_validation.len() {
+            self.node_validation.resize(index + 1, NodeValidation::Valid);
+        }
+        // Note: We don't need to update node_validation for the removed node
+        // since it won't be accessible via the old NodeId due to generation check
 
 
         self.validation = ValidationState::Dirty;
@@ -182,6 +197,15 @@ impl Graph {
         &mut self,
     ) -> Result<(), OperationError> {
         super::validate::validate_graph(self)
+    }
+
+    /// Get the validation state of a specific node
+    /// Returns None if the node doesn't exist or the NodeId is stale
+    pub fn node_validation(
+        &self,
+        id: NodeId,
+    ) -> Option<NodeValidation> {
+        super::validate::get_node_validation(self, id)
     }
 
     pub fn resolution(&self) -> (u32, u32) {
