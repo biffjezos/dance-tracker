@@ -116,3 +116,32 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5
+
+
+  cleanup:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: write
+
+    steps:
+      - name: Delete workflow runs older than 4 hours
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+
+          CUTOFF=$(date -u -d "4 hours ago" +"%Y-%m-%dT%H:%M:%SZ")
+
+          gh api repos/$REPO/actions/runs \
+            --paginate \
+            --jq '.workflow_runs[]
+              | select(.status == "completed")
+              | select(.created_at < "'"$CUTOFF"'")
+              | .id' |
+          while read RUN_ID; do
+            echo "Deleting run $RUN_ID"
+            gh api -X DELETE repos/$REPO/actions/runs/$RUN_ID || true
+          done
