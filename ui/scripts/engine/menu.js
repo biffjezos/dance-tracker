@@ -184,38 +184,6 @@ export class MenuManager {
         this.subMenu.appendChild(plusButton);
     }
 
-    renderChannelSelector() {
-        const selectionState = nodeSelectionState;
-        
-        // Create separator
-        const separator = document.createElement("span");
-        separator.innerText = " | ";
-        separator.className = "menu-separator";
-        this.subMenu.appendChild(separator);
-
-        // Create the channel selector button group
-        const minusButton = document.createElement("button");
-        minusButton.innerText = "-";
-        minusButton.onclick = () => {
-            selectionState.selectPreviousChannel();
-            this.render();
-        };
-        this.subMenu.appendChild(minusButton);
-
-        const channelLabel = document.createElement("span");
-        channelLabel.innerText = ` ${selectionState.getSelectedChannel()} `;
-        channelLabel.className = "node-selector-label";
-        this.subMenu.appendChild(channelLabel);
-
-        const plusButton = document.createElement("button");
-        plusButton.innerText = "+";
-        plusButton.onclick = () => {
-            selectionState.selectNextChannel();
-            this.render();
-        };
-        this.subMenu.appendChild(plusButton);
-    }
-
     renderEditButton() {
         const selectionState = nodeSelectionState;
         
@@ -301,9 +269,8 @@ export class MenuManager {
                 this.subMenu.appendChild(separator);
             }
 
-            // Render node selector and channel selector
+            // Render node selector
             this.renderNodeSelector();
-            this.renderChannelSelector();
             
             // Render EDIT button if supported
             this.renderEditButton();
