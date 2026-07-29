@@ -4,11 +4,14 @@
 /**
  * NodeEditContext provides the structure for node-specific edit interfaces
  * Each node type that supports editing can register its own edit context
+ * 
+ * The registry ONLY renders UI controls - it does NOT perform any processing.
+ * It answers: "What UI should be shown when this node is edited?"
  */
 export class NodeEditContext {
     /**
      * Create a new node edit context
-     * @param {string} nodeType - The node type this context handles (e.g., "standaloneMask", "composite")
+     * @param {string} nodeType - The node type this context handles (e.g., "image", "blur", "composite")
      * @param {Function} renderFunction - Function that renders the edit controls for this node type
      */
     constructor(nodeType, renderFunction) {
@@ -31,6 +34,9 @@ export class NodeEditContext {
 /**
  * NodeEditContextRegistry manages all available node edit contexts
  * This allows different node types to register their own edit interfaces
+ * 
+ * The registry is a pure UI concern - it maps node types to their edit UIs.
+ * It does NOT modify the graph or perform any operations.
  */
 export class NodeEditContextRegistry {
     constructor() {
@@ -39,7 +45,7 @@ export class NodeEditContextRegistry {
 
     /**
      * Register a new edit context for a node type
-     * @param {string} nodeType - The node type (e.g., "standaloneMask")
+     * @param {string} nodeType - The node type (e.g., "image", "blur", "composite")
      * @param {Function} renderFunction - Function to render the edit controls
      */
     register(nodeType, renderFunction) {
@@ -86,30 +92,50 @@ export class NodeEditContextRegistry {
 // Singleton instance
 export const nodeEditContextRegistry = new NodeEditContextRegistry();
 
-// Placeholder render functions for future implementation
-// These will be fleshed out as node-specific editors are implemented
+// ============================================================================
+// NODE-SPECIFIC EDIT CONTEXT RENDERERS
+// These functions render UI controls for specific node types.
+// They do NOT perform any image processing or graph operations.
+// ============================================================================
 
 /**
- * Placeholder render function for mask edit context
+ * Render function for IMAGE SOURCE edit context
+ * Shows: REPLACE IMAGE, TRANSFORM controls
  */
-export function renderMaskEditContext(menuManager, nodeEntry) {
-    // Future implementation will include:
-    // - THRESHOLD control
-    // - FEATHER control  
-    // - INVERT control
-    const thresholdLabel = document.createElement("span");
-    thresholdLabel.innerText = " MASK EDIT: THRESHOLD, FEATHER, INVERT ";
-    thresholdLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(thresholdLabel);
+export function renderImageEditContext(menuManager, nodeEntry) {
+    const imageLabel = document.createElement("span");
+    imageLabel.innerText = " IMAGE SOURCE SETTINGS ";
+    imageLabel.className = "node-selector-label";
+    menuManager.subMenu.appendChild(imageLabel);
 }
 
 /**
- * Placeholder render function for composite edit context
+ * Render function for BLUR edit context
+ * Shows: BLUR RADIUS, BLUR TYPE controls
+ */
+export function renderBlurEditContext(menuManager, nodeEntry) {
+    const blurLabel = document.createElement("span");
+    blurLabel.innerText = " BLUR SETTINGS ";
+    blurLabel.className = "node-selector-label";
+    menuManager.subMenu.appendChild(blurLabel);
+}
+
+/**
+ * Render function for mask edit context
+ * Shows: THRESHOLD, FEATHER, INVERT controls
+ */
+export function renderMaskEditContext(menuManager, nodeEntry) {
+    const maskLabel = document.createElement("span");
+    maskLabel.innerText = " MASK EDIT: THRESHOLD, FEATHER, INVERT ";
+    maskLabel.className = "node-selector-label";
+    menuManager.subMenu.appendChild(maskLabel);
+}
+
+/**
+ * Render function for composite edit context
+ * Shows: MODE, OPACITY controls
  */
 export function renderCompositeEditContext(menuManager, nodeEntry) {
-    // Future implementation will include:
-    // - MODE control
-    // - OPACITY control
     const compositeLabel = document.createElement("span");
     compositeLabel.innerText = " COMPOSITE EDIT: MODE, OPACITY ";
     compositeLabel.className = "node-selector-label";
@@ -117,12 +143,10 @@ export function renderCompositeEditContext(menuManager, nodeEntry) {
 }
 
 /**
- * Placeholder render function for rings edit context
+ * Render function for rings edit context
+ * Shows: ANIMATION, PARAMETERS controls
  */
 export function renderRingsEditContext(menuManager, nodeEntry) {
-    // Future implementation will include:
-    // - Animation controls
-    // - Parameter controls
     const ringsLabel = document.createElement("span");
     ringsLabel.innerText = " RINGS EDIT: ANIMATION, PARAMETERS ";
     ringsLabel.className = "node-selector-label";
@@ -130,13 +154,10 @@ export function renderRingsEditContext(menuManager, nodeEntry) {
 }
 
 /**
- * Placeholder render function for ghost edit context
+ * Render function for ghost edit context
+ * Shows: SPEED, LOOP, PARAMETERS controls
  */
 export function renderGhostEditContext(menuManager, nodeEntry) {
-    // Future implementation will include:
-    // - SPEED control
-    // - LOOP control
-    // - PARAMETERS control
     const ghostLabel = document.createElement("span");
     ghostLabel.innerText = " GHOST EDIT: SPEED, LOOP, PARAMETERS ";
     ghostLabel.className = "node-selector-label";
@@ -144,34 +165,34 @@ export function renderGhostEditContext(menuManager, nodeEntry) {
 }
 
 /**
- * Placeholder render function for image edit context
- */
-export function renderImageEditContext(menuManager, nodeEntry) {
-    // Future implementation will include:
-    // - LOAD IMAGE
-    // - RELOAD
-    const imageLabel = document.createElement("span");
-    imageLabel.innerText = " IMAGE EDIT: LOAD, RELOAD ";
-    imageLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(imageLabel);
-}
-
-/**
- * Placeholder render function for video edit context
+ * Render function for video edit context
+ * Shows: ANIMATION CONTROLS
  */
 export function renderVideoEditContext(menuManager, nodeEntry) {
-    // Future implementation will include:
-    // - Animation controls
     const videoLabel = document.createElement("span");
     videoLabel.innerText = " VIDEO EDIT: ANIMATION CONTROLS ";
     videoLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(videoLabel);
 }
 
+/**
+ * Render function for text edit context
+ * Shows: TEXT, FONT, COLOR controls
+ */
+export function renderTextEditContext(menuManager, nodeEntry) {
+    const textLabel = document.createElement("span");
+    textLabel.innerText = " TEXT EDIT: CONTENT, FONT, COLOR ";
+    textLabel.className = "node-selector-label";
+    menuManager.subMenu.appendChild(textLabel);
+}
+
 // Register all known edit contexts
+// These map node kinds to their respective edit UIs
+nodeEditContextRegistry.register("image", renderImageEditContext);
+nodeEditContextRegistry.register("blur", renderBlurEditContext);
 nodeEditContextRegistry.register("standaloneMask", renderMaskEditContext);
 nodeEditContextRegistry.register("composite", renderCompositeEditContext);
 nodeEditContextRegistry.register("rings", renderRingsEditContext);
 nodeEditContextRegistry.register("ghost", renderGhostEditContext);
-nodeEditContextRegistry.register("image", renderImageEditContext);
 nodeEditContextRegistry.register("video", renderVideoEditContext);
+nodeEditContextRegistry.register("text", renderTextEditContext);
