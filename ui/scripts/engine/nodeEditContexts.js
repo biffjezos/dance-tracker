@@ -189,13 +189,69 @@ export function renderTextEditContext(menuManager, nodeEntry) {
 /**
  * Render function for SHUFFLE edit context
  * Shows: RGBA channel mapping controls
- * This is a placeholder - will be implemented in commit 4
+ * 
+ * Display:
+ * SHUFFLE 1
+ * RED   [R] [G] [B] [A] [OFF]
+ * GREEN [R] [G] [B] [A] [OFF]
+ * BLUE  [R] [G] [B] [A] [OFF]
+ * ALPHA [R] [G] [B] [A] [OFF]
+ * 
+ * Each button changes one output channel mapping.
  */
 export function renderShuffleEditContext(menuManager, nodeEntry) {
-    const shuffleLabel = document.createElement("span");
-    shuffleLabel.innerText = " SHUFFLE SETTINGS ";
-    shuffleLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(shuffleLabel);
+    // Show the node label
+    const nodeLabel = document.createElement("span");
+    nodeLabel.innerText = ` ${nodeEntry.label} `;
+    nodeLabel.className = "node-selector-label";
+    menuManager.subMenu.appendChild(nodeLabel);
+    
+    // Create a new line for the channel controls
+    const newline = document.createElement("br");
+    menuManager.subMenu.appendChild(newline);
+    
+    // Channel mappings: RED, GREEN, BLUE, ALPHA
+    const channels = ["red", "green", "blue", "alpha"];
+    const channelLabels = ["RED", "GREEN", "BLUE", "ALPHA"];
+    const sourceOptions = ["R", "G", "B", "A", "OFF"];
+    
+    channels.forEach((channel, index) => {
+        // Channel label (RED, GREEN, BLUE, ALPHA)
+        const channelLabel = document.createElement("span");
+        channelLabel.innerText = channelLabels[index];
+        channelLabel.className = "node-selector-label";
+        menuManager.subMenu.appendChild(channelLabel);
+        
+        // Add space
+        const space = document.createElement("span");
+        space.innerText = " ";
+        menuManager.subMenu.appendChild(space);
+        
+        // Create buttons for each source option
+        sourceOptions.forEach(source => {
+            const button = document.createElement("button");
+            button.innerText = source;
+            button.className = "channel-btn";
+            button.onclick = () => {
+                // Dispatch parameter update event
+                const nodeId = nodeEntry.id;
+                window.dispatchEvent(
+                    new CustomEvent("updateNodeParameter", {
+                        detail: {
+                            nodeId: nodeId,
+                            parameter: channel,
+                            value: source
+                        }
+                    })
+                );
+            };
+            menuManager.subMenu.appendChild(button);
+        });
+        
+        // Add line break after each channel row
+        const br = document.createElement("br");
+        menuManager.subMenu.appendChild(br);
+    });
 }
 
 // Register all known edit contexts
