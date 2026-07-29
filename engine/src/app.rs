@@ -280,14 +280,19 @@ impl App {
     }
 }
 
-// Helper function to parse shuffle channel values
-fn parse_shuffle_channel(value: &str) -> Option<u8> {
-    match value {
-        "R" => Some(0),
-        "G" => Some(1),
-        "B" => Some(2),
-        "A" => Some(3),
-        "OFF" => Some(4),
+/// Parse a string into ShuffleChannel
+fn parse_shuffle_channel(s: &str) -> Option<crate::operations::transform::shuffle::ShuffleChannel> {
+    use crate::operations::transform::shuffle::ShuffleChannel;
+    match s.to_lowercase().as_str() {
+        "red" => Some(ShuffleChannel::Red),
+        "r" => Some(ShuffleChannel::Red),
+        "green" => Some(ShuffleChannel::Green),
+        "g" => Some(ShuffleChannel::Green),
+        "blue" => Some(ShuffleChannel::Blue),
+        "b" => Some(ShuffleChannel::Blue),
+        "alpha" => Some(ShuffleChannel::Alpha),
+        "a" => Some(ShuffleChannel::Alpha),
+        "off" => Some(ShuffleChannel::Off),
         _ => None,
     }
 }
