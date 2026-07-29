@@ -34,7 +34,7 @@ Other agents should treat the final API as the integration point.
 
 ## Tasks Breakdown
 
-1. [ ] Fix parameter name mismatch between Rust and JavaScript
-2. [ ] Verify the fix compiles
+1. [x] Fix parameter name mismatch between Rust and JavaScript
+2. [x] Verify the fix compiles
 3. [ ] Test the operation works correctly
 4. [ ] Commit and push changes to dev branch

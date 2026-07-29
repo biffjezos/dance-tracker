@@ -211,7 +211,7 @@ export function renderShuffleEditContext(menuManager, nodeEntry) {
     menuManager.subMenu.appendChild(newline);
     
     // Channel mappings: RED, GREEN, BLUE, ALPHA
-    const channels = ["red", "green", "blue", "alpha"];
+    const channels = ["red_channel", "green_channel", "blue_channel", "alpha_channel"];
     const channelLabels = ["RED", "GREEN", "BLUE", "ALPHA"];
     const sourceOptions = ["R", "G", "B", "A", "OFF"];
     
