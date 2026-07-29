@@ -176,7 +176,7 @@ export class MenuManager {
 
         const nodeLabel = document.createElement("span");
         nodeLabel.innerText = ` ${selectionState.getSelectedNodeName()} `;
-        nodeLabel.className = "node-selector-label";
+        nodeLabel.className = "node-name-label";
         this.subMenu.appendChild(nodeLabel);
 
         const plusButton = document.createElement("button");
@@ -319,7 +319,7 @@ export class MenuManager {
             if (selectedNode) {
                 const nodeLabel = document.createElement("span");
                 nodeLabel.innerText = ` ${selectedNode.label} `;
-                nodeLabel.className = "node-selector-label";
+                nodeLabel.className = "node-name-label";
                 this.subMenu.appendChild(nodeLabel);
             }
             return;

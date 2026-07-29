@@ -111,6 +111,19 @@ button:hover {
   color: var(--color-text-primary);
 }
 
+/* Node name display - fixed width for 23 characters */
+.node-name-label {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  display: inline-block;
+  width: 25ch;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .menu-separator {
   font-family: var(--font-family-primary);
   font-size: var(--font-size-body);
