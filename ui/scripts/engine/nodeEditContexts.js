@@ -186,6 +186,18 @@ export function renderTextEditContext(menuManager, nodeEntry) {
     menuManager.subMenu.appendChild(textLabel);
 }
 
+/**
+ * Render function for SHUFFLE edit context
+ * Shows: RGBA channel mapping controls
+ * This is a placeholder - will be implemented in commit 4
+ */
+export function renderShuffleEditContext(menuManager, nodeEntry) {
+    const shuffleLabel = document.createElement("span");
+    shuffleLabel.innerText = " SHUFFLE SETTINGS ";
+    shuffleLabel.className = "node-selector-label";
+    menuManager.subMenu.appendChild(shuffleLabel);
+}
+
 // Register all known edit contexts
 // These map node kinds to their respective edit UIs
 nodeEditContextRegistry.register("image", renderImageEditContext);
@@ -196,3 +208,4 @@ nodeEditContextRegistry.register("rings", renderRingsEditContext);
 nodeEditContextRegistry.register("ghost", renderGhostEditContext);
 nodeEditContextRegistry.register("video", renderVideoEditContext);
 nodeEditContextRegistry.register("text", renderTextEditContext);
+nodeEditContextRegistry.register("shuffle", renderShuffleEditContext);
