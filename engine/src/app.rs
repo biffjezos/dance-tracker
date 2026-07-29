@@ -154,6 +154,7 @@ impl App {
         image_source.set_image(image);
         
         Ok(())
+    }
 
     /// Set image data on a specific VideoSource node
     /// Takes pixel data as Uint8Array, width, height
