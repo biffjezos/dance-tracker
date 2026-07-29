@@ -119,11 +119,11 @@ impl App {
         
         // Get the operation from the graph
         let operation = self.graph.get_node_mut(&node_id)
-            .ok_or_else(|| JsValue::from_str(&format!("Node {} not found", node_id)))?;
+            .ok_or_else(|| JsValue::from_str(&format!("Node {:?} not found", node_id)))?;
         
         // Downcast to ImageSource
         let image_source = operation.as_any_mut().downcast_mut::<ImageSource>()
-            .ok_or_else(|| JsValue::from_str(&format!("Node {} is not an ImageSource", node_id)))?;
+            .ok_or_else(|| JsValue::from_str(&format!("Node {:?} is not an ImageSource", node_id)))?;
         
         // Create Image from the pixel data
         let image = Arc::new(Image {

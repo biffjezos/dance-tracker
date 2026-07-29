@@ -6,4 +6,4 @@ pub mod mask;
 pub mod transform;
 
 pub use frame::Frame;
-pub use image::Image;
+pub use image::{ Image, ImageFormat };
