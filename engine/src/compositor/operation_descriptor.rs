@@ -8,6 +8,7 @@ pub struct OperationDescriptor {
     pub label: &'static str,
     pub action: Option<&'static str>,              // direct action
     pub ui_action: Option<&'static str>,          // UI-specific action (e.g., open file picker)
+    pub create_node: Option<&'static str>,       // creates a graph operation node
     pub buttons: &'static [OperationButton],       // submenu
 }
 

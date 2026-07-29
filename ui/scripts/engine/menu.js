@@ -10,6 +10,7 @@ AMIGA TWO ROW MENU SYSTEM
 import { nodeSelectionState } from "./nodeSelection.js";
 import { nodeEditContextRegistry } from "./nodeEditContexts.js";
 import { getAllRealEntries } from "../state/registry.js";
+import { createNode } from "../core/operations.js";
 
 // MenuContext: Represents a menu in the hierarchy
 class MenuContext {
@@ -96,6 +97,7 @@ export class MenuManager {
         this.operations = [];
         this.category = null;
         this.currentContext = null;
+        this.buttons = [];
 
         window.addEventListener("operationsLoaded", e => {
             console.log("Operations loaded:", e.detail);
@@ -345,6 +347,31 @@ export class MenuManager {
             return;
         }
 
+        // Special handling for create_node context
+        if (this.currentContext && this.currentContext.id === "create_node") {
+            // Render UP button
+            if (this.currentContext.parent !== null) {
+                this.renderUpButton();
+                const separator = document.createElement("span");
+                separator.innerText = " | ";
+                separator.className = "menu-separator";
+                this.subMenu.appendChild(separator);
+            }
+            
+            // Render ADD button
+            const addButton = document.createElement("button");
+            addButton.innerText = "ADD";
+            addButton.onclick = () => {
+                // Get the operation ID from the context
+                const opId = this.currentContext.opId;
+                if (opId) {
+                    this.createNodeAndSelect(opId);
+                }
+            };
+            this.subMenu.appendChild(addButton);
+            return;
+        }
+
         // Render UP button if currentContext has a parent
         if (this.currentContext && this.currentContext.parent !== null) {
             this.renderUpButton();
@@ -373,6 +400,18 @@ export class MenuManager {
             button.onclick = () => {
                 console.log("Operation button clicked:", op);
 
+                // Check if this operation creates a node
+                if (op.create_node) {
+                    console.log("Operation creates node:", op.create_node);
+                    // Create a child MenuContext for the create_node submenu
+                    const createContext = new MenuContext("create_node", this.currentContext);
+                    createContext.opId = op.create_node;
+                    this.currentContext = createContext;
+                    this.render();
+                    this.updateStatusBar();
+                    return;
+                }
+
                 if (op.buttons && op.buttons.length) {
                     console.log("Showing submenu buttons");
                     this.buttons = op.buttons;
@@ -399,6 +438,29 @@ export class MenuManager {
                 }
             };
             this.subMenu.appendChild(button);
+        });
+    }
+
+    createNodeAndSelect(operationId) {
+        console.log("Creating node:", operationId);
+        
+        // Create the node in the graph
+        createNode(operationId).then(nodeId => {
+            console.log("Node created with ID:", nodeId);
+            
+            // For now, we'll add the node to the state
+            // This is a placeholder - actual node tracking needs to be implemented
+            
+            // Go back to nodes menu
+            this.currentContext = nodesMenu;
+            this.category = "nodes";
+            
+            // Refresh the node list and select the new node
+            // This will be properly implemented in commit 2
+            this.render();
+            this.updateStatusBar();
+        }).catch(err => {
+            console.error("Failed to create node:", err);
         });
     }
 
