@@ -141,29 +141,31 @@ impl Operation for Blur {
 
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![ParameterDescriptor {
-            name: "radius_px",
-            kind: ParameterKind::Number { step: 0.1, min: Some(0.0), max: Some(1000.0) },
+            name: "RADIUS",
+            // radius_px is stored as whole pixels (u32) - step by 1, not a
+            // fraction that would never move the stored value.
+            kind: ParameterKind::Number { step: 1.0, min: Some(0.0), max: Some(1000.0) },
             group: None,
         }]
     }
 
     fn get_parameter(&self, name: &str) -> Option<Value> {
         match name {
-            "radius_px" => Some(Value::Number(self.radius_px as f64)),
+            "RADIUS" => Some(Value::Number(self.radius_px as f64)),
             _ => None,
         }
     }
 
     fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
         match (name, value) {
-            ("radius_px", Value::Number(v)) => {
+            ("RADIUS", Value::Number(v)) => {
                 if v < 0.0 || v > 1000.0 {
                     return Err(OperationError::InvalidParameterValue(
                         name.to_string(),
                         v.to_string(),
                     ));
                 }
-                self.radius_px = v as u32;
+                self.radius_px = v.round() as u32;
                 Ok(())
             }
             _ => Err(OperationError::InvalidParameterType(name.to_string())),
@@ -287,5 +289,36 @@ mod tests {
         RenderExecutor
             .execute(&graph, blur_id, &context(4, 4))
             .expect("unwired blur renders");
+    }
+
+    #[test]
+    fn setting_radius_by_the_stepper_step_actually_moves_it() {
+        // The UI steps this parameter by 1.0 (RADIUS is stored as whole
+        // pixels) - a step smaller than 1 would silently truncate away on
+        // every set_parameter call, making the stepper look broken.
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(1.0)).unwrap();
+        assert_eq!(blur.radius_px, 1);
+
+        match blur.get_parameter("RADIUS") {
+            Some(Value::Number(v)) => assert_eq!(v, 1.0),
+            other => panic!("expected Value::Number(1.0), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_nonzero_radius_actually_blurs() {
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(1.0)).unwrap();
+
+        let input = image(vec![255, 255, 255, 255, 0, 0, 0, 255], 2, 1);
+        let values = blur
+            .execute(&context(2, 1), &[(Input::Source, Value::Image(input.clone()))])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_ne!(out.pixels, input.pixels),
+            other => panic!("expected image, got {:?}", other),
+        }
     }
 }
