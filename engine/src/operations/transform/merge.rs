@@ -20,7 +20,7 @@ use crate::compositor::{
 
 use crate::graphics::{Image, ImageFormat};
 
-use crate::operations::transform::Multiply;
+use crate::operations::transform::multiply::Multiply;
 
 /**
 move blendMode + impl Default for BlendMode + impl BlendMode
