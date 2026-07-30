@@ -6,6 +6,8 @@ pub mod mask;
 pub mod transform;
 pub mod video;
 
+
+pub use color::Color;
 pub use frame::Frame;
 pub use image::{ Image, ImageFormat };
 pub use video::Video;

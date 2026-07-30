@@ -20,10 +20,10 @@ use crate::compositor::{
 };
 
 use crate::graphics::{
+    Color,
     Image,
     ImageFormat,
 };
-use crate::graphics::Color;
 
 pub struct Checkerboard {
     pub size: f64,
