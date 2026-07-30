@@ -41,6 +41,7 @@ struct ParameterView {
     name: &'static str,
     kind: &'static str,
     options: &'static [&'static str],
+    step: Option<f64>,
     value: String,
 }
 
@@ -163,6 +164,7 @@ impl App {
                 name: parameter.name,
                 kind: parameter.kind.name(),
                 options: parameter.kind.options(),
+                step: parameter.kind.step(),
                 value: operation
                     .get_parameter(parameter.name)
                     .map(|value| value_to_text(&value))

@@ -6,9 +6,11 @@ Only the scalar Value variants make sense as something a UI would show
 a control for - Frame/Mask/Image are graph-wired inputs, never a
 setting on the node that produces them.
 */
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ParameterKind {
-    Number,
+    /// A stepper's increment - the operation owns it, so a UI stepper moves
+    /// by exactly this amount and nothing else.
+    Number { step: f64 },
     Boolean,
     Text,
     Color,
@@ -27,9 +29,17 @@ impl ParameterKind {
         }
     }
 
+    /// The stepper increment for a Number parameter - None for every other kind.
+    pub fn step(&self) -> Option<f64> {
+        match self {
+            ParameterKind::Number { step } => Some(*step),
+            _ => None,
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
-            ParameterKind::Number => "NUMBER",
+            ParameterKind::Number { .. } => "NUMBER",
             ParameterKind::Boolean => "BOOLEAN",
             ParameterKind::Text => "TEXT",
             ParameterKind::Color => "COLOR",
