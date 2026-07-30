@@ -8,6 +8,9 @@ import {
 } from "./graph.js";
 
 let liveNodeId = null;
+let liveNodeLabel = null;
+const LIVE_OUTPUT_DEFAULT_TITLE = "LIVE OUTPUT";
+
 export function renderPreview() {
     const wasmApp = getWasmApp();
     if (!wasmApp) return;
@@ -33,16 +36,24 @@ export function renderPreview() {
 }
 
 window.addEventListener("setLiveNode", e => {
-    liveNodeId = e.detail;
+    liveNodeId = e.detail.nodeId;
+    liveNodeLabel = e.detail.label;
 });
 window.addEventListener("clearLiveNode", () => {
     liveNodeId = null;
+    liveNodeLabel = null;
 });
 
 function loop() {
     const wasmApp = getWasmApp();
     const outputNodeId = liveNodeId ?? getOutputNodeId();
     const masterCanvas = document.getElementById("master-layer");
+
+    const liveOutputTitle = document.getElementById("live-output-title");
+    if (liveOutputTitle) {
+        liveOutputTitle.innerText = liveNodeId !== null ? liveNodeLabel : LIVE_OUTPUT_DEFAULT_TITLE;
+    }
+
     if (wasmApp && outputNodeId !== null && outputNodeId !== undefined) {
         try {
             wasmApp.render_tick(outputNodeId, masterCanvas);

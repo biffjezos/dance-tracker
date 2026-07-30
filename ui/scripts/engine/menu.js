@@ -237,7 +237,10 @@ export class MenuManager {
                 if (nodeId !== null && nodeId !== undefined) {
                     window.dispatchEvent(
                         new CustomEvent("setLiveNode", {
-                            detail: nodeId
+                            detail: {
+                                nodeId,
+                                label: nodeSelectionState.getSelectedNodeName()
+                            }
                         })
                     );
                 }

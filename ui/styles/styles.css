@@ -93,6 +93,23 @@ button:hover {
   color: var(--color-text-input-placeholder);
 }
 
+input[type="color"] {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--color-border-button);
+  background: var(--color-bg-button);
+  cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+}
+
 .ring-id-display {
   font-family: var(--font-family-primary);
   font-size: var(--font-size-body);
