@@ -160,6 +160,11 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
     menuManager.subMenu.appendChild(nodeLabel);
 
     parameters.forEach(parameter => {
+        if (parameter.kind === "COLOR") {
+            renderColorParameter(menuManager, nodeId, parameter);
+            return;
+        }
+
         if (!parameter.options || parameter.options.length === 0) return;
 
         const options = parameter.options;
@@ -200,6 +205,35 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
     });
 
     renderInputSteppers(menuManager, nodeEntry, nodeId);
+}
+
+/**
+ * Render a Color-kind parameter as a native colour picker. Its value is the
+ * "#rrggbb" text Rust's value_to_text() already produces for Value::Color,
+ * so the input's own value/change semantics are the entire implementation -
+ * no palette, no bespoke widget.
+ */
+function renderColorParameter(menuManager, nodeId, parameter) {
+    const label = document.createElement("span");
+    label.innerText = ` ${parameter.name} `;
+    label.className = "node-selector-label";
+    menuManager.subMenu.appendChild(label);
+
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = parameter.value;
+    input.oninput = () => {
+        window.dispatchEvent(
+            new CustomEvent("updateNodeParameter", {
+                detail: {
+                    nodeId: nodeId,
+                    parameter: parameter.name,
+                    value: input.value
+                }
+            })
+        );
+    };
+    menuManager.subMenu.appendChild(input);
 }
 
 /**
