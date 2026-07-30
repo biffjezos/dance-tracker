@@ -8,7 +8,7 @@ AMIGA TWO ROW MENU SYSTEM
 */
 
 import { nodeSelectionState } from "./nodeSelection.js";
-import { nodeEditContextRegistry } from "./nodeEditContexts.js";
+import { nodeEditContextRegistry, renderGroupContext } from "./nodeEditContexts.js";
 import { getAllRealEntries } from "../state/registry.js";
 import { createNode } from "../core/operations.js";
 import {
@@ -23,6 +23,7 @@ class MenuContext {
         this.id = id;
         this.parent = parent;
         this.opId = null; // For create_node context, stores the operation ID
+        this.group = null; // For param_group context, stores the group name
     }
 }
 
@@ -310,6 +311,26 @@ export class MenuManager {
             return;
         }
 
+        // Special handling for a parameter-group sub-pane (pushed from
+        // within an edit context when a parameter declares a group - e.g.
+        // "COLOUR"). Generic across every node kind - node_parameters()
+        // already tells us which parameters belong to the group.
+        if (this.currentContext && this.currentContext.id === "param_group") {
+            if (this.currentContext.parent !== null) {
+                this.renderUpButton();
+                const separator = document.createElement("span");
+                separator.innerText = " | ";
+                separator.className = "menu-separator";
+                this.subMenu.appendChild(separator);
+            }
+
+            const selectedNode = nodeSelectionState.getSelectedNode();
+            if (selectedNode) {
+                renderGroupContext(this, selectedNode, this.currentContext.group);
+            }
+            return;
+        }
+
         // Special handling for create_node context
         if (this.currentContext && this.currentContext.id === "create_node") {
             // Render UP button
@@ -439,6 +460,15 @@ export class MenuManager {
         }).catch(err => {
             console.error("Failed to create node:", err);
         });
+    }
+
+    // Descend into a named parameter group's own sub-pane (UP returns here).
+    enterParameterGroup(groupName) {
+        const groupContext = new MenuContext("param_group", this.currentContext);
+        groupContext.group = groupName;
+        this.currentContext = groupContext;
+        this.render();
+        this.updateStatusBar();
     }
 
     goUp() {

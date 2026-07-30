@@ -69,6 +69,11 @@ impl ParameterKind {
 pub struct ParameterDescriptor {
     pub name: &'static str,
     pub kind: ParameterKind,
+    /// Which named sub-pane this parameter belongs to in the editor, if
+    /// any (e.g. "DIMENSION", "COLOUR"). Ungrouped (None) parameters
+    /// render at the top level - the operation owns the grouping, the UI
+    /// only ever renders the distinct group names it's given.
+    pub group: Option<&'static str>,
 }
 
 /*

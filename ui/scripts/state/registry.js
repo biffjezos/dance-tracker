@@ -9,35 +9,23 @@ export function defaultUniversalSettings() {
         }
     };
 }
-export function getAllRealEntries() {
-    const list = [];
-    state.videoLayers.forEach(layer => {
-        // Check if this is an image layer (has imageNodeId)
-        if (layer.imageNodeId !== undefined) {
-            list.push({
-                id: "image:" + layer.id,
-                label: layer.name,
-                kind: "image",
-                layer
-            });
-        } else {
-            list.push({
-                id: "video:" + layer.id,
-                label: layer.name,
-                kind: "video",
-                layer
-            });
-        }
-    });
-    // Every create_node-backed operation (shuffle, and any future one)
-    // lives in this one generic array, tagged with its own kind.
-    state.nodes.forEach(layer => list.push({
+function toEntry(layer) {
+    return {
         id: layer.kind + ":" + layer.id,
         label: layer.name,
         kind: layer.kind,
         layer
-    }));
-    return list;
+    };
+}
+export function getAllRealEntries() {
+    // videoLayers (video/image/camera - created via their own bespoke
+    // external-resource flow) and nodes (any create_node-backed operation,
+    // e.g. shuffle) are separate arrays only because of how they're
+    // created; every entry they produce has the same generic shape.
+    return [
+        ...state.videoLayers.map(toEntry),
+        ...state.nodes.map(toEntry)
+    ];
 }
 export function getVideoRegistry() {
     // Every real node is a candidate source/preview target by default - new

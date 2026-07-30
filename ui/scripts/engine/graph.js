@@ -59,26 +59,11 @@ function settingsChanged(layerId, settings) {
     return false;
 }
 
-function buildVideoContent(layer) {
-    // Video/camera nodes are already created (and their pixel source
-    // attached) at the point the layer was added. Just surface the node ID.
-    if (layer.videoNodeId === undefined) return null;
-    return layer.videoNodeId;
-}
-
-function buildImageContent(layer) {
-    const wasmApp = getWasmApp();
-    if (!wasmApp || layer.imageNodeId === undefined) return null;
-    // Image nodes are already created with their data set
-    // Just return the node ID
-    return layer.imageNodeId;
-}
-
 function buildGenericContent(layer) {
-    // Plain create_node-backed operations (shuffle, and any future one with
-    // no bespoke JS field naming) are created - and wired to their source,
-    // if any - directly in the WASM graph when the user adds them. Just
-    // surface the node ID.
+    // Every layer's WASM node - video/camera, image, and any
+    // create_node-backed operation alike - is already created (and its
+    // pixel source or wiring attached, if it needs any) at the point the
+    // layer was added. Just surface the node id.
     if (layer.nodeId === undefined) return null;
     return layer.nodeId;
 }
@@ -101,21 +86,8 @@ function buildLayerNode(entry) {
         return existingNodeId;
     }
 
-    // Build new node based on type
-    let newNodeId = null;
-    
-    if (entry.kind === "video") {
-        newNodeId = buildVideoContent(layer);
-    } else if (entry.kind === "image") {
-        newNodeId = buildImageContent(layer);
-    } else {
-        // Any other kind is assumed to be a plain create_node-backed
-        // operation (like shuffle): its WASM node is already created and
-        // wired at add-time, so just surface layer.nodeId. New operations
-        // get this for free with no graph.js changes required.
-        newNodeId = buildGenericContent(layer);
-    }
-    
+    const newNodeId = buildGenericContent(layer);
+
     if (newNodeId !== null) {
         // Clean up old node if it exists
         if (existingNodeId !== null) {
@@ -136,11 +108,8 @@ export function rebuildGraph() {
     const all = getAllRealEntries();
     const contentIds = new Map();
     
-    /*
-    Build every real entry's WASM node. New kinds work here with no
-    changes required, as long as they're either handled explicitly in
-    buildLayerNode() or fall through to buildGenericContent().
-    */
+    // Build every real entry's WASM node. Every kind stores its id under
+    // layer.nodeId, so a new kind works here with zero changes required.
     all.forEach(entry => {
         const nodeId = buildLayerNode(entry);
         if (nodeId !== null) {
@@ -157,24 +126,21 @@ export function rebuildGraph() {
         }
     }
 
-    // Update cached IDs for preview and output
-    cachedContentIds = contentIds;
-    cachedWiredIds = contentIds;
+    // Cache the node ids this rebuild produced, for preview/output/wiring
+    // lookups between rebuilds.
+    cachedNodeIds = contentIds;
 
     updateOutputNodeId();
-    state.videoLayers.forEach(layer => layer.pendingCapture = false);
 }
 
-// Legacy exports for compatibility
-export let cachedContentIds = new Map();
-export let cachedWiredIds = new Map();
+export let cachedNodeIds = new Map();
 
 export function updateOutputNodeId() {
     if (state.outputEntryId === null) {
         outputNodeId = null;
         return;
     }
-    outputNodeId = cachedWiredIds.get(state.outputEntryId) ?? layerNodeIds.get(state.outputEntryId) ?? null;
+    outputNodeId = cachedNodeIds.get(state.outputEntryId) ?? layerNodeIds.get(state.outputEntryId) ?? null;
 }
 
 export function getOutputNodeId() {
@@ -185,7 +151,7 @@ export function getOutputNodeId() {
 // sits in the wiring pipeline - used to connect one node's input to another.
 export function resolveNodeId(entryId) {
     if (!entryId) return null;
-    return cachedWiredIds.get(entryId) ?? cachedContentIds.get(entryId) ?? layerNodeIds.get(entryId) ?? null;
+    return cachedNodeIds.get(entryId) ?? layerNodeIds.get(entryId) ?? null;
 }
 
 export function currentPreviewContentId() {
@@ -193,11 +159,11 @@ export function currentPreviewContentId() {
     const selectedNode = nodeSelectionState.getSelectedNode();
     if (selectedNode && selectedNode.id) {
         // Use the selected node's ID
-        return cachedWiredIds.get(selectedNode.id) ?? cachedContentIds.get(selectedNode.id) ?? layerNodeIds.get(selectedNode.id);
+        return cachedNodeIds.get(selectedNode.id) ?? layerNodeIds.get(selectedNode.id);
     }
-    
+
     // Fall back to scope-based preview (for legacy compatibility)
     const entry = scopedEntry(lastPreviewScope);
     if (!entry.id) return null;
-    return cachedWiredIds.get(entry.id) ?? cachedContentIds.get(entry.id) ?? layerNodeIds.get(entry.id);
+    return cachedNodeIds.get(entry.id) ?? layerNodeIds.get(entry.id);
 }

@@ -163,18 +163,22 @@ impl Operation for Shuffle {
             ParameterDescriptor {
                 name: "red_channel",
                 kind: ParameterKind::Enum(SHUFFLE_CHANNELS),
+                group: None,
             },
             ParameterDescriptor {
                 name: "green_channel",
                 kind: ParameterKind::Enum(SHUFFLE_CHANNELS),
+                group: None,
             },
             ParameterDescriptor {
                 name: "blue_channel",
                 kind: ParameterKind::Enum(SHUFFLE_CHANNELS),
+                group: None,
             },
             ParameterDescriptor {
                 name: "alpha_channel",
                 kind: ParameterKind::Enum(SHUFFLE_CHANNELS),
+                group: None,
             },
         ]
     }
