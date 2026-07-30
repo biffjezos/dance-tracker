@@ -341,11 +341,8 @@ impl App {
                 )
             }
 
-            ParameterKind::Boolean => {
-                Value::Boolean(
-                    value.parse::<bool>()
-                        .map_err(|_| JsValue::from_str("Invalid boolean"))?
-                )
+            ParameterKind::Color => {
+                return Err(JsValue::from_str("Parsing Value::Color not implemented"));
             }
 
             ParameterKind::Color => {
