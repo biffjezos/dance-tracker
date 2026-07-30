@@ -153,8 +153,6 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
     const nodeId = nodeEntry.layer.nodeId;
     const parameters = wasmApp.node_parameters(nodeId);
 
-    renderContextName(menuManager, nodeEntry.label);
-
     // Ungrouped parameters render inline, same as always. Grouped ones
     // collapse into one button per distinct group name - the operation
     // decides the grouping, this just renders whatever names it sees.
@@ -189,27 +187,9 @@ export function renderGroupContext(menuManager, nodeEntry, groupName) {
     const nodeId = nodeEntry.layer.nodeId;
     const parameters = wasmApp.node_parameters(nodeId).filter(p => p.group === groupName);
 
-    renderContextName(menuManager, groupName);
+    renderParameterLabel(menuManager, groupName);
 
     parameters.forEach(parameter => renderParameter(menuManager, nodeId, parameter));
-}
-
-/**
- * Render the current context's own name - fixed-width, same as the NODES
- * selector's name, so the layout doesn't jump around between contexts -
- * followed by the "|" separator that marks where the context's own name
- * ends and its controls begin.
- */
-function renderContextName(menuManager, text) {
-    const label = document.createElement("span");
-    label.innerText = ` ${text} `;
-    label.className = "node-name-label";
-    menuManager.subMenu.appendChild(label);
-
-    const separator = document.createElement("span");
-    separator.innerText = " | ";
-    separator.className = "menu-separator";
-    menuManager.subMenu.appendChild(separator);
 }
 
 /**

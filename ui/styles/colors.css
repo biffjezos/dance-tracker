@@ -22,6 +22,7 @@
     --color-text-statusbar: #00ffff;
     --color-text-button: #ffffff;
     --color-text-button-hover: #000;
+    --color-text-disabled: #666;
     --color-text-input: #fff;
     --color-text-input-placeholder: #557;
     --color-text-ring-display: #ffff00;
@@ -31,6 +32,7 @@
     --color-border-panel: #00ffff;
     --color-border-button: #ff00ff;
     --color-border-button-up: #00ffff;
+    --color-border-disabled: #444;
     --color-border-ring-display: #444;
     --color-border-titlebar-bottom: #ff00ff;
     --color-border-statusbar-top: #ff00ff;

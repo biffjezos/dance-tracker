@@ -74,6 +74,18 @@ button:hover {
   color: var(--color-text-button-hover);
 }
 
+button:disabled {
+  color: var(--color-text-disabled);
+  border-color: var(--color-border-disabled);
+  background: var(--color-bg-button);
+  cursor: default;
+}
+
+button:disabled:hover {
+  background: var(--color-bg-button);
+  color: var(--color-text-disabled);
+}
+
 .up-button {
   border-color: var(--color-border-button-up);
   color: var(--color-border-button-up);
