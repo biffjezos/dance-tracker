@@ -33,6 +33,16 @@ impl Color {
             a: 1.0,
         })
     }
+
+    /// This color as RGBA8, for writing directly into a pixel buffer.
+    pub fn to_rgba_u8(&self) -> [u8; 4] {
+        [
+            (self.r.clamp(0.0, 1.0) * 255.0) as u8,
+            (self.g.clamp(0.0, 1.0) * 255.0) as u8,
+            (self.b.clamp(0.0, 1.0) * 255.0) as u8,
+            (self.a.clamp(0.0, 1.0) * 255.0) as u8,
+        ]
+    }
 }
 
 #[cfg(test)]

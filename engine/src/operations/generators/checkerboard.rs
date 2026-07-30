@@ -50,20 +50,11 @@ impl Checkerboard {
         }
     }
 
-    fn color_to_rgba(color: Color) -> [u8; 4] {
-        [
-            (color.r.clamp(0.0, 1.0) * 255.0) as u8,
-            (color.g.clamp(0.0, 1.0) * 255.0) as u8,
-            (color.b.clamp(0.0, 1.0) * 255.0) as u8,
-            (color.a.clamp(0.0, 1.0) * 255.0) as u8,
-        ]
-    }
-
     pub fn generate(&self, width: u32, height: u32) -> Vec<u8> {
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
 
-        let a = Self::color_to_rgba(self.color_a);
-        let b = Self::color_to_rgba(self.color_b);
+        let a = self.color_a.to_rgba_u8();
+        let b = self.color_b.to_rgba_u8();
 
         let tile = self.size.max(1.0) as u32;
 
