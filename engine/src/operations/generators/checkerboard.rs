@@ -111,12 +111,12 @@ impl Operation for Checkerboard {
                 group: None,
             },
             ParameterDescriptor {
-                name: "color_a",
+                name: "A",
                 kind: ParameterKind::Color,
                 group: Some("COLOUR"),
             },
             ParameterDescriptor {
-                name: "color_b",
+                name: "B",
                 kind: ParameterKind::Color,
                 group: Some("COLOUR"),
             },
@@ -126,8 +126,8 @@ impl Operation for Checkerboard {
     fn get_parameter(&self, name: &str) -> Option<Value> {
         match name {
             "size" => Some(Value::Number(self.size)),
-            "color_a" => Some(Value::Color(self.color_a)),
-            "color_b" => Some(Value::Color(self.color_b)),
+            "A" => Some(Value::Color(self.color_a)),
+            "B" => Some(Value::Color(self.color_b)),
             _ => None,
         }
     }
@@ -147,7 +147,7 @@ impl Operation for Checkerboard {
                 }
             }
 
-            "color_a" => {
+            "A" => {
                 if let Value::Color(color) = value {
                     self.color_a = color;
                     Ok(())
@@ -156,7 +156,7 @@ impl Operation for Checkerboard {
                 }
             }
 
-            "color_b" => {
+            "B" => {
                 if let Value::Color(color) = value {
                     self.color_b = color;
                     Ok(())
