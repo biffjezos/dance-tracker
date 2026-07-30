@@ -142,26 +142,13 @@ export class MenuManager {
             const editButton = document.createElement("button");
             editButton.innerText = "EDIT";
             editButton.onclick = () => {
-                // Create a new edit context with the current node context as parent
-                const selectedNode = selectionState.getSelectedNode();
-                if (selectedNode) {
-                    // Create a node-specific context first
-                    const nodeContext = new MenuContext(
-                        selectedNode.id,
-                        this.currentContext
-                    );
-                    // Then create edit context with node context as parent
-                    this.currentContext = new MenuContext(
-                        "node_edit",
-                        nodeContext
-                    );
-                } else {
-                    // Fallback: create edit context with nodes menu as parent
-                    this.currentContext = new MenuContext(
-                        "node_edit",
-                        this.currentContext
-                    );
-                }
+                // Push the edit context directly on top of wherever EDIT was
+                // clicked from - no intermediate pass-through context, so UP
+                // goes straight back there in one step.
+                this.currentContext = new MenuContext(
+                    "node_edit",
+                    this.currentContext
+                );
                 this.render();
                 this.updateStatusBar();
             };
@@ -256,34 +243,6 @@ export class MenuManager {
                 }
             };
             this.subMenu.appendChild(liveButton);
-            return;
-        }
-
-        // Special handling for node-specific contexts (e.g., "image:1", "video:2")
-        // These are created when EDIT is clicked on a node
-        if (this.currentContext && this.currentContext.parent && 
-            this.currentContext.parent.id === "nodes") {
-            // This is a node context (child of nodes menu)
-            // Render UP button
-            if (this.currentContext.parent !== null) {
-                this.renderUpButton();
-                const separator = document.createElement("span");
-                separator.innerText = " | ";
-                separator.className = "menu-separator";
-                this.subMenu.appendChild(separator);
-            }
-            
-            // Show node name
-            const selectedNode = nodeSelectionState.getSelectedNode();
-            if (selectedNode) {
-                const nodeLabel = document.createElement("span");
-                nodeLabel.innerText = ` ${selectedNode.label} `;
-                nodeLabel.className = "node-name-label";
-                this.subMenu.appendChild(nodeLabel);
-            }
-
-            // Allow editing again from node context
-            this.renderEditButton();
             return;
         }
 
