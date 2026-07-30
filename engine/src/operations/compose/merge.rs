@@ -118,7 +118,7 @@ impl Operation for Merge {
     fn descriptor(&self) -> OperationDescriptor {
         OperationDescriptor {
             id: "merge",
-            menu: "TRANSFORM",
+            menu: "COMPOSE",
             label: "MERGE",
             action: None,
             ui_action: None,

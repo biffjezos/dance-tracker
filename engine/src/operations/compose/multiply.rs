@@ -70,7 +70,7 @@ impl Operation for Multiply {
     fn descriptor(&self) -> OperationDescriptor {
         OperationDescriptor {
             id: "multiply",
-            menu: "TRANSFORM",
+            menu: "COMPOSE",
             label: "MULTIPLY",
             action: None,
             ui_action: None,
