@@ -18,7 +18,8 @@ use crate::compositor::{
     metadata::ParameterKind,
     OperationError,
     OperationRegistry,
-    Value
+    Value,
+    value_to_text
 };
 use crate::graphics::{ Color, Image, ImageFormat };
 use crate::dom::{ VideoElementPixelSource, write_frame_to_canvas};
@@ -59,22 +60,16 @@ struct InputView {
     source: Option<u32>,
 }
 
-fn value_to_text(value: &Value) -> String {
-    match value {
-        Value::Text(text) => text.clone(),
-        Value::Number(number) => number.to_string(),
-        Value::Boolean(flag) => flag.to_string(),
-        Value::Color(color) => color.to_hex(),
-        other => format!("{:?}", other),
-    }
-}
-
 #[wasm_bindgen]
 pub struct App {
     graph: Graph,
     resources: ResourceManager,
     registry: OperationRegistry,
     frame_counter: u64,
+    // Persists across ticks so its frame-to-frame cache actually helps -
+    // a fresh RenderExecutor per tick would never see a "last tick" to
+    // compare against.
+    render_executor: RenderExecutor,
 }
 
 
@@ -90,6 +85,7 @@ impl App {
             resources: ResourceManager::new(),
             registry,
             frame_counter: 0,
+            render_executor: RenderExecutor::new(),
         }
     }
     pub fn get_operations(&self) -> JsValue {
@@ -138,6 +134,16 @@ impl App {
         let node_id = self.graph.add_node(operation);
 
         Ok(node_id.index())
+    }
+
+    /// Remove a node from the graph. Anyone wired to it is safely
+    /// disconnected (Graph::remove_node strips the wire, it doesn't leave
+    /// a dangling reference), and its render cache entry is dropped so it
+    /// doesn't linger forever under a NodeId that can never be reused.
+    pub fn remove_node(&mut self, node_id: u32) -> Result<(), JsValue> {
+        let node_id = NodeId::from_index(node_id);
+        self.render_executor.invalidate(node_id);
+        self.graph.remove_node(node_id).map_err(js_err)
     }
 
     /// Check if a node supports editing (has editable parameters)
@@ -403,9 +409,7 @@ impl App {
 
         let ctx = self.context(false);
 
-        let executor = RenderExecutor;
-
-        let values = executor
+        let values = self.render_executor
             .execute(
                 &self.graph,
                 NodeId::from_index(output_node as u32),

@@ -35,8 +35,9 @@
 
             <main class="workspace">
                 <section class="panel camera-panel">
-                    <div class="panel-title" id="camera-panel-title">
-                        NODE PREVIEW
+                    <div class="panel-title">
+                        <span id="camera-panel-title">NODE PREVIEW</span>
+                        <button class="expand-button" data-panel="preview">⤢</button>
                     </div>
                     <div class="screen">
                         <video id="camera" autoplay muted playsinline style="display:none"></video>
@@ -45,7 +46,10 @@
                 </section>
 
                 <section class="panel output-panel">
-                    <div class="panel-title" id="live-output-title">LIVE OUTPUT</div>
+                    <div class="panel-title">
+                        <span id="live-output-title">LIVE OUTPUT</span>
+                        <button class="expand-button" data-panel="output">⤢</button>
+                    </div>
                     <div class="screen output-stack">
                         <canvas id="master-layer"></canvas>
                     </div>

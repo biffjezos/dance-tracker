@@ -18,4 +18,4 @@ pub use operations::Operation;
 
 pub use operation_descriptor::OperationDescriptor;
 pub use registry::OperationRegistry;
-pub use value::Value;
+pub use value::{ Value, value_to_text };

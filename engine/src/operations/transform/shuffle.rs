@@ -211,7 +211,7 @@ impl Operation for Shuffle {
         */
         let Some(value) = find_input(inputs, Input::Source) else {
             return Ok(vec![
-                Value::Image(Image::black(ctx.meta.width, ctx.meta.height))
+                Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))
             ]);
         };
 
@@ -292,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unconnected_shuffle_produces_opaque_black_at_the_current_resolution() {
+    fn an_unconnected_shuffle_produces_the_missing_placeholder_at_the_current_resolution() {
         let shuffle = Shuffle::new();
 
         let values = shuffle
@@ -303,7 +303,9 @@ mod tests {
             Value::Image(output) => {
                 assert_eq!(output.width, 2);
                 assert_eq!(output.height, 1);
-                assert_eq!(output.pixels, vec![0, 0, 0, 255, 0, 0, 0, 255]);
+                // Both pixels fall in the same 16px checker tile at this
+                // tiny size, so they're the placeholder's magenta, not black.
+                assert_eq!(output.pixels, vec![255, 0, 255, 255, 255, 0, 255, 255]);
             }
             other => panic!("expected an image, got {:?}", other),
         }
@@ -378,7 +380,7 @@ mod tests {
 
         graph.validate().expect("an unwired input is not a graph failure");
 
-        RenderExecutor
+        RenderExecutor::new()
             .execute(&graph, shuffle_id, &context(4, 4))
             .expect("an unwired shuffle still renders");
     }
@@ -403,7 +405,7 @@ mod tests {
 
         graph.validate().expect("a wired graph is valid");
 
-        let values = RenderExecutor
+        let values = RenderExecutor::new()
             .execute(&graph, shuffle_id, &context(1, 1))
             .expect("the wired graph should render");
 

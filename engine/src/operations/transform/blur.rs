@@ -174,7 +174,7 @@ impl Operation for Blur {
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
-            return Ok(vec![Value::Image(Image::black(ctx.meta.width, ctx.meta.height))]);
+            return Ok(vec![Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
 
         match value {
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn unconnected_blur_produces_black() {
+    fn unconnected_blur_produces_the_missing_placeholder() {
         let blur = Blur::new();
         let values = blur.execute(&context(2, 1), &[]).unwrap();
 
@@ -275,7 +275,9 @@ mod tests {
             Value::Image(out) => {
                 assert_eq!(out.width, 2);
                 assert_eq!(out.height, 1);
-                assert_eq!(out.pixels, vec![0, 0, 0, 255, 0, 0, 0, 255]);
+                // Both pixels fall in the same 16px checker tile at this
+                // tiny size, so they're the placeholder's magenta, not black.
+                assert_eq!(out.pixels, vec![255, 0, 255, 255, 255, 0, 255, 255]);
             }
             other => panic!("expected image, got {:?}", other),
         }
@@ -286,7 +288,7 @@ mod tests {
         let mut graph = Graph::new(4, 4);
         let blur_id = graph.add_node(Box::new(Blur::new()));
         graph.validate().expect("unwired blur is valid");
-        RenderExecutor
+        RenderExecutor::new()
             .execute(&graph, blur_id, &context(4, 4))
             .expect("unwired blur renders");
     }
