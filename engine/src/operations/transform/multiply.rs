@@ -126,7 +126,7 @@ impl Operation for Multiply {
             ));
         };
 
-        let Some(second) = find_input(inputs, Input::SourceB) else {
+        let Some(second) = find_input(inputs, Input::Source) else {
             return Err(OperationError::InvalidInputType(
                 "Multiply requires second input".into()
             ));
