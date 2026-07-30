@@ -20,7 +20,7 @@ use crate::compositor::{
     OperationRegistry,
     Value
 };
-use crate::graphics::{ Image, ImageFormat };
+use crate::graphics::{ Color, Image, ImageFormat };
 use crate::dom::{ VideoElementPixelSource, write_frame_to_canvas};
 use crate::operations::sources::ImageSource;
 
@@ -360,7 +360,6 @@ impl App {
             }
 */
         };
-
         operation
             .set_parameter(&parameter, value)
             .map_err(js_err)
