@@ -74,9 +74,11 @@ function buildImageContent(layer) {
     return layer.imageNodeId;
 }
 
-function buildShuffleContent(layer) {
-    // Shuffle nodes are created (and wired to their source, if any) directly
-    // in the WASM graph when the user adds them - just surface the node ID.
+function buildGenericContent(layer) {
+    // Plain create_node-backed operations (shuffle, and any future one with
+    // no bespoke JS field naming) are created - and wired to their source,
+    // if any - directly in the WASM graph when the user adds them. Just
+    // surface the node ID.
     if (layer.nodeId === undefined) return null;
     return layer.nodeId;
 }
@@ -106,8 +108,12 @@ function buildLayerNode(entry) {
         newNodeId = buildVideoContent(layer);
     } else if (entry.kind === "image") {
         newNodeId = buildImageContent(layer);
-    } else if (entry.kind === "shuffle") {
-        newNodeId = buildShuffleContent(layer);
+    } else {
+        // Any other kind is assumed to be a plain create_node-backed
+        // operation (like shuffle): its WASM node is already created and
+        // wired at add-time, so just surface layer.nodeId. New operations
+        // get this for free with no graph.js changes required.
+        newNodeId = buildGenericContent(layer);
     }
     
     if (newNodeId !== null) {
@@ -131,15 +137,14 @@ export function rebuildGraph() {
     const contentIds = new Map();
     
     /*
-    FIRST PASS:
-    Build primitive generators - these can be incrementally updated
+    Build every real entry's WASM node. New kinds work here with no
+    changes required, as long as they're either handled explicitly in
+    buildLayerNode() or fall through to buildGenericContent().
     */
     all.forEach(entry => {
-        if (entry.kind === "video" || entry.kind === "image" || entry.kind === "shuffle") {
-            const nodeId = buildLayerNode(entry);
-            if (nodeId !== null) {
-                contentIds.set(entry.id, nodeId);
-            }
+        const nodeId = buildLayerNode(entry);
+        if (nodeId !== null) {
+            contentIds.set(entry.id, nodeId);
         }
     });
 

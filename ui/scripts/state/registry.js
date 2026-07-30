@@ -38,8 +38,9 @@ export function getAllRealEntries() {
     return list;
 }
 export function getVideoRegistry() {
-    return getAllRealEntries().filter(entry => entry.kind === "video" || entry.kind === "image" || entry.kind ===
-        "shuffle");
+    // Every real node is a candidate source/preview target by default - new
+    // kinds are included automatically, no filter list to maintain here.
+    return getAllRealEntries();
 }
 export function getShuffleRegistry() {
     return getAllRealEntries().filter(entry => entry.kind === "shuffle");
