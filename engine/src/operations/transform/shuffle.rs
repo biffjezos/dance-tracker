@@ -11,7 +11,7 @@ use crate::compositor::{
     metadata::{ OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind },
     Value
 };
-use crate::graphics::{Frame, Image, ImageFormat};
+use crate::graphics::{Frame, Image};
 use std::sync::Arc;
 
 /// Channel selection for Shuffle operation.
@@ -110,22 +110,6 @@ impl Shuffle {
 
         output
     }
-}
-
-/// An opaque black image, used when nothing is wired into an input yet.
-fn black_image(width: u32, height: u32) -> Arc<Image> {
-    let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
-
-    for pixel in pixels.chunks_exact_mut(4) {
-        pixel[3] = 255;
-    }
-
-    Arc::new(Image {
-        pixels,
-        width,
-        height,
-        format: ImageFormat::Rgba8,
-    })
 }
 
 impl Operation for Shuffle {
@@ -227,7 +211,7 @@ impl Operation for Shuffle {
         */
         let Some(value) = find_input(inputs, Input::Source) else {
             return Ok(vec![
-                Value::Image(black_image(ctx.meta.width, ctx.meta.height))
+                Value::Image(Image::black(ctx.meta.width, ctx.meta.height))
             ]);
         };
 
@@ -284,6 +268,7 @@ mod tests {
     use super::*;
     use crate::compositor::graph::Graph;
     use crate::compositor::executors::{Execute, RenderExecutor};
+    use crate::graphics::ImageFormat;
     use crate::operations::sources::ImageSource;
 
     fn context(width: u32, height: u32) -> Context {
