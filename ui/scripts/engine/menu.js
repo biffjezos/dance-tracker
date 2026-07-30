@@ -105,15 +105,30 @@ export class MenuManager {
         this.subMenu.appendChild(upButton);
     }
 
-    renderNodeSelector() {
+    renderSeparator() {
+        const separator = document.createElement("span");
+        separator.innerText = " | ";
+        separator.className = "menu-separator";
+        this.subMenu.appendChild(separator);
+    }
+
+    /**
+     * The static part every NODES-family context shares:
+     * [-] <fixed-width node name> [+]
+     * Only the actual node selector (the "nodes" top context) can step
+     * through nodes with it - everywhere else (EDIT, a parameter group) it
+     * renders the same, disabled, so switching between these contexts
+     * never jumps the layout around.
+     */
+    renderNodeSelector(disabled = false) {
         const selectionState = nodeSelectionState;
-        
-        // Create the node selector button group
+
         const minusButton = document.createElement("button");
         minusButton.innerText = "-";
-        minusButton.onclick = () => {
-            this.selectPreviousNode();
-        };
+        minusButton.disabled = disabled;
+        if (!disabled) {
+            minusButton.onclick = () => this.selectPreviousNode();
+        }
         this.subMenu.appendChild(minusButton);
 
         const nodeLabel = document.createElement("span");
@@ -123,22 +138,17 @@ export class MenuManager {
 
         const plusButton = document.createElement("button");
         plusButton.innerText = "+";
-        plusButton.onclick = () => {
-            this.selectNextNode();
-        };
+        plusButton.disabled = disabled;
+        if (!disabled) {
+            plusButton.onclick = () => this.selectNextNode();
+        }
         this.subMenu.appendChild(plusButton);
     }
 
     renderEditButton() {
         const selectionState = nodeSelectionState;
-        
-        if (selectionState.supportsEdit()) {
-            // Create separator
-            const separator = document.createElement("span");
-            separator.innerText = " | ";
-            separator.className = "menu-separator";
-            this.subMenu.appendChild(separator);
 
+        if (selectionState.supportsEdit()) {
             const editButton = document.createElement("button");
             editButton.innerText = "EDIT";
             editButton.onclick = () => {
@@ -212,22 +222,20 @@ export class MenuManager {
         // Special handling for NODES menu - only at the top of the nodes
         // stack. Once EDIT (or anything else) has pushed a deeper context,
         // that context's own branch below must render instead.
+        //
+        // Every NODES-family context (this one, node_edit, param_group)
+        // shares the same static part - [UP] [-] <node name> [+] - so
+        // switching between them never jumps the layout. Only here is the
+        // selector actually interactive; elsewhere it renders disabled.
         if (this.category === "nodes" && this.currentContext === nodesMenu) {
-            // Render UP button if currentContext has a parent
-            if (this.currentContext && this.currentContext.parent !== null) {
+            if (this.currentContext.parent !== null) {
                 this.renderUpButton();
-                const separator = document.createElement("span");
-                separator.innerText = " | ";
-                separator.className = "menu-separator";
-                this.subMenu.appendChild(separator);
             }
-
-            // Render node selector
             this.renderNodeSelector();
-            
-            // Render EDIT button if supported
+            this.renderSeparator();
+
             this.renderEditButton();
-            
+
             // biffjezos: added [> live] button
             const liveButton = document.createElement("button");
             liveButton.innerText = "> LIVE PREVIEW";
@@ -249,21 +257,17 @@ export class MenuManager {
             return;
         }
 
-        // Special handling for EDIT context. The "|" separator comes after
-        // the context's own name (rendered by renderContext), not before it.
+        // Special handling for EDIT context.
         if (this.currentContext && this.currentContext.id === "node_edit") {
             if (this.currentContext.parent !== null) {
                 this.renderUpButton();
             }
+            this.renderNodeSelector(true);
+            this.renderSeparator();
 
             const selectedNode = nodeSelectionState.getSelectedNode();
             if (selectedNode) {
                 nodeEditContextRegistry.renderContext(this, selectedNode);
-            } else {
-                const editLabel = document.createElement("span");
-                editLabel.innerText = " NODE EDIT CONTEXT ";
-                editLabel.className = "node-name-label";
-                this.subMenu.appendChild(editLabel);
             }
             return;
         }
@@ -276,6 +280,8 @@ export class MenuManager {
             if (this.currentContext.parent !== null) {
                 this.renderUpButton();
             }
+            this.renderNodeSelector(true);
+            this.renderSeparator();
 
             const selectedNode = nodeSelectionState.getSelectedNode();
             if (selectedNode) {
@@ -286,15 +292,12 @@ export class MenuManager {
 
         // Special handling for create_node context
         if (this.currentContext && this.currentContext.id === "create_node") {
-            // Render UP button
             if (this.currentContext.parent !== null) {
                 this.renderUpButton();
-                const separator = document.createElement("span");
-                separator.innerText = " | ";
-                separator.className = "menu-separator";
-                this.subMenu.appendChild(separator);
+                this.renderSeparator();
             }
-            
+
+
             // Render ADD button
             const addButton = document.createElement("button");
             addButton.innerText = "ADD";
@@ -312,10 +315,7 @@ export class MenuManager {
         // Render UP button if currentContext has a parent
         if (this.currentContext && this.currentContext.parent !== null) {
             this.renderUpButton();
-            const separator = document.createElement("span");
-            separator.innerText = " | ";
-            separator.className = "menu-separator";
-            this.subMenu.appendChild(separator);
+            this.renderSeparator();
         }
 
         // Filter operations by the selected category (menu field)
