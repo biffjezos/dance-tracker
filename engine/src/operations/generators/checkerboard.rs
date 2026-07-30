@@ -116,7 +116,7 @@ impl Operation for Checkerboard {
         vec![
             ParameterDescriptor {
                 name: "size",
-                kind: ParameterKind::Number { step: 1.0 },
+                kind: ParameterKind::Number { step: 1.0, min: Some(1.0), max: None },
             },
             ParameterDescriptor {
                 name: "color_a",

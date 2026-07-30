@@ -208,7 +208,8 @@ function renderColorParameter(menuManager, nodeId, parameter) {
 
 /**
  * Render a Number-kind parameter as a stepper moving by the step size the
- * operation itself declares.
+ * operation itself declares, clamped to its declared min/max so the
+ * stepper can never send a value the operation would reject.
  */
 function renderNumberParameter(menuManager, nodeId, parameter) {
     renderParameterLabel(menuManager, parameter.name);
@@ -217,7 +218,10 @@ function renderNumberParameter(menuManager, nodeId, parameter) {
     const step = parameter.step ?? 1;
 
     renderStepperButtons(menuManager, parameter.value, direction => {
-        dispatchParameterUpdate(nodeId, parameter.name, String(current + direction * step));
+        let next = current + direction * step;
+        if (parameter.min != null) next = Math.max(parameter.min, next);
+        if (parameter.max != null) next = Math.min(parameter.max, next);
+        dispatchParameterUpdate(nodeId, parameter.name, String(next));
         menuManager.render();
     });
 }

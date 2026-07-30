@@ -162,3 +162,79 @@ inventory::submit! {
         constructor: || Box::new(Multiply::new())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn context(width: u32, height: u32) -> Context {
+        Context {
+            meta: crate::compositor::Meta {
+                width,
+                height,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
+        Arc::new(Image {
+            pixels,
+            width,
+            height,
+            format: ImageFormat::Rgba8,
+        })
+    }
+
+    #[test]
+    fn multiplying_by_white_is_identity() {
+        let white = image(vec![255, 255, 255, 255], 1, 1);
+        let color = image(vec![10, 20, 30, 200], 1, 1);
+
+        let out = Multiply::multiply_pixels(&white.pixels, &color.pixels);
+
+        assert_eq!(out, color.pixels);
+    }
+
+    #[test]
+    fn multiplying_by_black_is_black() {
+        let black = image(vec![0, 0, 0, 255], 1, 1);
+        let color = image(vec![10, 20, 30, 200], 1, 1);
+
+        let out = Multiply::multiply_pixels(&black.pixels, &color.pixels);
+
+        assert_eq!(out, vec![0, 0, 0, 200]);
+    }
+
+    #[test]
+    fn multiply_in_graph_requires_both_inputs_of_matching_size() {
+        let multiply = Multiply::new();
+
+        let a = Value::Image(image(vec![255, 0, 0, 255], 1, 1));
+        let b = Value::Image(image(vec![0, 0, 0, 255, 0, 0, 0, 255], 2, 1));
+
+        let err = multiply
+            .execute(&context(1, 1), &[(Input::Foreground, a), (Input::Background, b)])
+            .unwrap_err();
+
+        assert!(matches!(err, OperationError::InvalidInputType(_)));
+    }
+
+    #[test]
+    fn multiply_combines_two_wired_inputs() {
+        let multiply = Multiply::new();
+
+        let fg = Value::Image(image(vec![255, 255, 255, 255], 1, 1));
+        let bg = Value::Image(image(vec![10, 20, 30, 255], 1, 1));
+
+        let values = multiply
+            .execute(&context(1, 1), &[(Input::Foreground, fg), (Input::Background, bg)])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, vec![10, 20, 30, 255]),
+            other => panic!("expected image, got {:?}", other),
+        }
+    }
+}

@@ -43,6 +43,8 @@ struct ParameterView {
     kind: &'static str,
     options: &'static [&'static str],
     step: Option<f64>,
+    min: Option<f64>,
+    max: Option<f64>,
     value: String,
 }
 
@@ -166,6 +168,8 @@ impl App {
                 kind: parameter.kind.name(),
                 options: parameter.kind.options(),
                 step: parameter.kind.step(),
+                min: parameter.kind.min(),
+                max: parameter.kind.max(),
                 value: operation
                     .get_parameter(parameter.name)
                     .map(|value| value_to_text(&value))
@@ -313,7 +317,10 @@ impl App {
             .set_pixel_source(Arc::new(pixel_source))
             .map_err(js_err)
     }
-    //biffjezos: replaced update_node_parameter to convert paramater: String to accepted by ParameterKind
+    /// Update a parameter on a specific node. The incoming value is always a
+    /// string (the UI never sends anything else); it's parsed here into the
+    /// Value variant the parameter's own declared kind expects, then the
+    /// operation owns validating it.
     pub fn update_node_parameter(
         &mut self,
         node_id: u32,
@@ -324,8 +331,6 @@ impl App {
 
         let operation = self.graph.get_node_mut(&node_id)
             .ok_or_else(|| JsValue::from_str(&format!("Node {:?} not found", node_id)))?;
-
-        let metadata = operation.metadata();
 
         let descriptor = operation
             .parameters()
@@ -349,7 +354,10 @@ impl App {
             }
 
             ParameterKind::Color => {
-                return Err(JsValue::from_str("Parsing Value::Color not implemented"));
+                Value::Color(
+                    Color::from_hex(&value)
+                        .ok_or_else(|| JsValue::from_str("Invalid color"))?
+                )
             }
 
             ParameterKind::Text | ParameterKind::Enum(_) => {
@@ -360,25 +368,6 @@ impl App {
             .set_parameter(&parameter, value)
             .map_err(js_err)
     }
-/**
-    /// Update a parameter on a specific node.
-    /// The operation owns validation of the value.
-    pub fn update_node_parameter(
-        &mut self,
-        node_id: u32,
-        parameter: String,
-        value: String,
-    ) -> Result<(), JsValue> {
-        let node_id = NodeId::from_index(node_id);
-
-        let operation = self.graph.get_node_mut(&node_id)
-            .ok_or_else(|| JsValue::from_str(&format!("Node {:?} not found", node_id)))?;
-
-        operation
-            .set_parameter(&parameter, Value::Text(value))
-            .map_err(js_err)
-    }
-*/
     pub fn set_resolution(&mut self, width: u32, height: u32) {
         self.graph.set_resolution(width, height);
     }
