@@ -92,7 +92,7 @@ impl Operation for Multiply {
             category: OperationCategory::Color,
             inputs: vec![
                 Input::Source,
-                Input::SourceB,
+                Input::Source,
             ],
             outputs: vec![OutputKind::Image],
         }
