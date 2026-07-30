@@ -146,7 +146,7 @@ impl Operation for Blur {
     fn metadata(&self) -> OperationMetadata {
         OperationMetadata {
             display_name: "Blur",
-            category: OperationCategory::Filter,
+            category: OperationCategory::Color,
             inputs: vec![Input::Source],
             outputs: vec![OutputKind::Image],
         }
@@ -155,26 +155,21 @@ impl Operation for Blur {
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![ParameterDescriptor {
             name: "radius_px",
-            kind: ParameterKind::Float {
-                min: 0.0,
-                max: 1000.0,
-                default: 0.0,
-                step: 0.1,
-            },
+            kind: ParameterKind::Number { step: 0.1 },
         }]
     }
 
     fn get_parameter(&self, name: &str) -> Option<Value> {
         match name {
-            "radius_px" => Some(Value::Float(self.radius_px as f64)),
+            "radius_px" => Some(Value::Number(self.radius_px as f64)),
             _ => None,
         }
     }
 
     fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
         match (name, value) {
-            ("radius_px", Value::Float(v)) => {
-                if v < 0.0 {
+            ("radius_px", Value::Number(v)) => {
+                if v < 0.0 || v > 1000.0 {
                     return Err(OperationError::InvalidParameterValue(
                         name.to_string(),
                         v.to_string(),
