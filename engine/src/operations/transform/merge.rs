@@ -20,8 +20,12 @@ use crate::compositor::{
 
 use crate::graphics::{Image, ImageFormat};
 
-use crate::operations::transform::multiply::Multiply;
+use crate::operations::Multiply;
 
+/**
+move blendMode + impl Default for BlendMode + impl BlendMode
+to src/graphics/..?
+*/
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BlendMode {
     Multiply,

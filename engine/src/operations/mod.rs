@@ -1,7 +1,6 @@
 // src/operations/mod.rs
 pub mod converters;
 pub mod inventory;
-pub mod merge;
 pub mod register;
 pub mod sources;
 pub mod transform;
