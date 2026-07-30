@@ -23,7 +23,7 @@ impl Multiply {
 
     /// Multiply two RGBA pixel buffers channel by channel.
     /// Values are normalized back to 0-255.
-    fn multiply_pixels(a: &[u8], b: &[u8]) -> Vec<u8> {
+    pub fn multiply_pixels(a: &[u8], b: &[u8]) -> Vec<u8> {
         let mut output = vec![0u8; a.len()];
 
         for ((source_a, source_b), target) in a
