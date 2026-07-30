@@ -59,6 +59,7 @@ fn value_to_text(value: &Value) -> String {
         Value::Text(text) => text.clone(),
         Value::Number(number) => number.to_string(),
         Value::Boolean(flag) => flag.to_string(),
+        Value::Color(color) => color.to_hex(),
         other => format!("{:?}", other),
     }
 }
