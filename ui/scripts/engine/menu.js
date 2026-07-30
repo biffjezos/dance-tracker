@@ -11,7 +11,10 @@ import { nodeSelectionState } from "./nodeSelection.js";
 import { nodeEditContextRegistry } from "./nodeEditContexts.js";
 import { getAllRealEntries } from "../state/registry.js";
 import { createNode } from "../core/operations.js";
-import { rebuildGraph } from "./graph.js";
+import {
+    rebuildGraph,
+    currentPreviewContentId
+} from "./graph.js";
 import { state } from "./state.js";
 
 // MenuContext: Represents a menu in the hierarchy
@@ -237,6 +240,21 @@ export class MenuManager {
             // Render EDIT button if supported
             this.renderEditButton();
             
+            // biffjezos: added [> live] button
+            const liveButton = document.createElement("button");
+            liveButton.innerText = "> LIVE PREVIEW";
+            liveButton.onclick = () => {
+                const nodeId = currentPreviewContentId();
+
+                if (nodeId !== null && nodeId !== undefined) {
+                    window.dispatchEvent(
+                        new CustomEvent("setLiveNode", {
+                            detail: nodeId
+                        })
+                    );
+                }
+            };
+            this.subMenu.appendChild(liveButton);
             return;
         }
 

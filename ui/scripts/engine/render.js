@@ -1,3 +1,4 @@
+// engine/render.js
 import {
     getWasmApp
 } from "../core/wasm.js";
@@ -5,6 +6,8 @@ import {
     getOutputNodeId,
     currentPreviewContentId
 } from "./graph.js";
+
+let liveNodeId = null;
 export function renderPreview() {
     const wasmApp = getWasmApp();
     if (!wasmApp) return;
@@ -29,9 +32,16 @@ export function renderPreview() {
     }
 }
 
+window.addEventListener("setLiveNode", e => {
+    liveNodeId = e.detail;
+});
+window.addEventListener("clearLiveNode", () => {
+    liveNodeId = null;
+});
+
 function loop() {
     const wasmApp = getWasmApp();
-    const outputNodeId = getOutputNodeId();
+    const outputNodeId = liveNodeId ?? getOutputNodeId();
     const masterCanvas = document.getElementById("master-layer");
     if (wasmApp && outputNodeId !== null && outputNodeId !== undefined) {
         try {

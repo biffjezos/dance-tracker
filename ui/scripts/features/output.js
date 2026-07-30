@@ -1,3 +1,5 @@
+// features/output.js
+
 import {
     WIDTH,
     HEIGHT
