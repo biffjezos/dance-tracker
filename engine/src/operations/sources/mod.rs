@@ -7,6 +7,7 @@ use crate::{
     operations::Frame,
 };
 
+pub use camera::CameraSource;
 pub use image::ImageSource;
 pub use video::VideoSource;
 

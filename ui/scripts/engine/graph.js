@@ -60,9 +60,10 @@ function settingsChanged(layerId, settings) {
 }
 
 function buildVideoContent(layer) {
-    const wasmApp = getWasmApp();
-    if (!wasmApp || !layer.videoEl) return null;
-    return wasmApp.add_video_source(layer.videoEl);
+    // Video/camera nodes are already created (and their pixel source
+    // attached) at the point the layer was added. Just surface the node ID.
+    if (layer.videoNodeId === undefined) return null;
+    return layer.videoNodeId;
 }
 
 function buildImageContent(layer) {
@@ -71,6 +72,13 @@ function buildImageContent(layer) {
     // Image nodes are already created with their data set
     // Just return the node ID
     return layer.imageNodeId;
+}
+
+function buildShuffleContent(layer) {
+    // Shuffle nodes are created (and wired to their source, if any) directly
+    // in the WASM graph when the user adds them - just surface the node ID.
+    if (layer.nodeId === undefined) return null;
+    return layer.nodeId;
 }
 
 function buildMaskContent(layer, contentIds) {
@@ -144,6 +152,8 @@ function buildLayerNode(entry) {
         newNodeId = buildVideoContent(layer);
     } else if (entry.kind === "image") {
         newNodeId = buildImageContent(layer);
+    } else if (entry.kind === "shuffle") {
+        newNodeId = buildShuffleContent(layer);
     } else if (entry.kind === "rings") {
         newNodeId = buildRingsContent(layer);
     } else if (entry.kind === "text") {
@@ -184,7 +194,8 @@ export function rebuildGraph() {
     Build primitive generators - these can be incrementally updated
     */
     all.forEach(entry => {
-        if (entry.kind === "video" || entry.kind === "rings" || entry.kind === "text" || entry.kind === "image") {
+        if (entry.kind === "video" || entry.kind === "rings" || entry.kind === "text" || entry.kind === "image" ||
+            entry.kind === "shuffle") {
             const nodeId = buildLayerNode(entry);
             if (nodeId !== null) {
                 contentIds.set(entry.id, nodeId);
@@ -389,6 +400,13 @@ export function updateOutputNodeId() {
 
 export function getOutputNodeId() {
     return outputNodeId;
+}
+
+// Resolve the current WASM node ID backing a registry entry, wherever it
+// sits in the wiring pipeline - used to connect one node's input to another.
+export function resolveNodeId(entryId) {
+    if (!entryId) return null;
+    return cachedWiredIds.get(entryId) ?? cachedContentIds.get(entryId) ?? layerNodeIds.get(entryId) ?? null;
 }
 
 export function currentPreviewContentId() {

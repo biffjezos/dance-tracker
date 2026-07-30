@@ -1,5 +1,6 @@
 // src/operations/sources/camera.rs
 use std::any::Any;
+use std::sync::Arc;
 
 use crate::compositor::{
     Context,
@@ -11,21 +12,34 @@ use crate::compositor::{
     Value
 };
 
-/// Camera source operation (stub implementation)
+use crate::operations::sources::PixelSource;
+
+/// Live camera source.
+///
+/// The host owns the capture device and hands the running stream over as a
+/// PixelSource; this operation only pulls the current frame out of it.
 pub struct CameraSource {
-    // Placeholder for camera state
+    pub pixel_source: Option<Arc<dyn PixelSource>>,
 }
 
 impl CameraSource {
     pub fn new() -> Self {
         Self {
-            // Initialize camera state
+            pixel_source: None,
         }
+    }
+
+    pub fn set_source(&mut self, source: Arc<dyn PixelSource>) {
+        self.pixel_source = Some(source);
+    }
+
+    pub fn get_source(&self) -> Option<Arc<dyn PixelSource>> {
+        self.pixel_source.clone()
     }
 }
 
 impl Operation for CameraSource {
-    
+
     fn descriptor(&self) -> OperationDescriptor {
         OperationDescriptor {
             id: "camera_source",
@@ -37,7 +51,7 @@ impl Operation for CameraSource {
             buttons: &[],
         }
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -50,14 +64,41 @@ impl Operation for CameraSource {
         OperationMetadata {
             display_name: "Camera Source",
             category: OperationCategory::Source,
-            input_count: 0,
-            outputs: vec![OutputKind::Image],
+            inputs: Vec::new(),
+            outputs: vec![OutputKind::Frame],
         }
     }
 
-    fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
-        // Stub implementation - returns an error for now
-        Err(OperationError::NotImplemented("Camera source not yet implemented".to_string()))
+    fn set_pixel_source(
+        &mut self,
+        source: Arc<dyn PixelSource>,
+    ) -> Result<(), OperationError> {
+        self.set_source(source);
+        Ok(())
+    }
+
+    fn execute(
+        &self,
+        ctx: &Context,
+        _inputs: &[(Input, Value)],
+    ) -> Result<Vec<Value>, OperationError> {
+        let source = self
+            .pixel_source
+            .as_ref()
+            .ok_or_else(|| {
+                OperationError::SourceNotFound(
+                    "Camera stream not attached".to_string()
+                )
+            })?;
+
+        let frame = source.read(
+            ctx.meta.width,
+            ctx.meta.height,
+        )?;
+
+        Ok(vec![
+            Value::Frame(Arc::new(frame))
+        ])
     }
 }
 

@@ -18,24 +18,18 @@ import {
     getWasmApp
 } from "../core/wasm.js";
 
-let originalVideoLayer = null;
-
-function getOriginalVideoLayer() {
-    if (originalVideoLayer) {
-        return originalVideoLayer;
-    }
-    const camera = getCamera();
-    if (!camera) {
-        return null;
-    }
-    originalVideoLayer = {
-        id: "original",
-        number: null,
-        name: null,
-        videoEl: camera.getVideo(),
-        settings: defaultUniversalSettings()
-    };
-    return originalVideoLayer;
+/*
+    Attach a live HTMLVideoElement (a decoded file, or a camera stream) to a
+    freshly created node of the given operation id. The scratch canvas is
+    where the pixel source draws each frame before reading it back.
+*/
+function createLiveSourceNode(wasmApp, operationId, video) {
+    const nodeId = wasmApp.create_node(operationId);
+    const scratchCanvas = document.createElement("canvas");
+    scratchCanvas.width = video.videoWidth;
+    scratchCanvas.height = video.videoHeight;
+    wasmApp.set_pixel_source_on_node(nodeId, video, scratchCanvas);
+    return nodeId;
 }
 
 /*
@@ -75,11 +69,7 @@ window.addEventListener("menuOperation", e => {
                 console.error("WASM app not initialized");
                 return;
             }
-            const nodeId = wasmApp.create_video_source_node();
-            const scratchCanvas = document.createElement("canvas");
-            scratchCanvas.width = video.videoWidth;
-            scratchCanvas.height = video.videoHeight;
-            wasmApp.set_video_element_on_node(nodeId, video, scratchCanvas);
+            const nodeId = createLiveSourceNode(wasmApp, "video_source", video);
             const number = state.nextVideoNumber++;
             const layer = {
                 id: "video-" + number,
@@ -104,6 +94,42 @@ window.addEventListener("menuOperation", e => {
 });
 
 // Camera stream handling
+function activateCamera() {
+    const camera = getCamera();
+    if (!camera) {
+        return null;
+    }
+    const wasmApp = getWasmApp();
+    if (!wasmApp) {
+        return null;
+    }
+    const video = camera.getVideo();
+    const number = state.nextVideoNumber++;
+    const layer = {
+        id: "camera-" + number,
+        number,
+        name: "CAMERA " + number,
+        videoEl: video,
+        settings: defaultUniversalSettings()
+    };
+    // The camera node needs an actual frame size before it can be created,
+    // which only exists once the stream has loaded metadata.
+    const attach = () => {
+        layer.videoNodeId = createLiveSourceNode(wasmApp, "camera_source", video);
+        state.videoLayers.push(layer);
+        rebuildGraph();
+        reportSelection("video");
+    };
+    if (video.videoWidth && video.videoHeight) {
+        attach();
+    } else {
+        video.addEventListener("loadedmetadata", attach, {
+            once: true
+        });
+    }
+    return layer;
+}
+
 window.addEventListener("menuOperation", e => {
     if (e.detail !== "open_camera_stream") {
         return;
@@ -113,17 +139,9 @@ window.addEventListener("menuOperation", e => {
         return;
     }
     state.cameraOn = true;
-    const layer = getOriginalVideoLayer();
-    if (!layer) {
-        return;
-    }
     if (!state.cameraActivated) {
         state.cameraActivated = true;
-        layer.number = state.nextVideoNumber++;
-        layer.name = "VIDEO " + layer.number;
-        state.videoLayers.push(layer);
-        rebuildGraph();
-        reportSelection("video");
+        activateCamera();
     }
     state.transportPlaying = true;
     camera.start();
@@ -136,89 +154,13 @@ window.addEventListener("toggleCamera", () => {
     }
     state.cameraOn = !state.cameraOn;
     if (state.cameraOn) {
-        const layer = getOriginalVideoLayer();
-        if (!layer) {
-            return;
-        }
         if (!state.cameraActivated) {
             state.cameraActivated = true;
-            layer.number = state.nextVideoNumber++;
-            layer.name = "VIDEO " + layer.number;
-            state.videoLayers.push(layer);
-            rebuildGraph();
-            reportSelection("video");
+            activateCamera();
         }
         state.transportPlaying = true;
         camera.start();
     } else {
         camera.stop();
     }
-});
-
-// External video loading
-window.addEventListener("loadVideoFile", async e => {
-    const video = document.createElement("video");
-    video.muted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.style.display = "none";
-    document.body.appendChild(video);
-    video.src = URL.createObjectURL(e.detail.file);
-    await video.play();
-    const wasmApp = getWasmApp();
-    if (!wasmApp) {
-        return;
-    }
-    const nodeId = wasmApp.create_video_source_node();
-    const scratchCanvas = document.createElement("canvas");
-    scratchCanvas.width = video.videoWidth;
-    scratchCanvas.height = video.videoHeight;
-    wasmApp.set_video_element_on_node(nodeId, video, scratchCanvas);
-    const number = state.nextVideoNumber++;
-    const layer = {
-        id: "video-" + number,
-        number,
-        name: "VIDEO " + number,
-        videoNodeId: nodeId,
-        videoEl: video,
-        settings: defaultUniversalSettings()
-    };
-    state.videoLayers.push(layer);
-    state.transportPlaying = true;
-    rebuildGraph();
-    reportSelection("video");
-});
-
-// Add video layer
-window.addEventListener("addVideoLayer", async e => {
-    const video = document.createElement("video");
-    video.muted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.style.display = "none";
-    document.body.appendChild(video);
-    video.src = URL.createObjectURL(e.detail.file);
-    await video.play();
-    const wasmApp = getWasmApp();
-    if (!wasmApp) {
-        return;
-    }
-    const nodeId = wasmApp.create_video_source_node();
-    const scratchCanvas = document.createElement("canvas");
-    scratchCanvas.width = video.videoWidth;
-    scratchCanvas.height = video.videoHeight;
-    wasmApp.set_video_element_on_node(nodeId, video, scratchCanvas);
-    const number = state.nextVideoNumber++;
-    const layer = {
-        id: "video-" + number,
-        number,
-        name: "VIDEO " + number,
-        videoNodeId: nodeId,
-        videoEl: video,
-        settings: defaultUniversalSettings()
-    };
-    state.videoLayers.push(layer);
-    state.transportPlaying = true;
-    rebuildGraph();
-    reportSelection("video");
 });

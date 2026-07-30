@@ -102,15 +102,30 @@ mod tests {
     use std::any::Any;
     use std::cell::Cell;
 
-    use crate::compositor::{OperationCategory, OperationMetadata};
-    use crate::graph::Node;
-    use crate::operations::executor::Execute;
+    use crate::compositor::metadata::{OperationCategory, OperationMetadata};
+    use crate::compositor::{OperationDescriptor, Operation};
 
     struct CountingSource {
         calls: Cell<u32>,
     }
 
-    impl crate::compositor::Operation for CountingSource {
+    fn test_descriptor(id: &'static str, label: &'static str) -> OperationDescriptor {
+        OperationDescriptor {
+            id,
+            menu: "TEST",
+            label,
+            action: None,
+            ui_action: None,
+            create_node: None,
+            buttons: &[],
+        }
+    }
+
+    impl Operation for CountingSource {
+        fn descriptor(&self) -> OperationDescriptor {
+            test_descriptor("counting_source", "COUNTING SOURCE")
+        }
+
         fn as_any(&self) -> &dyn Any { self }
         fn as_any_mut(&mut self) -> &mut dyn Any { self }
 
@@ -118,7 +133,7 @@ mod tests {
             OperationMetadata {
                 display_name: "CountingSource",
                 category: OperationCategory::Source,
-                input_count: 0,
+                inputs: vec![],
                 outputs: vec![],
             }
         }
@@ -131,7 +146,11 @@ mod tests {
 
     struct Combine;
 
-    impl crate::compositor::Operation for Combine {
+    impl Operation for Combine {
+        fn descriptor(&self) -> OperationDescriptor {
+            test_descriptor("combine", "COMBINE")
+        }
+
         fn as_any(&self) -> &dyn Any { self }
         fn as_any_mut(&mut self) -> &mut dyn Any { self }
 
@@ -139,7 +158,7 @@ mod tests {
             OperationMetadata {
                 display_name: "Combine",
                 category: OperationCategory::Composite,
-                input_count: 2,
+                inputs: vec![Input::Foreground, Input::Background],
                 outputs: vec![],
             }
         }
@@ -153,15 +172,11 @@ mod tests {
     fn a_node_feeding_two_consumers_is_evaluated_once_per_tick() {
         let mut graph = Graph::new(1, 1);
 
-        let source_id = graph.add_node(Node {
-            operation: Box::new(CountingSource { calls: Cell::new(0) }),
-            inputs: vec![],
-        });
+        let source_id = graph.add_node(Box::new(CountingSource { calls: Cell::new(0) }));
 
-        let combine_id = graph.add_node(Node {
-            operation: Box::new(Combine),
-            inputs: vec![(Input::Foreground, source_id), (Input::Background, source_id)],
-        });
+        let combine_id = graph.add_node(Box::new(Combine));
+        graph.connect(combine_id, Input::Foreground, source_id).unwrap();
+        graph.connect(combine_id, Input::Background, source_id).unwrap();
 
         let ctx = Context::default();
         RenderExecutor.execute(&graph, combine_id, &ctx).expect("should succeed");
@@ -183,15 +198,11 @@ mod tests {
     fn a_node_feeding_two_consumers_is_evaluated_fresh_on_the_next_tick() {
         let mut graph = Graph::new(1, 1);
 
-        let source_id = graph.add_node(Node {
-            operation: Box::new(CountingSource { calls: Cell::new(0) }),
-            inputs: vec![],
-        });
+        let source_id = graph.add_node(Box::new(CountingSource { calls: Cell::new(0) }));
 
-        let combine_id = graph.add_node(Node {
-            operation: Box::new(Combine),
-            inputs: vec![(Input::Foreground, source_id), (Input::Background, source_id)],
-        });
+        let combine_id = graph.add_node(Box::new(Combine));
+        graph.connect(combine_id, Input::Foreground, source_id).unwrap();
+        graph.connect(combine_id, Input::Background, source_id).unwrap();
 
         let ctx = Context::default();
         RenderExecutor.execute(&graph, combine_id, &ctx).expect("should succeed");
@@ -214,15 +225,11 @@ mod tests {
     fn execute_profiled_records_one_entry_per_evaluated_node_with_display_names() {
         let mut graph = Graph::new(1, 1);
 
-        let source_id = graph.add_node(Node {
-            operation: Box::new(CountingSource { calls: Cell::new(0) }),
-            inputs: vec![],
-        });
+        let source_id = graph.add_node(Box::new(CountingSource { calls: Cell::new(0) }));
 
-        let combine_id = graph.add_node(Node {
-            operation: Box::new(Combine),
-            inputs: vec![(Input::Foreground, source_id), (Input::Background, source_id)],
-        });
+        let combine_id = graph.add_node(Box::new(Combine));
+        graph.connect(combine_id, Input::Foreground, source_id).unwrap();
+        graph.connect(combine_id, Input::Background, source_id).unwrap();
 
         let ctx = Context::default();
         let (outputs, profile) = RenderExecutor

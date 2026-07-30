@@ -1,6 +1,10 @@
 // nodeEditContexts.js
 // Node-specific edit context registry
 
+import { getWasmApp } from "../core/wasm.js";
+import { getAllRealEntries } from "../state/registry.js";
+import { resolveNodeId } from "./graph.js";
+
 /**
  * NodeEditContext provides the structure for node-specific edit interfaces
  * Each node type that supports editing can register its own edit context
@@ -188,69 +192,123 @@ export function renderTextEditContext(menuManager, nodeEntry) {
 
 /**
  * Render function for SHUFFLE edit context
- * Shows: RGBA channel mapping controls
- * 
- * Display:
- * SHUFFLE 1
- * RED   [R] [G] [B] [A] [OFF]
- * GREEN [R] [G] [B] [A] [OFF]
- * BLUE  [R] [G] [B] [A] [OFF]
- * ALPHA [R] [G] [B] [A] [OFF]
- * 
- * Each button changes one output channel mapping.
+ *
+ * Layout: <NAME>  [-] [RED selector] [+]  [-] [GREEN selector] [+]  ...
+ *
+ * Every channel is a stepper cycling through whatever values the Shuffle
+ * operation itself reports via node_parameters() (RED/GREEN/BLUE/ALPHA/OFF
+ * today) - the UI never hardcodes the option list, it only renders it.
  */
 export function renderShuffleEditContext(menuManager, nodeEntry) {
+    const wasmApp = getWasmApp();
+    if (!wasmApp) return;
+
+    const nodeId = nodeEntry.layer.nodeId;
+    const parameters = wasmApp.node_parameters(nodeId);
+
     // Show the node label
     const nodeLabel = document.createElement("span");
     nodeLabel.innerText = ` ${nodeEntry.label} `;
     nodeLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(nodeLabel);
-    
-    // Create a new line for the channel controls
-    const newline = document.createElement("br");
-    menuManager.subMenu.appendChild(newline);
-    
-    // Channel mappings: RED, GREEN, BLUE, ALPHA
-    const channels = ["red_channel", "green_channel", "blue_channel", "alpha_channel"];
-    const channelLabels = ["RED", "GREEN", "BLUE", "ALPHA"];
-    const sourceOptions = ["R", "G", "B", "A", "OFF"];
-    
-    channels.forEach((channel, index) => {
-        // Channel label (RED, GREEN, BLUE, ALPHA)
-        const channelLabel = document.createElement("span");
-        channelLabel.innerText = channelLabels[index];
-        channelLabel.className = "node-selector-label";
-        menuManager.subMenu.appendChild(channelLabel);
-        
-        // Add space
-        const space = document.createElement("span");
-        space.innerText = " ";
-        menuManager.subMenu.appendChild(space);
-        
-        // Create buttons for each source option
-        sourceOptions.forEach(source => {
-            const button = document.createElement("button");
-            button.innerText = source;
-            button.className = "channel-btn";
-            button.onclick = () => {
-                // Dispatch parameter update event
-                const nodeId = nodeEntry.id;
-                window.dispatchEvent(
-                    new CustomEvent("updateNodeParameter", {
-                        detail: {
-                            nodeId: nodeId,
-                            parameter: channel,
-                            value: source
-                        }
-                    })
-                );
-            };
-            menuManager.subMenu.appendChild(button);
+
+    parameters.forEach(parameter => {
+        if (!parameter.options || parameter.options.length === 0) return;
+
+        const options = parameter.options;
+        const currentIndex = Math.max(0, options.indexOf(parameter.value));
+
+        const step = direction => {
+            const nextIndex = (currentIndex + direction + options.length) % options.length;
+            window.dispatchEvent(
+                new CustomEvent("updateNodeParameter", {
+                    detail: {
+                        nodeId: nodeId,
+                        parameter: parameter.name,
+                        value: options[nextIndex]
+                    }
+                })
+            );
+            menuManager.render();
+        };
+
+        const separator = document.createElement("span");
+        separator.innerText = " ";
+        menuManager.subMenu.appendChild(separator);
+
+        const minusButton = document.createElement("button");
+        minusButton.innerText = "-";
+        minusButton.onclick = () => step(-1);
+        menuManager.subMenu.appendChild(minusButton);
+
+        const valueLabel = document.createElement("span");
+        valueLabel.innerText = ` ${parameter.value} `;
+        valueLabel.className = "node-selector-label";
+        menuManager.subMenu.appendChild(valueLabel);
+
+        const plusButton = document.createElement("button");
+        plusButton.innerText = "+";
+        plusButton.onclick = () => step(1);
+        menuManager.subMenu.appendChild(plusButton);
+    });
+
+    renderInputSteppers(menuManager, nodeEntry, nodeId);
+}
+
+/**
+ * Render a stepper for each input a node declares (queried from the graph,
+ * never hardcoded), letting the user wire it to any other real node or back
+ * to NONE. Generic across node kinds - Shuffle is simply the first user.
+ */
+function renderInputSteppers(menuManager, nodeEntry, nodeId) {
+    const wasmApp = getWasmApp();
+    if (!wasmApp) return;
+
+    const inputs = wasmApp.node_inputs(nodeId);
+    const candidates = getAllRealEntries().filter(entry => entry.id !== nodeEntry.id);
+
+    inputs.forEach(input => {
+        const options = ["NONE", ...candidates.map(entry => entry.label)];
+
+        const currentEntry = candidates.find(entry => {
+            const candidateId = resolveNodeId(entry.id);
+            return candidateId !== null && candidateId === input.source;
         });
-        
-        // Add line break after each channel row
-        const br = document.createElement("br");
-        menuManager.subMenu.appendChild(br);
+        const currentIndex = currentEntry ? candidates.indexOf(currentEntry) + 1 : 0;
+
+        const step = direction => {
+            const nextIndex = (currentIndex + direction + options.length) % options.length;
+            if (nextIndex === 0) {
+                wasmApp.disconnect_node_input(nodeId, input.name);
+            } else {
+                const target = candidates[nextIndex - 1];
+                const sourceId = resolveNodeId(target.id);
+                if (sourceId !== null) {
+                    wasmApp.connect_node_input(nodeId, input.name, sourceId);
+                }
+            }
+            menuManager.render();
+        };
+
+        const label = document.createElement("span");
+        label.innerText = ` ${input.name} `;
+        label.className = "node-selector-label";
+        menuManager.subMenu.appendChild(label);
+
+        const minusButton = document.createElement("button");
+        minusButton.innerText = "-";
+        minusButton.onclick = () => step(-1);
+        menuManager.subMenu.appendChild(minusButton);
+
+        const valueLabel = document.createElement("span");
+        valueLabel.innerText = ` ${options[currentIndex]} `;
+        valueLabel.className = "node-selector-label";
+        menuManager.subMenu.appendChild(valueLabel);
+
+        const plusButton = document.createElement("button");
+        plusButton.innerText = "+";
+        plusButton.onclick = () => step(1);
+        menuManager.subMenu.appendChild(plusButton);
     });
 }
 

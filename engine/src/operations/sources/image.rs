@@ -60,7 +60,7 @@ impl Operation for ImageSource {
         OperationMetadata {
             display_name: "Image Source",
             category: OperationCategory::Source,
-            input_count: 0,
+            inputs: Vec::new(),
             outputs: vec![OutputKind::Image],
         }
     }

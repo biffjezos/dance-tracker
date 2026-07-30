@@ -1,4 +1,6 @@
 
+use crate::compositor::input::Input;
+
 /*
 Only the scalar Value variants make sense as something a UI would show
 a control for - Frame/Mask/Image are graph-wired inputs, never a
@@ -9,7 +11,31 @@ pub enum ParameterKind {
     Number,
     Boolean,
     Text,
-    Color
+    Color,
+    /// A closed set of values. The operation owns the list, so a UI selector
+    /// offers exactly these and nothing else.
+    Enum(&'static [&'static str])
+}
+
+impl ParameterKind {
+    /// The values a selector may offer for this parameter - empty for
+    /// parameters that are not a closed set.
+    pub fn options(&self) -> &'static [&'static str] {
+        match self {
+            ParameterKind::Enum(options) => options,
+            _ => &[],
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            ParameterKind::Number => "NUMBER",
+            ParameterKind::Boolean => "BOOLEAN",
+            ParameterKind::Text => "TEXT",
+            ParameterKind::Color => "COLOR",
+            ParameterKind::Enum(_) => "ENUM",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -55,6 +81,15 @@ pub enum OutputKind {
 pub struct OperationMetadata {
     pub display_name: &'static str,
     pub category: OperationCategory,
-    pub input_count: usize,
+    /// Which inputs this operation can be wired to, in menu order. A source
+    /// operation declares none; anything the UI offers to wire comes from here,
+    /// never from a hardcoded list on the UI side.
+    pub inputs: Vec<Input>,
     pub outputs: Vec<OutputKind>,
+}
+
+impl OperationMetadata {
+    pub fn input_count(&self) -> usize {
+        self.inputs.len()
+    }
 }
