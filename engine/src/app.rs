@@ -350,13 +350,15 @@ impl App {
 
             ParameterKind::Color => {
                 Value::Color(
-                    unimplemented!("Value::Color cannot be parsed. Unimplemented!")?
+                    value.parse::<Color>()
+                        .map_err(|_| JsValue::from_str("Invalid boolean"))?
                 )
             }
-
+/*
             ParameterKind::Text | ParameterKind::Enum(_) => {
                 Value::Text(value)
             }
+*/
         };
 
         operation
