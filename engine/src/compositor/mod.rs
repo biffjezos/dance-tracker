@@ -16,6 +16,6 @@ pub use error::OperationError;
 pub use input::Input;
 pub use operations::Operation;
 
-pub use operation_descriptor::{ OperationButton, OperationDescriptor} ;
+pub use operation_descriptor::OperationDescriptor;
 pub use registry::OperationRegistry;
 pub use value::Value;

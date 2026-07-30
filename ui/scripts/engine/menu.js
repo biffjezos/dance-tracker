@@ -32,75 +32,12 @@ const VISIBILITY_MODE_LABELS = {
     maskWhite: "MASK WHITE",
     off: "OFF"
 };
-const SWATCHES = [{
-    label: "BLACK",
-    r: 0,
-    g: 0,
-    b: 0
-}, {
-    label: "WHITE",
-    r: 255,
-    g: 255,
-    b: 255
-}, {
-    label: "RED",
-    r: 255,
-    g: 0,
-    b: 0
-}, {
-    label: "GREEN",
-    r: 0,
-    g: 255,
-    b: 0
-}, {
-    label: "BLUE",
-    r: 0,
-    g: 150,
-    b: 255
-}, {
-    label: "MAGENTA",
-    r: 255,
-    g: 0,
-    b: 255
-}, {
-    label: "CYAN",
-    r: 0,
-    g: 255,
-    b: 255
-}, {
-    label: "YELLOW",
-    r: 255,
-    g: 255,
-    b: 0
-}, {
-    label: "DARK GREEN",
-    r: 0,
-    g: 20,
-    b: 0
-}, {
-    label: "DARK BLUE",
-    r: 0,
-    g: 10,
-    b: 30
-}];
-
-function colourMenu(event) {
-    return SWATCHES.map(swatch => ({
-        label: swatch.label,
-        event: event,
-        r: swatch.r,
-        g: swatch.g,
-        b: swatch.b
-    }));
-}
-
 export class MenuManager {
     constructor() {
         this.subMenu = document.getElementById("sub-menu");
         this.operations = [];
         this.category = null;
         this.currentContext = null;
-        this.buttons = [];
 
         window.addEventListener("operationsLoaded", e => {
             console.log("Operations loaded:", e.detail);
@@ -417,19 +354,6 @@ export class MenuManager {
                     return;
                 }
 
-                if (op.buttons && op.buttons.length) {
-                    console.log("Showing submenu buttons");
-                    this.buttons = op.buttons;
-                    // Create a child MenuContext for the submenu
-                    this.currentContext = new MenuContext(
-                        op.id || op.label.toLowerCase().replace(/\s+/g, "_"),
-                        this.currentContext
-                    );
-                    this.renderButtons();
-                    this.updateStatusBar();
-                    return;
-                }
-
                 // Use ui_action if available, otherwise fall back to action
                 const action = op.ui_action || op.action;
                 console.log("Dispatching action:", action);
@@ -494,39 +418,6 @@ export class MenuManager {
             this.updateStatusBar();
         }).catch(err => {
             console.error("Failed to create node:", err);
-        });
-    }
-
-    renderButtons() {
-        console.log("Rendering buttons submenu");
-        this.subMenu.innerHTML = "";
-
-        // Render UP button if currentContext has a parent
-        if (this.currentContext && this.currentContext.parent !== null) {
-            this.renderUpButton();
-            const separator = document.createElement("span");
-            separator.innerText = " | ";
-            separator.className = "menu-separator";
-            this.subMenu.appendChild(separator);
-        }
-
-        this.buttons.forEach(btn => {
-            const button = document.createElement("button");
-            button.innerText = btn.label || btn.name || btn;
-
-            button.onclick = () => {
-                console.log("Submenu button clicked, action:", btn.action);
-                const action = btn.action;
-
-                if (action) {
-                    window.dispatchEvent(
-                        new CustomEvent("menuOperation", {
-                            detail: action
-                        })
-                    );
-                }
-            };
-            this.subMenu.appendChild(button);
         });
     }
 
