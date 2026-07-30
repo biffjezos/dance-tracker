@@ -280,6 +280,9 @@ export class MenuManager {
                 nodeLabel.className = "node-name-label";
                 this.subMenu.appendChild(nodeLabel);
             }
+
+            // Allow editing again from node context
+            this.renderEditButton();
             return;
         }
 
