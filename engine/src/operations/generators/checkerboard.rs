@@ -87,7 +87,7 @@ impl Operation for Checkerboard {
     fn descriptor(&self) -> OperationDescriptor {
         OperationDescriptor {
             id: "checkerboard",
-            menu: "GENERATOR",
+            menu: "GENERATE",
             label: "CHECKERBOARD",
             action: None,
             ui_action: None,
