@@ -350,7 +350,7 @@ impl App {
 
             ParameterKind::Color => {
                 Value::Color(
-                     JsValue::from_str("Parsing Value::Color not implemented".to_string())
+                     JsValue::from_str("Parsing Value::Color not implemented")
                 )
             }
             ParameterKind::Text | ParameterKind::Enum(_) => {
