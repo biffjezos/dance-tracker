@@ -342,7 +342,7 @@ impl App {
             }
 
             ParameterKind::Color => {
-                return Err(JsValue::from_str("Parsing Value::Color not implemented"));
+                Err(JsValue::from_str("Parsing Value::Color not implemented"))?
             }
 
             ParameterKind::Color => {
