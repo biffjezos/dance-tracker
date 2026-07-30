@@ -45,6 +45,17 @@ export class NodeEditContext {
 export class NodeEditContextRegistry {
     constructor() {
         this.contexts = new Map(); // nodeType -> NodeEditContext
+        this.defaultContext = null;
+    }
+
+    /**
+     * Register the fallback edit context used for any node kind that has
+     * no bespoke registration. New operations get a working EDIT screen
+     * for free as long as they're generic enough for the default renderer.
+     * @param {Function} renderFunction - Function to render the edit controls
+     */
+    registerDefault(renderFunction) {
+        this.defaultContext = new NodeEditContext(null, renderFunction);
     }
 
     /**
@@ -82,13 +93,13 @@ export class NodeEditContextRegistry {
      */
     renderContext(menuManager, nodeEntry) {
         if (!nodeEntry || !nodeEntry.kind) return false;
-        
-        const context = this.getContext(nodeEntry.kind);
+
+        const context = this.getContext(nodeEntry.kind) || this.defaultContext;
         if (context) {
             context.render(menuManager, nodeEntry);
             return true;
         }
-        
+
         return false;
     }
 }
@@ -125,15 +136,17 @@ export function renderVideoEditContext(menuManager, nodeEntry) {
 }
 
 /**
- * Render function for SHUFFLE edit context
+ * Default edit context, used for any node kind without its own bespoke
+ * registration.
  *
- * Layout: <NAME>  [-] [RED selector] [+]  [-] [GREEN selector] [+]  ...
+ * Layout: <NAME>  [-] [option selector] [+]  [-] [option selector] [+] ...
  *
- * Every channel is a stepper cycling through whatever values the Shuffle
- * operation itself reports via node_parameters() (RED/GREEN/BLUE/ALPHA/OFF
- * today) - the UI never hardcodes the option list, it only renders it.
+ * Every enum-valued parameter is a stepper cycling through whatever values
+ * the operation itself reports via node_parameters() - the UI never
+ * hardcodes an option list, it only renders what Rust describes. Shuffle
+ * was simply the first operation this was written against.
  */
-export function renderShuffleEditContext(menuManager, nodeEntry) {
+export function renderGenericEditContext(menuManager, nodeEntry) {
     const wasmApp = getWasmApp();
     if (!wasmApp) return;
 
@@ -249,4 +262,4 @@ function renderInputSteppers(menuManager, nodeEntry, nodeId) {
 // Register all known edit contexts
 // These map node kinds to their respective edit UIs
 nodeEditContextRegistry.register("video", renderVideoEditContext);
-nodeEditContextRegistry.register("shuffle", renderShuffleEditContext);
+nodeEditContextRegistry.registerDefault(renderGenericEditContext);
