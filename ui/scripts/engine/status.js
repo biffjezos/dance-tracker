@@ -66,17 +66,7 @@ export function reportSelection(scope) {
             id: entry.id,
             label: entry.label,
             kind: entry.kind,
-            visibilityMode: entry.id !== null && entry.id === state.outputEntryId ? "on" : "off",
-            keyColour: entry.kind === "standaloneMask" ? entry.layer.settings.keyColour : null,
-            mode: entry.kind === "standaloneMask" ? entry.layer.settings.mode : null,
-            sourceLabel: entry.kind === "standaloneMask" ? resolveMaskSourceLabel(entry.layer.settings
-                .source) : null,
-            ringCount: entry.kind === "rings" ? entry.layer.settings.count : null,
-            foregroundLabel: entry.kind === "composite" ? resolveMaskSourceLabel(entry.layer.settings
-                .foreground) : null,
-            backgroundLabel: entry.kind === "composite" ? resolveMaskSourceLabel(entry.layer.settings
-                .background) : null,
-            blendMode: entry.kind === "composite" ? entry.layer.settings.blendMode : null
+            visibilityMode: entry.id !== null && entry.id === state.outputEntryId ? "on" : "off"
         }
     }));
     renderPreview();

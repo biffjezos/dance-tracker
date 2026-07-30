@@ -29,36 +29,6 @@ export function getAllRealEntries() {
             });
         }
     });
-    state.maskLayers.forEach(layer => list.push({
-        id: "mask:" + layer.id,
-        label: layer.name,
-        kind: "standaloneMask",
-        layer
-    }));
-    state.compositeLayers.forEach(layer => list.push({
-        id: "composite:" + layer.id,
-        label: layer.name,
-        kind: "composite",
-        layer
-    }));
-    state.ringsLayers.forEach(layer => list.push({
-        id: "rings:" + layer.id,
-        label: layer.name,
-        kind: "rings",
-        layer
-    }));
-    state.ghostLayers.forEach(layer => list.push({
-        id: "ghost:" + layer.id,
-        label: layer.name,
-        kind: "ghost",
-        layer
-    }));
-    state.textLayers.forEach(layer => list.push({
-        id: "text:" + layer.id,
-        label: layer.name,
-        kind: "text",
-        layer
-    }));
     state.shuffleLayers.forEach(layer => list.push({
         id: "shuffle:" + layer.id,
         label: layer.name,
@@ -68,14 +38,8 @@ export function getAllRealEntries() {
     return list;
 }
 export function getVideoRegistry() {
-    return getAllRealEntries().filter(entry => entry.kind === "video" || entry.kind === "rings" || entry.kind ===
-        "ghost" || entry.kind === "text" || entry.kind === "standaloneMask" || entry.kind === "composite" || entry.kind === "image" || entry.kind === "shuffle");
-}
-export function getMaskRegistry() {
-    return getAllRealEntries().filter(entry => entry.kind === "standaloneMask");
-}
-export function getCompositeRegistry() {
-    return getAllRealEntries().filter(entry => entry.kind === "composite");
+    return getAllRealEntries().filter(entry => entry.kind === "video" || entry.kind === "image" || entry.kind ===
+        "shuffle");
 }
 export function getShuffleRegistry() {
     return getAllRealEntries().filter(entry => entry.kind === "shuffle");
@@ -92,17 +56,7 @@ export function selectedVideoEntry() {
     const registry = getVideoRegistry();
     return registry.find(entry => entry.id === state.selectedVideoId) || registry[0] || EMPTY_ENTRY;
 }
-export function selectedMaskEntry() {
-    const registry = getMaskRegistry();
-    return registry.find(entry => entry.id === state.selectedMaskId) || registry[0] || EMPTY_ENTRY;
-}
-export function selectedCompositeEntry() {
-    const registry = getCompositeRegistry();
-    return registry.find(entry => entry.id === state.selectedCompositeId) || registry[0] || EMPTY_ENTRY;
-}
-export function scopedEntry(scope) {
-    if (scope === "mask") return selectedMaskEntry();
-    if (scope === "composite") return selectedCompositeEntry();
+export function scopedEntry() {
     return selectedVideoEntry();
 }
 export function resolveMaskSourceLabel(sourceId) {

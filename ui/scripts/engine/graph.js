@@ -81,52 +81,6 @@ function buildShuffleContent(layer) {
     return layer.nodeId;
 }
 
-function buildMaskContent(layer, contentIds) {
-    const wasmApp = getWasmApp();
-    const s = layer.settings;
-    const sourceId = contentIds.get(s.source);
-    if (sourceId === undefined) return null;
-    if (s.mode === "keying") {
-        return wasmApp.add_chroma(sourceId, s.keyColour.r, s.keyColour.g, s.keyColour.b, s.threshold, s.fill ===
-            "video", s.colour.r, s.colour.g, s.colour.b);
-    }
-    const differenceId = wasmApp.add_difference(sourceId, s.threshold, s.fill === "video", s.colour.r, s.colour.g, s
-        .colour.b);
-    if (layer.pendingCapture) {
-        wasmApp.capture_background(differenceId);
-    }
-    return differenceId;
-}
-
-function buildRingsContent(layer) {
-    const wasmApp = getWasmApp();
-    return wasmApp.add_rings(layer.settings.count, layer.settings.ringsPerGroup, layer.settings.spacing, layer.settings
-        .size, layer.settings.width, layer.settings.colours);
-}
-
-function buildGhostContent(layer, ids) {
-    const wasmApp = getWasmApp();
-    const source = ids.get(layer.settings.applyToMask);
-    if (source === undefined) return null;
-    return wasmApp.add_ghost(source, layer.settings.count, layer.settings.alpha, layer.settings.delayTicks);
-}
-
-function buildTextContent(layer) {
-    const wasmApp = getWasmApp();
-    if (!layer.settings.content.trim()) return null;
-    return wasmApp.add_text(layer.settings.content, layer.settings.colour, layer.settings.size);
-}
-
-function buildCompositeContent(layer, contentIds, wiredIds) {
-    const wasmApp = getWasmApp();
-    const s = layer.settings;
-    if (s.foreground === "none" || s.background === "none") return null;
-    const fg = wiredIds.get(s.foreground) ?? contentIds.get(s.foreground);
-    const bg = wiredIds.get(s.background) ?? contentIds.get(s.background);
-    if (fg === undefined || bg === undefined) return null;
-    return wasmApp.add_compose(fg, bg, s.blendMode);
-}
-
 // Incremental node builder - only rebuilds what changed
 function buildLayerNode(entry) {
     const layer = entry.layer;
@@ -154,19 +108,6 @@ function buildLayerNode(entry) {
         newNodeId = buildImageContent(layer);
     } else if (entry.kind === "shuffle") {
         newNodeId = buildShuffleContent(layer);
-    } else if (entry.kind === "rings") {
-        newNodeId = buildRingsContent(layer);
-    } else if (entry.kind === "text") {
-        newNodeId = buildTextContent(layer);
-    } else if (entry.kind === "standaloneMask") {
-        // Masks need contentIds, so they're handled in the main pass
-        return null;
-    } else if (entry.kind === "ghost") {
-        // Ghosts need wiredIds, so they're handled in the main pass
-        return null;
-    } else if (entry.kind === "composite") {
-        // Composites need wiredIds, so they're handled in the main pass
-        return null;
     }
     
     if (newNodeId !== null) {
@@ -194,8 +135,7 @@ export function rebuildGraph() {
     Build primitive generators - these can be incrementally updated
     */
     all.forEach(entry => {
-        if (entry.kind === "video" || entry.kind === "rings" || entry.kind === "text" || entry.kind === "image" ||
-            entry.kind === "shuffle") {
+        if (entry.kind === "video" || entry.kind === "image" || entry.kind === "shuffle") {
             const nodeId = buildLayerNode(entry);
             if (nodeId !== null) {
                 contentIds.set(entry.id, nodeId);
@@ -203,175 +143,10 @@ export function rebuildGraph() {
         }
     });
 
-    /*
-    SECOND PASS:
-    Build masks from primitive sources.
-    */
-    all.forEach(entry => {
-        if (entry.kind !== "standaloneMask") return;
-        
-        const layer = entry.layer;
-        const layerId = entry.id;
-        const existingNodeId = getLayerNodeId(layerId);
-        const changed = settingsChanged(layerId, layer.settings);
-        
-        // If we have an existing node and settings haven't changed, reuse it
-        if (existingNodeId !== null && !changed) {
-            contentIds.set(entry.id, existingNodeId);
-            return;
-        }
-        
-        const id = buildMaskContent(entry.layer, contentIds);
-        if (id !== null) {
-            // Clean up old node
-            if (existingNodeId !== null) {
-                // Will be handled by generation mechanism when removal is implemented
-            }
-            setLayerNodeId(layerId, id);
-            contentIds.set(entry.id, id);
-        }
-    });
-
-    /*
-    THIRD PASS:
-    Apply universal MASKED BY.
-    */
-    const wiredIds = new Map();
-    all.forEach(entry => {
-        let id = contentIds.get(entry.id);
-        if (id === undefined) return;
-        
-        const layer = entry.layer;
-        const layerId = entry.id;
-        const existingWiredId = getLayerNodeId(layerId + ":wired");
-        
-        const mask = layer.settings.maskedBy;
-        if (mask && mask.source !== "none") {
-            const maskId = contentIds.get(mask.source);
-            if (maskId !== undefined) {
-                const newId = wasmApp.add_apply_mask(id, maskId, mask.channel);
-                
-                // Check if we can reuse the wired node
-                if (existingWiredId !== null && !settingsChanged(layerId + ":maskedBy", mask)) {
-                    // Reuse existing wired node
-                    wiredIds.set(entry.id, existingWiredId);
-                    return;
-                }
-                
-                // Clean up old wired node if it exists
-                if (existingWiredId !== null) {
-                    // Will be handled by generation mechanism
-                }
-                
-                setLayerNodeId(layerId + ":wired", newId);
-                id = newId;
-            }
-        }
-        
-        // Track the final wired ID for this entry
-        setLayerNodeId(layerId, id);
-        wiredIds.set(entry.id, id);
-    });
-
-    /*
-    FOURTH PASS:
-    Ghosts now see final wired nodes.
-    */
-    all.forEach(entry => {
-        if (entry.kind !== "ghost") return;
-        
-        const layer = entry.layer;
-        const layerId = entry.id;
-        const existingNodeId = getLayerNodeId(layerId);
-        const changed = settingsChanged(layerId, layer.settings);
-        
-        // If we have an existing node and settings haven't changed, reuse it
-        if (existingNodeId !== null && !changed) {
-            wiredIds.set(entry.id, existingNodeId);
-            return;
-        }
-        
-        const id = buildGhostContent(entry.layer, wiredIds);
-        if (id !== null) {
-            // Clean up old node
-            if (existingNodeId !== null) {
-                // Will be handled by generation mechanism
-            }
-            setLayerNodeId(layerId, id);
-            wiredIds.set(entry.id, id);
-        }
-    });
-
-    /*
-    FIFTH PASS:
-    Composite only here.
-    */
-    all.forEach(entry => {
-        if (entry.kind !== "composite") return;
-        
-        const layer = entry.layer;
-        const layerId = entry.id;
-        const existingNodeId = getLayerNodeId(layerId);
-        const changed = settingsChanged(layerId, layer.settings);
-        
-        // If we have an existing node and settings haven't changed, reuse it
-        if (existingNodeId !== null && !changed) {
-            wiredIds.set(entry.id, existingNodeId);
-            return;
-        }
-        
-        const id = buildCompositeContent(entry.layer, contentIds, wiredIds);
-        if (id !== null) {
-            // Clean up old node
-            if (existingNodeId !== null) {
-                // Will be handled by generation mechanism
-            }
-            setLayerNodeId(layerId, id);
-            wiredIds.set(entry.id, id);
-        }
-    });
-
-    /*
-    FINAL:
-    Apply masks to composites.
-    */
-    all.forEach(entry => {
-        if (entry.kind !== "composite") return;
-        let id = wiredIds.get(entry.id);
-        if (id === undefined) return;
-        
-        const layer = entry.layer;
-        const layerId = entry.id;
-        const mask = layer.settings.maskedBy;
-        
-        if (mask && mask.source !== "none") {
-            const existingMaskedId = getLayerNodeId(layerId + ":masked");
-            const maskChanged = settingsChanged(layerId + ":compositeMask", mask);
-            
-            const maskId = wiredIds.get(mask.source) ?? contentIds.get(mask.source);
-            if (maskId !== undefined) {
-                // Check if we can reuse the masked composite node
-                if (existingMaskedId !== null && !maskChanged) {
-                    id = existingMaskedId;
-                } else {
-                    // Clean up old masked node if it exists
-                    if (existingMaskedId !== null) {
-                        // Will be handled by generation mechanism
-                    }
-                    id = wasmApp.add_apply_mask(id, maskId, mask.channel);
-                    setLayerNodeId(layerId + ":masked", id);
-                }
-            }
-        }
-        
-        wiredIds.set(entry.id, id);
-        setLayerNodeId(layerId, id);
-    });
-
     // Clean up stale entries from layerNodeIds for removed layers
     const currentLayerIds = new Set(all.map(e => e.id));
     for (const [layerId] of layerNodeIds) {
-        if (!currentLayerIds.has(layerId) && !layerId.endsWith(":wired") && !layerId.endsWith(":masked")) {
+        if (!currentLayerIds.has(layerId)) {
             layerNodeIds.delete(layerId);
             layerSettingsHash.delete(layerId);
         }
@@ -379,11 +154,10 @@ export function rebuildGraph() {
 
     // Update cached IDs for preview and output
     cachedContentIds = contentIds;
-    cachedWiredIds = wiredIds;
-    
+    cachedWiredIds = contentIds;
+
     updateOutputNodeId();
     state.videoLayers.forEach(layer => layer.pendingCapture = false);
-    state.maskLayers.forEach(layer => layer.pendingCapture = false);
 }
 
 // Legacy exports for compatibility
