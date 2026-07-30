@@ -341,19 +341,20 @@ impl App {
                 )
             }
 
-            ParameterKind::Color => {
-                Err(JsValue::from_str("Parsing Value::Color not implemented"))?
+            ParameterKind::Boolean => {
+                Value::Boolean(
+                    value.parse::<bool>()
+                        .map_err(|_| JsValue::from_str("Invalid boolean"))?
+                )
             }
 
             ParameterKind::Color => {
-                Value::Color(
-                     JsValue::from_str("Parsing Value::Color not implemented")
-                )
+                return Err(JsValue::from_str("Parsing Value::Color not implemented"));
             }
+
             ParameterKind::Text | ParameterKind::Enum(_) => {
                 Value::Text(value)
             }
-            
         };
         operation
             .set_parameter(&parameter, value)
