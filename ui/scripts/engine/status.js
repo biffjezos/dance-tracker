@@ -1,6 +1,6 @@
 /*
 ==================================================
-STATUS BAR / CAMERA PANEL TITLE
+STATUS BAR / PREVIEW PANEL TITLE
 ==================================================
 */
 import {
@@ -14,12 +14,12 @@ import {
     renderPreview
 } from "./render.js";
 import { nodeSelectionState } from "./nodeSelection.js";
-const CAMERA_PANEL_DEFAULT_TITLE = "CAMERA INPUT";
+const PREVIEW_PANEL_DEFAULT_TITLE = "NODE PREVIEW";
 
 function updateLayerStatusDisplay(entry) {
     const panelTitle = document.getElementById("camera-panel-title");
     if (panelTitle) {
-        panelTitle.innerText = entry.label || CAMERA_PANEL_DEFAULT_TITLE;
+        panelTitle.innerText = entry.label || PREVIEW_PANEL_DEFAULT_TITLE;
     }
     const bar = document.querySelector(".statusbar");
     if (bar) {
@@ -33,7 +33,7 @@ function updateNodeSelectionDisplay() {
     const selectedNode = nodeSelectionState.getSelectedNode();
     const panelTitle = document.getElementById("camera-panel-title");
     if (panelTitle) {
-        panelTitle.innerText = selectedNode ? selectedNode.label : CAMERA_PANEL_DEFAULT_TITLE;
+        panelTitle.innerText = selectedNode ? selectedNode.label : PREVIEW_PANEL_DEFAULT_TITLE;
     }
     
     // Also update status bar if needed
