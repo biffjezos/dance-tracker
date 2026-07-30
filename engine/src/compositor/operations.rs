@@ -39,9 +39,10 @@ pub trait Operation: Any {
         Err(OperationError::UnknownParameter(name.to_string()))
     }
 
-    /// Returns true if this operation supports editing (has parameters that can be modified)
+    /// Returns true if this operation supports editing - it has parameters
+    /// that can be modified, and/or inputs that can be rewired.
     fn supports_edit(&self) -> bool {
-        !self.parameters().is_empty()
+        !self.parameters().is_empty() || self.metadata().input_count() > 0
     }
 
     /// Attach a live pixel source to this operation.
