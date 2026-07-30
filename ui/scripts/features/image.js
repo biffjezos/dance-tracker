@@ -57,7 +57,8 @@ window.addEventListener("menuOperation", e => {
                 id: "image-" + number,
                 number,
                 name: "IMAGE " + number,
-                imageNodeId: nodeId,
+                nodeId: nodeId,
+                kind: "image",
                 settings: defaultUniversalSettings()
             };
 

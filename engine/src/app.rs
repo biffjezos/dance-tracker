@@ -45,6 +45,7 @@ struct ParameterView {
     step: Option<f64>,
     min: Option<f64>,
     max: Option<f64>,
+    group: Option<&'static str>,
     value: String,
 }
 
@@ -170,6 +171,7 @@ impl App {
                 step: parameter.kind.step(),
                 min: parameter.kind.min(),
                 max: parameter.kind.max(),
+                group: parameter.group,
                 value: operation
                     .get_parameter(parameter.name)
                     .map(|value| value_to_text(&value))

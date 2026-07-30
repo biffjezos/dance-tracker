@@ -117,14 +117,17 @@ impl Operation for Checkerboard {
             ParameterDescriptor {
                 name: "size",
                 kind: ParameterKind::Number { step: 1.0, min: Some(1.0), max: None },
+                group: None,
             },
             ParameterDescriptor {
                 name: "color_a",
                 kind: ParameterKind::Color,
+                group: Some("COLOUR"),
             },
             ParameterDescriptor {
                 name: "color_b",
                 kind: ParameterKind::Color,
+                group: Some("COLOUR"),
             },
         ]
     }

@@ -159,35 +159,75 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
     nodeLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(nodeLabel);
 
+    // Ungrouped parameters render inline, same as always. Grouped ones
+    // collapse into one button per distinct group name - the operation
+    // decides the grouping, this just renders whatever names it sees.
+    const groupNames = [];
     parameters.forEach(parameter => {
-        if (parameter.kind === "COLOR") {
-            renderColorParameter(menuManager, nodeId, parameter);
+        if (parameter.group) {
+            if (!groupNames.includes(parameter.group)) groupNames.push(parameter.group);
             return;
         }
+        renderParameter(menuManager, nodeId, parameter);
+    });
 
-        if (parameter.kind === "NUMBER") {
-            renderNumberParameter(menuManager, nodeId, parameter);
-            return;
-        }
-
-        if (parameter.kind === "BOOLEAN") {
-            renderBooleanParameter(menuManager, nodeId, parameter);
-            return;
-        }
-
-        if (!parameter.options || parameter.options.length === 0) return;
-
-        const options = parameter.options;
-        const currentIndex = Math.max(0, options.indexOf(parameter.value));
-
-        renderStepperButtons(menuManager, parameter.value, direction => {
-            const nextIndex = (currentIndex + direction + options.length) % options.length;
-            dispatchParameterUpdate(nodeId, parameter.name, options[nextIndex]);
-            menuManager.render();
-        });
+    groupNames.forEach(groupName => {
+        const groupButton = document.createElement("button");
+        groupButton.innerText = `${groupName} >`;
+        groupButton.onclick = () => menuManager.enterParameterGroup(groupName);
+        menuManager.subMenu.appendChild(groupButton);
     });
 
     renderInputSteppers(menuManager, nodeEntry, nodeId);
+}
+
+/**
+ * Render just the parameters belonging to one named group - the sub-pane
+ * a group button (above) navigates into. Generic across node kinds; the
+ * group name is entirely data from node_parameters(), never hardcoded.
+ */
+export function renderGroupContext(menuManager, nodeEntry, groupName) {
+    const wasmApp = getWasmApp();
+    if (!wasmApp) return;
+
+    const nodeId = nodeEntry.layer.nodeId;
+    const parameters = wasmApp.node_parameters(nodeId).filter(p => p.group === groupName);
+
+    renderParameterLabel(menuManager, groupName);
+
+    parameters.forEach(parameter => renderParameter(menuManager, nodeId, parameter));
+}
+
+/**
+ * Render one parameter's control, dispatched by its kind. Shared by the
+ * top-level (ungrouped) view and a parameter group's own sub-pane.
+ */
+function renderParameter(menuManager, nodeId, parameter) {
+    if (parameter.kind === "COLOR") {
+        renderColorParameter(menuManager, nodeId, parameter);
+        return;
+    }
+
+    if (parameter.kind === "NUMBER") {
+        renderNumberParameter(menuManager, nodeId, parameter);
+        return;
+    }
+
+    if (parameter.kind === "BOOLEAN") {
+        renderBooleanParameter(menuManager, nodeId, parameter);
+        return;
+    }
+
+    if (!parameter.options || parameter.options.length === 0) return;
+
+    const options = parameter.options;
+    const currentIndex = Math.max(0, options.indexOf(parameter.value));
+
+    renderStepperButtons(menuManager, parameter.value, direction => {
+        const nextIndex = (currentIndex + direction + options.length) % options.length;
+        dispatchParameterUpdate(nodeId, parameter.name, options[nextIndex]);
+        menuManager.render();
+    });
 }
 
 /**

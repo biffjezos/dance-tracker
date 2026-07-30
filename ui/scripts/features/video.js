@@ -75,7 +75,8 @@ window.addEventListener("menuOperation", e => {
                 id: "video-" + number,
                 number,
                 name: "VIDEO " + number,
-                videoNodeId: nodeId,
+                nodeId: nodeId,
+                kind: "video",
                 videoEl: video,
                 settings: defaultUniversalSettings()
             };
@@ -109,13 +110,14 @@ function activateCamera() {
         id: "camera-" + number,
         number,
         name: "CAMERA " + number,
+        kind: "video",
         videoEl: video,
         settings: defaultUniversalSettings()
     };
     // The camera node needs an actual frame size before it can be created,
     // which only exists once the stream has loaded metadata.
     const attach = () => {
-        layer.videoNodeId = createLiveSourceNode(wasmApp, "camera_source", video);
+        layer.nodeId = createLiveSourceNode(wasmApp, "camera_source", video);
         state.videoLayers.push(layer);
         rebuildGraph();
         reportSelection("video");
