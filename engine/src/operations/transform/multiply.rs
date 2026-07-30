@@ -120,13 +120,13 @@ impl Operation for Multiply {
         inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
 
-        let Some(first) = find_input(inputs, Input::Source) else {
+        let Some(first) = find_input(inputs, Input::Foreground) else {
             return Err(OperationError::InvalidInputType(
                 "Multiply requires first input".into()
             ));
         };
 
-        let Some(second) = find_input(inputs, Input::Source) else {
+        let Some(second) = find_input(inputs, Input::Background) else {
             return Err(OperationError::InvalidInputType(
                 "Multiply requires second input".into()
             ));
