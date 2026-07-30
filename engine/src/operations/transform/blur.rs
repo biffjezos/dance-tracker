@@ -155,7 +155,7 @@ impl Operation for Blur {
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![ParameterDescriptor {
             name: "radius_px",
-            kind: ParameterKind::Number { step: 0.1 },
+            kind: ParameterKind::Number { step: 0.1, min: Some(0.0), max: Some(1000.0) },
         }]
     }
 

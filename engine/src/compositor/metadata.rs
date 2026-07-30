@@ -8,9 +8,10 @@ setting on the node that produces them.
 */
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ParameterKind {
-    /// A stepper's increment - the operation owns it, so a UI stepper moves
-    /// by exactly this amount and nothing else.
-    Number { step: f64 },
+    /// A stepper's increment and, optionally, its bounds - the operation
+    /// owns them, so a UI stepper moves by exactly this amount and cannot
+    /// be pushed past a bound the operation itself would reject.
+    Number { step: f64, min: Option<f64>, max: Option<f64> },
     Boolean,
     Text,
     Color,
@@ -32,7 +33,23 @@ impl ParameterKind {
     /// The stepper increment for a Number parameter - None for every other kind.
     pub fn step(&self) -> Option<f64> {
         match self {
-            ParameterKind::Number { step } => Some(*step),
+            ParameterKind::Number { step, .. } => Some(*step),
+            _ => None,
+        }
+    }
+
+    /// The lower bound a Number parameter accepts, if any.
+    pub fn min(&self) -> Option<f64> {
+        match self {
+            ParameterKind::Number { min, .. } => *min,
+            _ => None,
+        }
+    }
+
+    /// The upper bound a Number parameter accepts, if any.
+    pub fn max(&self) -> Option<f64> {
+        match self {
+            ParameterKind::Number { max, .. } => *max,
             _ => None,
         }
     }
