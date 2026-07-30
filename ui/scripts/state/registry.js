@@ -29,10 +29,12 @@ export function getAllRealEntries() {
             });
         }
     });
-    state.shuffleLayers.forEach(layer => list.push({
-        id: "shuffle:" + layer.id,
+    // Every create_node-backed operation (shuffle, and any future one)
+    // lives in this one generic array, tagged with its own kind.
+    state.nodes.forEach(layer => list.push({
+        id: layer.kind + ":" + layer.id,
         label: layer.name,
-        kind: "shuffle",
+        kind: layer.kind,
         layer
     }));
     return list;
@@ -41,9 +43,6 @@ export function getVideoRegistry() {
     // Every real node is a candidate source/preview target by default - new
     // kinds are included automatically, no filter list to maintain here.
     return getAllRealEntries();
-}
-export function getShuffleRegistry() {
-    return getAllRealEntries().filter(entry => entry.kind === "shuffle");
 }
 const EMPTY_ENTRY = {
     label: null,

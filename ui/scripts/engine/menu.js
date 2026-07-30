@@ -372,28 +372,27 @@ export class MenuManager {
 
     createNodeAndSelect(operationId) {
         console.log("Creating node:", operationId);
-        
+
         // Create the node in the graph
         createNode(operationId).then(nodeId => {
             console.log("Node created with ID:", nodeId);
-            
-            // Add the node to the appropriate layer array based on operation type
-            let layer, layerKind;
-            if (operationId === "shuffle") {
-                const number = state.nextShuffleNumber++;
-                layerKind = "shuffle";
-                layer = {
-                    id: `shuffle-${number}`,
-                    name: `SHUFFLE ${number}`,
-                    nodeId: nodeId,
-                    settings: {}
-                };
-                state.shuffleLayers.push(layer);
-            } else {
-                // Fallback for other node types
-                console.warn("Unknown node type for creation:", operationId);
-                return;
-            }
+
+            // Every create_node-backed operation is stored the same way -
+            // its display label comes from the operation's own descriptor,
+            // never a hardcoded per-kind name.
+            const op = this.operations.find(o => o.create_node === operationId);
+            const label = op ? op.label : operationId.toUpperCase();
+            const number = state.nextNumberByKind[operationId] || 1;
+            state.nextNumberByKind[operationId] = number + 1;
+
+            const layer = {
+                id: `${operationId}-${number}`,
+                name: `${label} ${number}`,
+                nodeId: nodeId,
+                kind: operationId,
+                settings: {}
+            };
+            state.nodes.push(layer);
 
             // Make the new node's content available for preview/wiring
             rebuildGraph();
@@ -402,9 +401,9 @@ export class MenuManager {
             // (kind + layer.id) as getAllRealEntries(), so this selection
             // matches what stepping through NODES will find for it later.
             const newEntry = {
-                id: `${layerKind}:${layer.id}`,
+                id: `${operationId}:${layer.id}`,
                 label: layer.name,
-                kind: layerKind,
+                kind: operationId,
                 layer
             };
             nodeSelectionState.setSelectedNode(newEntry);
