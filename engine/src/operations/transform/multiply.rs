@@ -91,8 +91,8 @@ impl Operation for Multiply {
             display_name: "Multiply",
             category: OperationCategory::Color,
             inputs: vec![
-                Input::Source,
-                Input::Source,
+                 Input::Foreground,
+                 Input::Background
             ],
             outputs: vec![OutputKind::Image],
         }
