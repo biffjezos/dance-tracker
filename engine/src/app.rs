@@ -15,6 +15,7 @@ use crate::compositor::{
     graph::{ Graph, NodeId },
     Input,
     Meta,
+    metadata::ParameterKind,
     OperationError,
     OperationRegistry,
     Value
@@ -349,8 +350,7 @@ impl App {
 
             ParameterKind::Color => {
                 Value::Color(
-                    parse_color(&value)
-                        .ok_or_else(|| JsValue::from_str("Invalid color"))?
+                    unimplemented!("Value::Color cannot be parsed. Unimplemented!")?
                 )
             }
 
