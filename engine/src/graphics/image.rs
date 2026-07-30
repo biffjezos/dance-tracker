@@ -25,6 +25,35 @@ impl Image {
             format: ImageFormat::Rgba8,
         })
     }
+
+    /// The classic compositing-app "missing" placeholder - a magenta/black
+    /// checker - used instead of black when an operation's input isn't
+    /// wired, so a never-connected or since-removed source is visibly
+    /// obvious in the actual output, not just discoverable by opening EDIT.
+    pub fn missing(width: u32, height: u32) -> Arc<Image> {
+        const TILE: u32 = 16;
+        let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
+
+        for y in 0..height {
+            for x in 0..width {
+                let checker = ((x / TILE) + (y / TILE)) % 2 == 0;
+                let index = ((y * width + x) * 4) as usize;
+                let color: [u8; 4] = if checker {
+                    [255, 0, 255, 255]
+                } else {
+                    [0, 0, 0, 255]
+                };
+                pixels[index..index + 4].copy_from_slice(&color);
+            }
+        }
+
+        Arc::new(Image {
+            pixels,
+            width,
+            height,
+            format: ImageFormat::Rgba8,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

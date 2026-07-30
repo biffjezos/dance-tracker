@@ -174,6 +174,13 @@ input[type="color"]::-webkit-color-swatch {
   border: 2px solid var(--color-border-panel);
   min-height: 0;
   background: var(--color-bg-panel);
+  cursor: pointer;
+}
+
+/* Click a panel's screen to make it the keyboard-shortcut target (Space
+   play/stop) - only one panel is focused at a time. */
+.panel.focused {
+  border-color: var(--color-border-button);
 }
 
 .panel-title {
@@ -184,6 +191,29 @@ input[type="color"]::-webkit-color-swatch {
   font-size: var(--font-size-panel-title);
   display: flex;
   align-items: center;
+  justify-content: space-between;
+}
+
+.expand-button {
+  border: none;
+  border-left: 2px solid var(--color-border-button);
+  padding: 0 8px;
+  height: 100%;
+  font-size: var(--font-size-panel-title);
+}
+
+/* Either panel can expand to fill the whole content area; the other is
+   hidden entirely (not just visually - see canvasFocus/render.js, its
+   tick is skipped too). Aspect ratio is preserved for free by the
+   existing object-fit: contain on video/canvas. */
+.workspace.expanded-preview .output-panel,
+.workspace.expanded-output .camera-panel {
+  display: none;
+}
+
+.workspace.expanded-preview .camera-panel,
+.workspace.expanded-output .output-panel {
+  grid-column: 1 / -1;
 }
 
 .screen {

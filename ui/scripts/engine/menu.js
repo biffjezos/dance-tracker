@@ -11,9 +11,11 @@ import { nodeSelectionState } from "./nodeSelection.js";
 import { nodeEditContextRegistry, renderGroupContext } from "./nodeEditContexts.js";
 import { getAllRealEntries } from "../state/registry.js";
 import { createNode } from "../core/operations.js";
+import { getWasmApp } from "../core/wasm.js";
 import {
     rebuildGraph,
-    currentPreviewContentId
+    currentPreviewContentId,
+    resolveNodeId
 } from "./graph.js";
 import { state, nextNumber } from "./state.js";
 
@@ -166,6 +168,45 @@ export class MenuManager {
         }
     }
 
+    renderRemoveButton() {
+        if (!nodeSelectionState.getSelectedNode()) return;
+
+        const removeButton = document.createElement("button");
+        removeButton.innerText = "REMOVE";
+        removeButton.onclick = () => this.removeSelectedNode();
+        this.subMenu.appendChild(removeButton);
+    }
+
+    // Remove the selected node from the graph. Graph::remove_node already
+    // safely disconnects anyone wired to it (no dangling reference, no
+    // crash) - this just mirrors that on the JS side: drop the layer,
+    // rebuild, and select whatever's left.
+    removeSelectedNode() {
+        const selectedNode = nodeSelectionState.getSelectedNode();
+        if (!selectedNode) return;
+
+        const wasmApp = getWasmApp();
+        const nodeId = resolveNodeId(selectedNode.id);
+        if (wasmApp && nodeId !== null && nodeId !== undefined) {
+            try {
+                wasmApp.remove_node(nodeId);
+            } catch (err) {
+                console.error("Failed to remove node:", err);
+            }
+        }
+
+        state.videoLayers = state.videoLayers.filter(layer => layer !== selectedNode.layer);
+        state.nodes = state.nodes.filter(layer => layer !== selectedNode.layer);
+
+        rebuildGraph();
+
+        const entries = getAllRealEntries();
+        nodeSelectionState.setSelectedNode(entries.length > 0 ? entries[0] : null);
+
+        this.render();
+        this.updateStatusBar();
+    }
+
     selectNextNode() {
         const selectionState = nodeSelectionState;
         const entries = getAllRealEntries();
@@ -235,6 +276,7 @@ export class MenuManager {
             this.renderSeparator();
 
             this.renderEditButton();
+            this.renderRemoveButton();
 
             // biffjezos: added [> live] button
             const liveButton = document.createElement("button");

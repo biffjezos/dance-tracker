@@ -6,12 +6,15 @@ import {
     getOutputNodeId,
     currentPreviewContentId
 } from "./graph.js";
+import { isPanelVisible } from "./panelExpand.js";
 
 let liveNodeId = null;
 let liveNodeLabel = null;
 const LIVE_OUTPUT_DEFAULT_TITLE = "LIVE OUTPUT";
 
 export function renderPreview() {
+    if (!isPanelVisible("preview")) return;
+
     const wasmApp = getWasmApp();
     if (!wasmApp) return;
     const canvas = document.getElementById("camera-preview");
@@ -45,23 +48,25 @@ window.addEventListener("clearLiveNode", () => {
 });
 
 function loop() {
-    const wasmApp = getWasmApp();
-    const outputNodeId = liveNodeId ?? getOutputNodeId();
-    const masterCanvas = document.getElementById("master-layer");
-
     const liveOutputTitle = document.getElementById("live-output-title");
     if (liveOutputTitle) {
         liveOutputTitle.innerText = liveNodeId !== null ? liveNodeLabel : LIVE_OUTPUT_DEFAULT_TITLE;
     }
 
-    if (wasmApp && outputNodeId !== null && outputNodeId !== undefined) {
-        try {
-            wasmApp.render_tick(outputNodeId, masterCanvas);
-        } catch (error) {
-            // expected transient failure
+    if (isPanelVisible("output")) {
+        const wasmApp = getWasmApp();
+        const outputNodeId = liveNodeId ?? getOutputNodeId();
+        const masterCanvas = document.getElementById("master-layer");
+
+        if (wasmApp && outputNodeId !== null && outputNodeId !== undefined) {
+            try {
+                wasmApp.render_tick(outputNodeId, masterCanvas);
+            } catch (error) {
+                // expected transient failure
+            }
+        } else {
+            masterCanvas.getContext("2d").clearRect(0, 0, masterCanvas.width, masterCanvas.height);
         }
-    } else {
-        masterCanvas.getContext("2d").clearRect(0, 0, masterCanvas.width, masterCanvas.height);
     }
     renderPreview();
     requestAnimationFrame(loop);

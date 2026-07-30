@@ -10,6 +10,9 @@ import { reportSelection } from "./engine/status.js";
 
 import { nodeSelectionState } from "./engine/nodeSelection.js";
 import "./engine/nodeEditContexts.js";
+import { initCanvasFocus, getFocusedPanel } from "./engine/canvasFocus.js";
+import { togglePlayback } from "./engine/transport.js";
+import { initPanelExpand } from "./engine/panelExpand.js";
 
 import "./features/image.js";
 import "./features/video.js";
@@ -27,6 +30,23 @@ const camera = new Camera(settings);
 
 const menu = new MenuManager();
 menu.init();
+
+initCanvasFocus();
+initPanelExpand();
+
+// Space play/stops the selected node's video, but only when a canvas is
+// focused (clicked) - otherwise Space scrolling the page or doing nothing
+// unexpectedly would be surprising.
+window.addEventListener("keydown", e => {
+    if (e.code !== "Space" || !getFocusedPanel()) return;
+
+    const selectedNode = nodeSelectionState.getSelectedNode();
+    const videoEl = selectedNode?.layer?.videoEl;
+    if (!videoEl) return;
+
+    e.preventDefault();
+    togglePlayback(videoEl);
+});
 
 
 window.addEventListener("menuOperation", e => {
