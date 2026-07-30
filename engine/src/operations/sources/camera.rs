@@ -48,7 +48,6 @@ impl Operation for CameraSource {
             action: None,
             ui_action: Some("open_camera_stream"),
             create_node: None,
-            buttons: &[],
         }
     }
 
