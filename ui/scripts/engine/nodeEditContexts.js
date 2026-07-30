@@ -165,43 +165,26 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
             return;
         }
 
+        if (parameter.kind === "NUMBER") {
+            renderNumberParameter(menuManager, nodeId, parameter);
+            return;
+        }
+
+        if (parameter.kind === "BOOLEAN") {
+            renderBooleanParameter(menuManager, nodeId, parameter);
+            return;
+        }
+
         if (!parameter.options || parameter.options.length === 0) return;
 
         const options = parameter.options;
         const currentIndex = Math.max(0, options.indexOf(parameter.value));
 
-        const step = direction => {
+        renderStepperButtons(menuManager, parameter.value, direction => {
             const nextIndex = (currentIndex + direction + options.length) % options.length;
-            window.dispatchEvent(
-                new CustomEvent("updateNodeParameter", {
-                    detail: {
-                        nodeId: nodeId,
-                        parameter: parameter.name,
-                        value: options[nextIndex]
-                    }
-                })
-            );
+            dispatchParameterUpdate(nodeId, parameter.name, options[nextIndex]);
             menuManager.render();
-        };
-
-        const separator = document.createElement("span");
-        separator.innerText = " ";
-        menuManager.subMenu.appendChild(separator);
-
-        const minusButton = document.createElement("button");
-        minusButton.innerText = "-";
-        minusButton.onclick = () => step(-1);
-        menuManager.subMenu.appendChild(minusButton);
-
-        const valueLabel = document.createElement("span");
-        valueLabel.innerText = ` ${parameter.value} `;
-        valueLabel.className = "node-selector-label";
-        menuManager.subMenu.appendChild(valueLabel);
-
-        const plusButton = document.createElement("button");
-        plusButton.innerText = "+";
-        plusButton.onclick = () => step(1);
-        menuManager.subMenu.appendChild(plusButton);
+        });
     });
 
     renderInputSteppers(menuManager, nodeEntry, nodeId);
@@ -214,26 +197,87 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
  * no palette, no bespoke widget.
  */
 function renderColorParameter(menuManager, nodeId, parameter) {
-    const label = document.createElement("span");
-    label.innerText = ` ${parameter.name} `;
-    label.className = "node-selector-label";
-    menuManager.subMenu.appendChild(label);
+    renderParameterLabel(menuManager, parameter.name);
 
     const input = document.createElement("input");
     input.type = "color";
     input.value = parameter.value;
-    input.oninput = () => {
-        window.dispatchEvent(
-            new CustomEvent("updateNodeParameter", {
-                detail: {
-                    nodeId: nodeId,
-                    parameter: parameter.name,
-                    value: input.value
-                }
-            })
-        );
-    };
+    input.oninput = () => dispatchParameterUpdate(nodeId, parameter.name, input.value);
     menuManager.subMenu.appendChild(input);
+}
+
+/**
+ * Render a Number-kind parameter as a stepper moving by the step size the
+ * operation itself declares.
+ */
+function renderNumberParameter(menuManager, nodeId, parameter) {
+    renderParameterLabel(menuManager, parameter.name);
+
+    const current = parseFloat(parameter.value) || 0;
+    const step = parameter.step ?? 1;
+
+    renderStepperButtons(menuManager, parameter.value, direction => {
+        dispatchParameterUpdate(nodeId, parameter.name, String(current + direction * step));
+        menuManager.render();
+    });
+}
+
+/**
+ * Render a Boolean-kind parameter as a two-state stepper (TRUE/FALSE).
+ */
+function renderBooleanParameter(menuManager, nodeId, parameter) {
+    renderParameterLabel(menuManager, parameter.name);
+
+    const current = parameter.value === "true";
+
+    renderStepperButtons(menuManager, current ? "TRUE" : "FALSE", () => {
+        dispatchParameterUpdate(nodeId, parameter.name, String(!current));
+        menuManager.render();
+    });
+}
+
+function renderParameterLabel(menuManager, text) {
+    const label = document.createElement("span");
+    label.innerText = ` ${text} `;
+    label.className = "node-selector-label";
+    menuManager.subMenu.appendChild(label);
+}
+
+function dispatchParameterUpdate(nodeId, parameterName, value) {
+    window.dispatchEvent(
+        new CustomEvent("updateNodeParameter", {
+            detail: {
+                nodeId: nodeId,
+                parameter: parameterName,
+                value: value
+            }
+        })
+    );
+}
+
+/**
+ * Render a "- value +" stepper triplet. onStep(direction) is called with
+ * -1 or +1 and is responsible for dispatching the update.
+ */
+function renderStepperButtons(menuManager, valueText, onStep) {
+    const separator = document.createElement("span");
+    separator.innerText = " ";
+    menuManager.subMenu.appendChild(separator);
+
+    const minusButton = document.createElement("button");
+    minusButton.innerText = "-";
+    minusButton.onclick = () => onStep(-1);
+    menuManager.subMenu.appendChild(minusButton);
+
+    const valueLabel = document.createElement("span");
+    valueLabel.innerText = ` ${valueText} `;
+    valueLabel.className = "node-selector-label";
+    menuManager.subMenu.appendChild(valueLabel);
+
+    const plusButton = document.createElement("button");
+    plusButton.innerText = "+";
+    plusButton.onclick = () => onStep(1);
+    menuManager.subMenu.appendChild(plusButton);
 }
 
 /**
@@ -257,7 +301,9 @@ function renderInputSteppers(menuManager, nodeEntry, nodeId) {
         });
         const currentIndex = currentEntry ? candidates.indexOf(currentEntry) + 1 : 0;
 
-        const step = direction => {
+        renderParameterLabel(menuManager, input.name);
+
+        renderStepperButtons(menuManager, options[currentIndex], direction => {
             const nextIndex = (currentIndex + direction + options.length) % options.length;
             if (nextIndex === 0) {
                 wasmApp.disconnect_node_input(nodeId, input.name);
@@ -269,27 +315,7 @@ function renderInputSteppers(menuManager, nodeEntry, nodeId) {
                 }
             }
             menuManager.render();
-        };
-
-        const label = document.createElement("span");
-        label.innerText = ` ${input.name} `;
-        label.className = "node-selector-label";
-        menuManager.subMenu.appendChild(label);
-
-        const minusButton = document.createElement("button");
-        minusButton.innerText = "-";
-        minusButton.onclick = () => step(-1);
-        menuManager.subMenu.appendChild(minusButton);
-
-        const valueLabel = document.createElement("span");
-        valueLabel.innerText = ` ${options[currentIndex]} `;
-        valueLabel.className = "node-selector-label";
-        menuManager.subMenu.appendChild(valueLabel);
-
-        const plusButton = document.createElement("button");
-        plusButton.innerText = "+";
-        plusButton.onclick = () => step(1);
-        menuManager.subMenu.appendChild(plusButton);
+        });
     });
 }
 
