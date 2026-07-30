@@ -75,9 +75,17 @@ impl Operation for VideoSource {
         OperationMetadata {
             display_name: "Video Source",
             category: OperationCategory::Source,
-            input_count: 0,
+            inputs: Vec::new(),
             outputs: vec![OutputKind::Video],
         }
+    }
+
+    fn set_pixel_source(
+        &mut self,
+        source: Arc<dyn PixelSource>,
+    ) -> Result<(), OperationError> {
+        self.set_source(source);
+        Ok(())
     }
 
     fn execute(

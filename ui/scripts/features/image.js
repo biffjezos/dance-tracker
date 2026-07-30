@@ -46,7 +46,7 @@ window.addEventListener("menuOperation", e => {
             }
 
             // Create the node
-            const nodeId = wasmApp.create_image_source_node();
+            const nodeId = wasmApp.create_node("image_source");
             
             // Set the image data on the node
             wasmApp.set_image_on_node(nodeId, new Uint8Array(imageData.pixels), imageData.width, imageData.height);

@@ -98,17 +98,27 @@ pub fn validate_graph(
                 ValidationState::Dirty,
         };
 
-    // If any node is invalid, return an error
-    if graph.node_validation.iter().any(|&state| !matches!(state, NodeValidation::Valid)) {
-        // Find the first error to return
-        for (index, state) in graph.node_validation.iter().enumerate() {
-            if !matches!(state, NodeValidation::Valid) {
-                return Err(operation_error_from_node_validation(index, *state));
-            }
+    /*
+    Only structural damage makes the graph itself unusable - a cycle, or a
+    reference to a node that no longer exists. An input the user simply has
+    not wired yet is a normal editing state: it stays visible per node, and
+    the operation decides what it produces without one.
+    */
+    for (index, state) in graph.node_validation.iter().enumerate() {
+        if is_structural_failure(*state) {
+            return Err(operation_error_from_node_validation(index, *state));
         }
     }
 
     Ok(())
+}
+
+/// Whether a node state means the graph cannot be evaluated at all.
+fn is_structural_failure(state: NodeValidation) -> bool {
+    matches!(
+        state,
+        NodeValidation::Cycle | NodeValidation::UnknownInput(_)
+    )
 }
 
 /// Convert a NodeValidation state to an OperationError for backward compatibility
@@ -208,19 +218,16 @@ fn run_validation(
                 continue;
             }
 
-            // Check if this node is missing required inputs
-            // Use metadata to determine how many inputs are expected
+            // Report the first input the operation declares but has not been
+            // wired to - the operation itself decides whether it can run anyway.
             let metadata = node.operation.metadata();
-            let expected_inputs = metadata.input_count;
-            let actual_inputs = node.inputs.len();
-            
-            if expected_inputs > 0 && actual_inputs == 0 {
-                // Node expects inputs but has none - mark as missing input
-                // We'll use a generic input for now since we don't know which specific input is missing
-                result.node_states[index] = NodeValidation::MissingInput(Input::Source);
-            } else if actual_inputs < expected_inputs {
-                // Node has some inputs but not enough - mark as missing input
-                result.node_states[index] = NodeValidation::MissingInput(Input::Source);
+
+            let unwired = metadata.inputs.iter().find(|key| {
+                !node.inputs.iter().any(|(wired, _)| wired == *key)
+            });
+
+            if let Some(key) = unwired {
+                result.node_states[index] = NodeValidation::MissingInput(*key);
             }
         } else {
             // This node slot is empty (removed node)
@@ -232,15 +239,18 @@ fn run_validation(
     // Third pass: propagate invalidity through dependencies
     propagate_invalidity(graph, &mut result);
 
-    // Determine overall graph state
-    let has_invalid_nodes = result.node_states.iter()
-        .any(|&state| !matches!(state, NodeValidation::Valid));
-    
-    if has_invalid_nodes {
-        result.graph_state = ValidationState::Invalid(OperationError::UnknownNode);
-    } else {
-        result.graph_state = ValidationState::Valid;
-    }
+    // The graph as a whole is only invalid when it is structurally broken.
+    let structural_failure = result.node_states.iter()
+        .copied()
+        .enumerate()
+        .find(|&(_, state)| is_structural_failure(state));
+
+    result.graph_state = match structural_failure {
+        Some((index, state)) => ValidationState::Invalid(
+            operation_error_from_node_validation(index, state)
+        ),
+        None => ValidationState::Valid,
+    };
 
     result
 }

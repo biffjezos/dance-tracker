@@ -11,6 +11,7 @@ import { nodeSelectionState } from "./nodeSelection.js";
 import { nodeEditContextRegistry } from "./nodeEditContexts.js";
 import { getAllRealEntries } from "../state/registry.js";
 import { createNode } from "../core/operations.js";
+import { rebuildGraph } from "./graph.js";
 import { state } from "./state.js";
 
 // MenuContext: Represents a menu in the hierarchy
@@ -280,8 +281,10 @@ export class MenuManager {
             return;
         }
 
-        // Special handling for NODES menu
-        if (this.category === "nodes") {
+        // Special handling for NODES menu - only at the top of the nodes
+        // stack. Once EDIT (or anything else) has pushed a deeper context,
+        // that context's own branch below must render instead.
+        if (this.category === "nodes" && this.currentContext === nodesMenu) {
             // Render UP button if currentContext has a parent
             if (this.currentContext && this.currentContext.parent !== null) {
                 this.renderUpButton();
@@ -451,40 +454,41 @@ export class MenuManager {
             console.log("Node created with ID:", nodeId);
             
             // Add the node to the appropriate layer array based on operation type
-            let layerId, layerName, layerKind;
+            let layer, layerKind;
             if (operationId === "shuffle") {
-                layerId = `shuffle:${state.nextShuffleNumber++}`;
-                layerName = `SHUFFLE ${state.nextShuffleNumber - 1}`;
+                const number = state.nextShuffleNumber++;
                 layerKind = "shuffle";
-                
-                const newLayer = {
-                    id: layerId,
-                    name: layerName,
+                layer = {
+                    id: `shuffle-${number}`,
+                    name: `SHUFFLE ${number}`,
                     nodeId: nodeId,
                     settings: {}
                 };
-                state.shuffleLayers.push(newLayer);
+                state.shuffleLayers.push(layer);
             } else {
                 // Fallback for other node types
                 console.warn("Unknown node type for creation:", operationId);
                 return;
             }
-            
-            // Create the entry
+
+            // Make the new node's content available for preview/wiring
+            rebuildGraph();
+
+            // Select the new node - use the same registry-key convention
+            // (kind + layer.id) as getAllRealEntries(), so this selection
+            // matches what stepping through NODES will find for it later.
             const newEntry = {
-                id: layerId,
-                label: layerName,
+                id: `${layerKind}:${layer.id}`,
+                label: layer.name,
                 kind: layerKind,
-                layer: { id: layerId, name: layerName, nodeId: nodeId, settings: {} }
+                layer
             };
-            
-            // Select the new node
             nodeSelectionState.setSelectedNode(newEntry);
-            
+
             // Go back to nodes menu
             this.currentContext = nodesMenu;
             this.category = "nodes";
-            
+
             // Refresh the menu
             this.render();
             this.updateStatusBar();
