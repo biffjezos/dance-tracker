@@ -1,6 +1,7 @@
 // features/video.js
 import {
-    state
+    state,
+    nextNumber
 } from "../engine/state.js";
 import {
     getCamera
@@ -70,7 +71,7 @@ window.addEventListener("menuOperation", e => {
                 return;
             }
             const nodeId = createLiveSourceNode(wasmApp, "video_source", video);
-            const number = state.nextVideoNumber++;
+            const number = nextNumber("video");
             const layer = {
                 id: "video-" + number,
                 number,
@@ -105,7 +106,7 @@ function activateCamera() {
         return null;
     }
     const video = camera.getVideo();
-    const number = state.nextVideoNumber++;
+    const number = nextNumber("camera");
     const layer = {
         id: "camera-" + number,
         number,

@@ -1,7 +1,6 @@
 export const state = {
     wasmApp: null,
     camera: null,
-    nextVideoNumber: 1,
     nextNumberByKind: {},
     cameraActivated: false,
     cameraOn: false,
@@ -14,3 +13,12 @@ export const state = {
     outputWidth: 320,
     outputHeight: 240
 };
+
+// Every kind (video, image, camera, and any create_node-backed operation)
+// numbers its own layers independently, starting at 1 - never a shared
+// counter that makes one kind's first instance look like a later one.
+export function nextNumber(kind) {
+    const number = (state.nextNumberByKind[kind] || 0) + 1;
+    state.nextNumberByKind[kind] = number;
+    return number;
+}

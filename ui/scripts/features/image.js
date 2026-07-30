@@ -4,7 +4,8 @@ INPUT: IMAGE FILE
 ==================================================
 */
 import {
-    state
+    state,
+    nextNumber
 } from "../engine/state.js";
 import {
     rebuildGraph
@@ -52,7 +53,7 @@ window.addEventListener("menuOperation", e => {
             wasmApp.set_image_on_node(nodeId, new Uint8Array(imageData.pixels), imageData.width, imageData.height);
             
             // Create a layer for this image
-            const number = state.nextVideoNumber++;
+            const number = nextNumber("image");
             const layer = {
                 id: "image-" + number,
                 number,

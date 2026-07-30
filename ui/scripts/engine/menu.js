@@ -15,7 +15,7 @@ import {
     rebuildGraph,
     currentPreviewContentId
 } from "./graph.js";
-import { state } from "./state.js";
+import { state, nextNumber } from "./state.js";
 
 // MenuContext: Represents a menu in the hierarchy
 class MenuContext {
@@ -246,25 +246,20 @@ export class MenuManager {
             return;
         }
 
-        // Special handling for EDIT context
+        // Special handling for EDIT context. The "|" separator comes after
+        // the context's own name (rendered by renderContext), not before it.
         if (this.currentContext && this.currentContext.id === "node_edit") {
-            // Render UP button
             if (this.currentContext.parent !== null) {
                 this.renderUpButton();
-                const separator = document.createElement("span");
-                separator.innerText = " | ";
-                separator.className = "menu-separator";
-                this.subMenu.appendChild(separator);
             }
-            
-            // Render node-specific edit context
+
             const selectedNode = nodeSelectionState.getSelectedNode();
             if (selectedNode) {
                 nodeEditContextRegistry.renderContext(this, selectedNode);
             } else {
                 const editLabel = document.createElement("span");
                 editLabel.innerText = " NODE EDIT CONTEXT ";
-                editLabel.className = "node-selector-label";
+                editLabel.className = "node-name-label";
                 this.subMenu.appendChild(editLabel);
             }
             return;
@@ -277,10 +272,6 @@ export class MenuManager {
         if (this.currentContext && this.currentContext.id === "param_group") {
             if (this.currentContext.parent !== null) {
                 this.renderUpButton();
-                const separator = document.createElement("span");
-                separator.innerText = " | ";
-                separator.className = "menu-separator";
-                this.subMenu.appendChild(separator);
             }
 
             const selectedNode = nodeSelectionState.getSelectedNode();
@@ -383,8 +374,7 @@ export class MenuManager {
             // never a hardcoded per-kind name.
             const op = this.operations.find(o => o.create_node === operationId);
             const label = op ? op.label : operationId.toUpperCase();
-            const number = state.nextNumberByKind[operationId] || 1;
-            state.nextNumberByKind[operationId] = number + 1;
+            const number = nextNumber(operationId);
 
             const layer = {
                 id: `${operationId}-${number}`,
