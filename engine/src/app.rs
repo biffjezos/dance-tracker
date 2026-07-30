@@ -312,7 +312,58 @@ impl App {
             .set_pixel_source(Arc::new(pixel_source))
             .map_err(js_err)
     }
+    //biffjezos: replaced update_node_parameter to convert paramater: String to accepted by ParameterKind
+    pub fn update_node_parameter(
+        &mut self,
+        node_id: u32,
+        parameter: String,
+        value: String,
+    ) -> Result<(), JsValue> {
+        let node_id = NodeId::from_index(node_id);
 
+        let operation = self.graph.get_node_mut(&node_id)
+            .ok_or_else(|| JsValue::from_str(&format!("Node {:?} not found", node_id)))?;
+
+        let metadata = operation.metadata();
+
+        let descriptor = operation
+            .parameters()
+            .into_iter()
+            .find(|p| p.name == parameter)
+            .ok_or_else(|| JsValue::from_str("Unknown parameter"))?;
+
+        let value = match descriptor.kind {
+            ParameterKind::Number { .. } => {
+                Value::Number(
+                    value.parse::<f64>()
+                        .map_err(|_| JsValue::from_str("Invalid number"))?
+                )
+            }
+
+            ParameterKind::Boolean => {
+                Value::Boolean(
+                    value.parse::<bool>()
+                        .map_err(|_| JsValue::from_str("Invalid boolean"))?
+                )
+            }
+
+            ParameterKind::Color => {
+                Value::Color(
+                    parse_color(&value)
+                        .ok_or_else(|| JsValue::from_str("Invalid color"))?
+                )
+            }
+
+            ParameterKind::Text | ParameterKind::Enum(_) => {
+                Value::Text(value)
+            }
+        };
+
+        operation
+            .set_parameter(&parameter, value)
+            .map_err(js_err)
+    }
+/**
     /// Update a parameter on a specific node.
     /// The operation owns validation of the value.
     pub fn update_node_parameter(
@@ -330,7 +381,7 @@ impl App {
             .set_parameter(&parameter, Value::Text(value))
             .map_err(js_err)
     }
-
+*/
     pub fn set_resolution(&mut self, width: u32, height: u32) {
         self.graph.set_resolution(width, height);
     }
