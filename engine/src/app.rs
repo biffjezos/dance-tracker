@@ -348,16 +348,10 @@ impl App {
                 )
             }
 
-            ParameterKind::Color => {
-                Value::Color(
-                    value.parse::<Color>()
-                        .map_err(|_| JsValue::from_str("Invalid boolean"))?
-                )
-            }
             ParameterKind::Text | ParameterKind::Enum(_) => {
                 Value::Text(value)
             }
-            
+
         };
         operation
             .set_parameter(&parameter, value)
