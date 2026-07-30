@@ -15,7 +15,7 @@ import { resolveNodeId } from "./graph.js";
 export class NodeEditContext {
     /**
      * Create a new node edit context
-     * @param {string} nodeType - The node type this context handles (e.g., "image", "blur", "composite")
+     * @param {string} nodeType - The node type this context handles (e.g., "video", "shuffle")
      * @param {Function} renderFunction - Function that renders the edit controls for this node type
      */
     constructor(nodeType, renderFunction) {
@@ -49,7 +49,7 @@ export class NodeEditContextRegistry {
 
     /**
      * Register a new edit context for a node type
-     * @param {string} nodeType - The node type (e.g., "image", "blur", "composite")
+     * @param {string} nodeType - The node type (e.g., "video", "shuffle")
      * @param {Function} renderFunction - Function to render the edit controls
      */
     register(nodeType, renderFunction) {
@@ -114,61 +114,6 @@ export function renderImageEditContext(menuManager, nodeEntry) {
 }
 
 /**
- * Render function for BLUR edit context
- * Shows: BLUR RADIUS, BLUR TYPE controls
- */
-export function renderBlurEditContext(menuManager, nodeEntry) {
-    const blurLabel = document.createElement("span");
-    blurLabel.innerText = " BLUR SETTINGS ";
-    blurLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(blurLabel);
-}
-
-/**
- * Render function for mask edit context
- * Shows: THRESHOLD, FEATHER, INVERT controls
- */
-export function renderMaskEditContext(menuManager, nodeEntry) {
-    const maskLabel = document.createElement("span");
-    maskLabel.innerText = " MASK EDIT: THRESHOLD, FEATHER, INVERT ";
-    maskLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(maskLabel);
-}
-
-/**
- * Render function for composite edit context
- * Shows: MODE, OPACITY controls
- */
-export function renderCompositeEditContext(menuManager, nodeEntry) {
-    const compositeLabel = document.createElement("span");
-    compositeLabel.innerText = " COMPOSITE EDIT: MODE, OPACITY ";
-    compositeLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(compositeLabel);
-}
-
-/**
- * Render function for rings edit context
- * Shows: ANIMATION, PARAMETERS controls
- */
-export function renderRingsEditContext(menuManager, nodeEntry) {
-    const ringsLabel = document.createElement("span");
-    ringsLabel.innerText = " RINGS EDIT: ANIMATION, PARAMETERS ";
-    ringsLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(ringsLabel);
-}
-
-/**
- * Render function for ghost edit context
- * Shows: SPEED, LOOP, PARAMETERS controls
- */
-export function renderGhostEditContext(menuManager, nodeEntry) {
-    const ghostLabel = document.createElement("span");
-    ghostLabel.innerText = " GHOST EDIT: SPEED, LOOP, PARAMETERS ";
-    ghostLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(ghostLabel);
-}
-
-/**
  * Render function for video edit context
  * Shows: ANIMATION CONTROLS
  */
@@ -177,17 +122,6 @@ export function renderVideoEditContext(menuManager, nodeEntry) {
     videoLabel.innerText = " VIDEO EDIT: ANIMATION CONTROLS ";
     videoLabel.className = "node-selector-label";
     menuManager.subMenu.appendChild(videoLabel);
-}
-
-/**
- * Render function for text edit context
- * Shows: TEXT, FONT, COLOR controls
- */
-export function renderTextEditContext(menuManager, nodeEntry) {
-    const textLabel = document.createElement("span");
-    textLabel.innerText = " TEXT EDIT: CONTENT, FONT, COLOR ";
-    textLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(textLabel);
 }
 
 /**
@@ -314,11 +248,5 @@ function renderInputSteppers(menuManager, nodeEntry, nodeId) {
 
 // Register all known edit contexts
 // These map node kinds to their respective edit UIs
-nodeEditContextRegistry.register("blur", renderBlurEditContext);
-nodeEditContextRegistry.register("standaloneMask", renderMaskEditContext);
-nodeEditContextRegistry.register("composite", renderCompositeEditContext);
-nodeEditContextRegistry.register("rings", renderRingsEditContext);
-nodeEditContextRegistry.register("ghost", renderGhostEditContext);
 nodeEditContextRegistry.register("video", renderVideoEditContext);
-nodeEditContextRegistry.register("text", renderTextEditContext);
 nodeEditContextRegistry.register("shuffle", renderShuffleEditContext);
