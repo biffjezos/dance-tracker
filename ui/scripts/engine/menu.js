@@ -17,6 +17,7 @@ import {
     currentPreviewContentId,
     resolveNodeId
 } from "./graph.js";
+import { getLiveNodeId } from "./render.js";
 import { state, nextNumber } from "./state.js";
 
 // MenuContext: Represents a menu in the hierarchy
@@ -397,10 +398,19 @@ export class MenuManager {
             this.renderRemoveButton();
 
             // biffjezos: added [> live] button
+            // Toggle, not a one-way setter: clicking again on the node that's
+            // already the live override releases it (dispatches clearLiveNode)
+            // instead of leaving no way back to the wired LIVE OUTPUT node.
+            const nodeId = currentPreviewContentId();
+            const isLive = nodeId !== null && nodeId !== undefined && getLiveNodeId() === nodeId;
             const liveButton = document.createElement("button");
-            liveButton.innerText = "> LIVE PREVIEW";
+            liveButton.innerText = isLive ? "> RELEASE LIVE PREVIEW" : "> LIVE PREVIEW";
             liveButton.onclick = () => {
-                const nodeId = currentPreviewContentId();
+                if (isLive) {
+                    window.dispatchEvent(new CustomEvent("clearLiveNode"));
+                    this.render();
+                    return;
+                }
 
                 if (nodeId !== null && nodeId !== undefined) {
                     window.dispatchEvent(
@@ -411,6 +421,7 @@ export class MenuManager {
                             }
                         })
                     );
+                    this.render();
                 }
             };
             this.subMenu.appendChild(liveButton);

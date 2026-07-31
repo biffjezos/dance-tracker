@@ -65,7 +65,10 @@ impl PreviewExecutor {
         }
 
         let outputs = node_data.operation.execute(ctx, &input_values)?;
-        Ok(outputs.into_iter().next().unwrap())
+        // ok_or (not unwrap) so an operation that violates the "always
+        // returns exactly one output" convention errors out this one
+        // preview instead of panicking the whole WASM instance.
+        outputs.into_iter().next().ok_or(OperationError::NoOutput)
     }
 
     fn evaluate_memoized(
@@ -88,7 +91,9 @@ impl PreviewExecutor {
         }
 
         let outputs = node_data.operation.execute(ctx, &input_values)?;
-        let value = outputs.into_iter().next().unwrap();
+        // See evaluate_unmemoized: ok_or, not unwrap, so a no-output
+        // operation errors out this preview instead of panicking.
+        let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;
 
         memo.insert(node, value.clone());
 

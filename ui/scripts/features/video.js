@@ -13,7 +13,8 @@ import {
     reportSelection
 } from "../engine/status.js";
 import {
-    defaultUniversalSettings
+    defaultUniversalSettings,
+    setSelectedVideoEntry
 } from "../state/registry.js";
 import {
     getWasmApp
@@ -84,6 +85,7 @@ window.addEventListener("menuOperation", e => {
             state.videoLayers.push(layer);
             state.transportPlaying = true;
             rebuildGraph();
+            setSelectedVideoEntry(layer);
             reportSelection("video");
         } catch (error) {
             console.error("Error loading video:", error);
@@ -121,6 +123,7 @@ function activateCamera() {
         layer.nodeId = createLiveSourceNode(wasmApp, "camera_source", video);
         state.videoLayers.push(layer);
         rebuildGraph();
+        setSelectedVideoEntry(layer);
         reportSelection("video");
     };
     if (video.videoWidth && video.videoHeight) {

@@ -15,6 +15,11 @@ pub enum OperationError {
     InvalidInputType(String),
     InvalidParameterType(String),
     InvalidParameterValue(String, String),
+    // execute() returned an empty Vec<Value> - every executor expects
+    // exactly one output today, so this turns that convention violation
+    // into a propagated error instead of a panic that would take down
+    // the whole render loop.
+    NoOutput,
 }
 
 impl fmt::Display for OperationError {
@@ -31,6 +36,7 @@ impl fmt::Display for OperationError {
             OperationError::InvalidInputType(msg) => write!(f, "Invalid input type: {}", msg),
             OperationError::InvalidParameterType(msg) => write!(f, "Invalid parameter type: {}", msg),
             OperationError::InvalidParameterValue(name, value) => write!(f, "Invalid parameter value for {}: {}", name, value),
+            OperationError::NoOutput => write!(f, "Operation produced no output"),
         }
     }
 }

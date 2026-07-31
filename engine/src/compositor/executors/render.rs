@@ -109,7 +109,9 @@ impl RenderExecutor {
         }
 
         let outputs = node_data.operation.execute(ctx, &input_values)?;
-        let value = outputs.into_iter().next().unwrap();
+        // ok_or (not unwrap) so a no-output operation errors out this tick
+        // instead of panicking the whole render loop.
+        let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;
 
         if !live {
             self.cache.borrow_mut().insert(node, CachedNode {
@@ -163,7 +165,8 @@ impl RenderExecutor {
         let outputs = outputs?;
         entries.push(ProfileEntry { name, duration_ms });
 
-        let value = outputs.into_iter().next().unwrap();
+        // ok_or (not unwrap): see evaluate() above.
+        let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;
         memo.insert(node, value.clone());
 
         Ok(value)

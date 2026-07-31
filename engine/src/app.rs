@@ -33,6 +33,16 @@ fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
 }
 
+// Milliseconds since the page's time origin - falls back to 0.0 rather than
+// panicking if window/performance is ever unavailable, since losing the
+// playback clock should never take down rendering.
+fn now_ms() -> f64 {
+    web_sys::window()
+        .and_then(|w| w.performance())
+        .map(|p| p.now())
+        .unwrap_or(0.0)
+}
+
 /*
 Resolve a bare JS-supplied slot index into the current, generation-checked
 NodeId for whatever node actually occupies that slot right now. JS only ever
@@ -83,6 +93,11 @@ pub struct App {
     // a fresh RenderExecutor per tick would never see a "last tick" to
     // compare against.
     render_executor: RenderExecutor,
+    // performance.now() timestamp (ms) captured once at construction, so
+    // context() can report meta.time as seconds-since-start rather than an
+    // absolute wall-clock value - Video::frame_at expects 0.0 to mean "the
+    // start of playback", not "the start of the Unix epoch".
+    start_time_ms: f64,
 }
 
 
@@ -99,13 +114,17 @@ impl App {
             registry,
             frame_counter: 0,
             render_executor: RenderExecutor::new(),
+            start_time_ms: now_ms(),
         }
     }
-    pub fn get_operations(&self) -> JsValue {
+    // Returns Result (not JsValue directly) so a serialization failure
+    // becomes a catchable JS error instead of panicking the WASM instance,
+    // matching every other JS-facing method in this file.
+    pub fn get_operations(&self) -> Result<JsValue, JsValue> {
         serde_wasm_bindgen::to_value(
             &self.registry.descriptors()
         )
-        .unwrap()
+        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
     }
 
     pub fn execute_operation(&mut self, id: &str) {
@@ -407,6 +426,10 @@ impl App {
         Context {
             meta: Meta {
                 frame: self.frame_counter,
+                // Seconds since this App was constructed, so a multi-frame
+                // Value::Video advances via Video::frame_at(time) instead of
+                // being permanently stuck at time=0.0 (its first frame).
+                time: (now_ms() - self.start_time_ms) / 1000.0,
                 preview,
                 width,
                 height,

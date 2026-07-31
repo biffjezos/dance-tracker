@@ -47,6 +47,13 @@ export function getDisplayedOutputNodeId() {
     return liveNodeId ?? getOutputNodeId();
 }
 
+// Lets menu.js render the LIVE PREVIEW button as a toggle (and dispatch
+// clearLiveNode) instead of only ever being able to set a new override -
+// clearLiveNode itself was previously dispatched-nowhere dead code.
+export function getLiveNodeId() {
+    return liveNodeId;
+}
+
 window.addEventListener("setLiveNode", e => {
     liveNodeId = e.detail.nodeId;
     liveNodeLabel = e.detail.label;
