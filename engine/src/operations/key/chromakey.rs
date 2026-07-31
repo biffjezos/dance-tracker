@@ -231,7 +231,7 @@ mod tests {
 
         graph.connect(chroma_id, Input::Source, src_a_id).unwrap();
 
-        let executor = PreviewExecutor;
+        let executor = PreviewExecutor::default();
         let values = executor.execute(&graph, chroma_id, &ctx).unwrap();
         match &values[0] {
             Value::Image(out) => assert_eq!(&out.pixels[0..4], &[255, 0, 0, 255], "expected red from src_a"),
