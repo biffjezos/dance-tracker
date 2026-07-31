@@ -463,7 +463,7 @@ impl App {
 
         let ctx = self.context(true);
 
-        let executor = PreviewExecutor;
+        let executor = PreviewExecutor::default();
 
         let values = executor
             .execute(
