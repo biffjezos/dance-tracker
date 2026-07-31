@@ -9,7 +9,7 @@ AMIGA TWO ROW MENU SYSTEM
 
 import { nodeSelectionState } from "./nodeSelection.js";
 import { nodeEditContextRegistry, renderGroupContext } from "./nodeEditContexts.js";
-import { getAllRealEntries } from "../state/registry.js";
+import { getAllRealEntries, addNodeLayer, removeLayer } from "../state/registry.js";
 import { createNode } from "../core/operations.js";
 import { getWasmApp } from "../core/wasm.js";
 import {
@@ -18,7 +18,7 @@ import {
     resolveNodeId
 } from "./graph.js";
 import { getLiveNodeId } from "./render.js";
-import { state, nextNumber } from "./state.js";
+import { nextNumber } from "./state.js";
 
 // MenuContext: Represents a menu in the hierarchy
 class MenuContext {
@@ -369,8 +369,7 @@ export class MenuManager {
             }
         }
 
-        state.videoLayers = state.videoLayers.filter(layer => layer !== selectedNode.layer);
-        state.nodes = state.nodes.filter(layer => layer !== selectedNode.layer);
+        removeLayer(selectedNode.layer);
 
         rebuildGraph();
 
@@ -624,7 +623,7 @@ export class MenuManager {
                 kind: operationId,
                 settings: {}
             };
-            state.nodes.push(layer);
+            addNodeLayer(layer);
 
             // Make the new node's content available for preview/wiring
             rebuildGraph();

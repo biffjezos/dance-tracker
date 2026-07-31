@@ -15,7 +15,8 @@ import {
 } from "../engine/status.js";
 import {
     defaultUniversalSettings,
-    setSelectedVideoEntry
+    setSelectedVideoEntry,
+    addVideoLayer
 } from "../state/registry.js";
 import {
     getWasmApp
@@ -64,7 +65,7 @@ window.addEventListener("menuOperation", e => {
                 settings: defaultUniversalSettings()
             };
 
-            state.videoLayers.push(layer);
+            addVideoLayer(layer);
             state.transportPlaying = true;
 
             rebuildGraph();
