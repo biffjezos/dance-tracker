@@ -51,6 +51,14 @@ initPanelExpand();
 // element always keeps playing, and Space toggles that panel's freeze
 // state via a new WASM binding rather than touching videoEl directly.
 window.addEventListener("keydown", e => {
+    // A canvas click sets focusedPanel and stays set until another canvas
+    // is clicked - it doesn't track which element currently has keyboard
+    // focus. Without this check, typing a space into any text field (e.g.
+    // renaming a node) while a panel was previously clicked would both
+    // fail to type the space and toggle playback at the same time.
+    const target = e.target;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+
     const panel = getFocusedPanel();
     if (e.code !== "Space" || !panel) return;
 
