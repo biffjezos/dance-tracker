@@ -6,33 +6,71 @@ Either canvas panel can expand to fill the whole content area; the other
 becomes hidden. isPanelVisible() is what render.js consults to skip that
 panel's tick entirely while it's hidden - not just hiding the result, but
 not computing it either.
+
+Below MOBILE_BREAKPOINT (matches Bootstrap's lg), the two panels never
+show side by side at all - squeezed to half width each isn't usable on a
+narrow screen. With no explicit choice made yet, one panel (preview)
+fills the screen by default there, and the #panel-switch buttons (shown
+only below that width) are how the other one gets picked - the per-panel
+expand buttons still work too, they're just harder to reach for than a
+dedicated switch when only one panel is even visible to click on.
 ==================================================
 */
 
-let expandedPanel = null; // "preview" | "output" | null
+const MOBILE_BREAKPOINT = 992;
+
+let expandedPanel = null; // "preview" | "output" | null - explicit user choice
+let workspaceEl = null;
+
+function isNarrowViewport() {
+    return window.innerWidth < MOBILE_BREAKPOINT;
+}
+
+function effectivePanel() {
+    if (expandedPanel !== null) return expandedPanel;
+    return isNarrowViewport() ? "preview" : null;
+}
 
 export function isPanelVisible(panelId) {
-    return expandedPanel === null || expandedPanel === panelId;
+    const panel = effectivePanel();
+    return panel === null || panel === panelId;
 }
 
 export function initPanelExpand() {
-    const workspace = document.querySelector(".workspace");
-    if (!workspace) return;
+    workspaceEl = document.querySelector(".workspace");
+    if (!workspaceEl) return;
 
     document.querySelectorAll(".expand-button").forEach(button => {
         button.addEventListener("click", () => {
             const panelId = button.dataset.panel;
             expandedPanel = expandedPanel === panelId ? null : panelId;
-            applyExpandState(workspace);
+            applyExpandState();
         });
     });
+
+    document.querySelectorAll("#panel-switch [data-switch-panel]").forEach(button => {
+        button.addEventListener("click", () => {
+            expandedPanel = button.dataset.switchPanel;
+            applyExpandState();
+        });
+    });
+
+    window.addEventListener("resize", applyExpandState);
+
+    applyExpandState();
 }
 
-function applyExpandState(workspace) {
-    workspace.classList.toggle("expanded-preview", expandedPanel === "preview");
-    workspace.classList.toggle("expanded-output", expandedPanel === "output");
+function applyExpandState() {
+    const panel = effectivePanel();
+
+    workspaceEl.classList.toggle("expanded-preview", panel === "preview");
+    workspaceEl.classList.toggle("expanded-output", panel === "output");
 
     document.querySelectorAll(".expand-button").forEach(button => {
-        button.innerText = button.dataset.panel === expandedPanel ? "⤡" : "⤢";
+        button.innerText = button.dataset.panel === panel ? "⤡" : "⤢";
+    });
+
+    document.querySelectorAll("#panel-switch [data-switch-panel]").forEach(button => {
+        button.classList.toggle("active", button.dataset.switchPanel === panel);
     });
 }

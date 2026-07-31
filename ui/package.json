@@ -1,0 +1,16 @@
+{
+  "name": "ui",
+  "version": "1.0.0",
+  "description": "Dance Tracker 5000 UI - a static page compiled from Handlebars partials. There is no runtime server-side dependency; `npm run build` regenerates index.html and nothing else changes at request time.",
+  "private": true,
+  "scripts": {
+    "build": "node build-html.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "bootstrap": "^5.3.3",
+    "handlebars": "^4.7.9"
+  }
+}

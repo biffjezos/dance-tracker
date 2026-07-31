@@ -1,0 +1,17 @@
+            <nav class="main-menu">
+                <button
+                    id="main-menu-toggle"
+                    class="menu-toggle-button d-lg-none"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#main-menu-items"
+                    aria-expanded="false"
+                    aria-controls="main-menu-items"
+                > ☰ MENU </button>
+
+                <div class="main-menu-items collapse d-lg-flex" id="main-menu-items">
+{{#each menus}}
+                    <button data-menu="{{this.key}}"> {{this.label}} </button>
+{{/each}}
+                </div>
+            </nav>

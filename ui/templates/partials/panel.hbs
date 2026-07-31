@@ -1,0 +1,12 @@
+                <section class="panel {{sectionClass}}">
+                    <div class="panel-title">
+                        <span id="{{titleId}}">{{titleText}}</span>
+                        <button class="expand-button" data-panel="{{panelKey}}">⤢</button>
+                    </div>
+                    <div class="screen{{#if screenExtraClass}} {{screenExtraClass}}{{/if}}">
+{{#if hasVideo}}
+                        <video id="camera" autoplay muted playsinline style="display:none"></video>
+{{/if}}
+                        <canvas id="{{canvasId}}"></canvas>
+                    </div>
+                </section>

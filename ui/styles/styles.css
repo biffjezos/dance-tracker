@@ -22,10 +22,15 @@ html, body {
   height: 96vh;
   margin: 2vh auto;
   display: grid;
-  grid-template-rows: 45px 35px 35px 1fr 28px;
+  /* Menu/status rows are auto, not a fixed px height, because the
+     main-menu can be a two-line toggle+collapse below lg, the sub-menu
+     wraps onto more than one line once a node has several parameters,
+     and the status bar wraps below lg too. */
+  grid-template-rows: 45px auto auto auto 1fr auto;
   border: 3px solid var(--color-border-app);
   background: var(--color-bg-app);
   box-shadow: 0 0 20px var(--color-shadow-app);
+  overflow: auto;
 }
 
 /* ========================================== TITLE BAR ========================================== */
@@ -53,10 +58,74 @@ html, body {
 .main-menu, .sub-menu {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 3px;
   background: var(--color-bg-menu);
   border-bottom: 1px solid var(--color-border-menu-bottom);
+}
+
+/* Below lg, the eight main-menu buttons collapse behind a single toggle
+   (Bootstrap's Collapse component) instead of wrapping onto several rows
+   of their own - at lg and up, the toggle is hidden and the full list is
+   always shown exactly as it always has been. */
+.main-menu {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+@media (min-width: 992px) {
+  .main-menu {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.menu-toggle-button {
+  align-self: flex-start;
+}
+
+.main-menu-items {
+  gap: 4px;
+}
+
+/* Bootstrap's Collapse *component* (bootstrap.bundle.min.js) is vendored,
+   but not the full bootstrap.css its default .collapse styling normally
+   comes from - only the grid + utilities CSS, to keep Bootstrap out of
+   this app's own visual styling. These three rules are the entire base
+   behaviour .collapse actually needs (hidden unless .show, plus the
+   height transition while toggling); d-lg-flex above still wins at lg+
+   regardless of .show, since utility classes carry !important. */
+.collapse:not(.show) {
+  display: none;
+}
+
+.collapsing {
+  height: 0;
+  overflow: hidden;
+  transition: height 0.2s ease;
+}
+
+.main-menu-items.collapse.show {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* Below lg, only one workspace panel is ever shown at a time (see
+   panelExpand.js) - this switch is how it's picked, standing in for the
+   per-panel expand buttons that would otherwise require guessing which
+   panel is even the hidden one. */
+.panel-switch {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--color-bg-menu);
+  border-bottom: 1px solid var(--color-border-menu-bottom);
+}
+
+.panel-switch button.active {
+  background: var(--color-bg-button-hover);
+  color: var(--color-text-button-hover);
 }
 
 button {
@@ -178,6 +247,14 @@ input[type="color"]::-webkit-color-swatch {
 }
 
 /* ========================================== WORKSPACE ========================================== */
+/* Deliberately plain CSS Grid, not Bootstrap's row/col - Bootstrap's grid
+   is flexbox-based, and a flex line's height is computed from its items'
+   own content first. That's circular for a panel whose content
+   (.screen{flex:1}) wants to fill whatever height the panel ends up
+   with: Grid's stretch instead gives every item the row's full computed
+   height unconditionally, which is what this layout actually depends on.
+   The responsive behaviour (single panel below lg) is handled by
+   panelExpand.js hiding one panel outright, not by this grid reflowing. */
 .workspace {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -214,7 +291,6 @@ input[type="color"]::-webkit-color-swatch {
 
 .expand-button {
   border: none;
-  border-left: 2px solid var(--color-border-button);
   padding: 0 8px;
   height: 100%;
   font-size: var(--font-size-panel-title);
@@ -223,7 +299,9 @@ input[type="color"]::-webkit-color-swatch {
 /* Either panel can expand to fill the whole content area; the other is
    hidden entirely (not just visually - see canvasFocus/render.js, its
    tick is skipped too). Aspect ratio is preserved for free by the
-   existing object-fit: contain on video/canvas. */
+   existing object-fit: contain on video/canvas. Below lg this is the
+   *only* way either panel is ever shown - see panelExpand.js, which
+   defaults one of them expanded there instead of leaving both stacked. */
 .workspace.expanded-preview .output-panel,
 .workspace.expanded-output .camera-panel {
   display: none;
@@ -260,6 +338,7 @@ video, canvas {
   display: flex;
   align-items: center;
   justify-content: space-around;
+  flex-wrap: wrap;
   background: var(--color-bg-statusbar);
   color: var(--color-text-statusbar);
   font-size: var(--font-size-status);
