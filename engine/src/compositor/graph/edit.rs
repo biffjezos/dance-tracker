@@ -221,3 +221,81 @@ impl Graph {
         self.height = height;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compositor::{
+        Context,
+        Value,
+        metadata::{OperationCategory, OperationMetadata},
+        OperationDescriptor,
+    };
+    use std::any::Any;
+
+    struct Stub;
+
+    impl Operation for Stub {
+        fn descriptor(&self) -> OperationDescriptor {
+            OperationDescriptor {
+                id: "stub",
+                menu: "TEST",
+                label: "STUB",
+                action: None,
+                ui_action: None,
+                create_node: None,
+            }
+        }
+
+        fn as_any(&self) -> &dyn Any { self }
+        fn as_any_mut(&mut self) -> &mut dyn Any { self }
+
+        fn metadata(&self) -> OperationMetadata {
+            OperationMetadata {
+                display_name: "Stub",
+                category: OperationCategory::Source,
+                inputs: vec![],
+                outputs: vec![],
+            }
+        }
+
+        fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
+            Ok(vec![])
+        }
+    }
+
+    // Reproduces the exact reported bug: add a node, remove it, add another
+    // node that reuses the freed slot - the new node must still resolve via
+    // Graph::current_id (what App uses to turn a bare JS index into a real
+    // NodeId), even though the slot's generation moved on.
+    #[test]
+    fn a_node_reusing_a_freed_slot_resolves_by_its_bare_index() {
+        let mut graph = Graph::new(320, 240);
+
+        let image_1 = graph.add_node(Box::new(Stub));
+        let _blur_1 = graph.add_node(Box::new(Stub));
+
+        graph.remove_node(image_1).unwrap();
+
+        // MULTIPLY 1 reuses IMAGE 1's freed slot index, but with a bumped
+        // generation.
+        let multiply_1 = graph.add_node(Box::new(Stub));
+        assert_eq!(multiply_1.index(), image_1.index());
+        assert_ne!(multiply_1.generation, image_1.generation);
+
+        let resolved = graph.current_id(multiply_1.index())
+            .expect("current_id must resolve the live node at this slot");
+        assert_eq!(resolved, multiply_1);
+        assert!(graph.get_node(&resolved).is_some());
+
+        // The stale NodeId from before removal must not resolve to the new
+        // node occupying its old slot.
+        assert!(graph.get_node(&image_1).is_none());
+    }
+
+    #[test]
+    fn current_id_is_none_for_an_empty_slot() {
+        let graph = Graph::new(320, 240);
+        assert!(graph.current_id(0).is_none());
+    }
+}

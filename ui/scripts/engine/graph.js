@@ -154,6 +154,39 @@ export function resolveNodeId(entryId) {
     return cachedNodeIds.get(entryId) ?? layerNodeIds.get(entryId) ?? null;
 }
 
+// Walk upstream from a WASM node id to find the real HTMLVideoElement(s)
+// feeding it - the node itself if it's a raw video/camera layer, or
+// whatever video/camera layer(s) feed it through any number of intermediate
+// nodes (blend modes, transforms, etc). A node can have more than one video
+// feeding it (e.g. two inputs of a blend mode), so this returns all of them
+// rather than assuming a single canonical source.
+export function findVideoElementsForNode(nodeId, visited = new Set()) {
+    if (nodeId === null || nodeId === undefined || visited.has(nodeId)) return [];
+    visited.add(nodeId);
+
+    const entry = getAllRealEntries().find(entry => resolveNodeId(entry.id) === nodeId);
+    if (entry?.layer?.videoEl) {
+        return [entry.layer.videoEl];
+    }
+
+    const wasmApp = getWasmApp();
+    if (!wasmApp) return [];
+
+    let inputs;
+    try {
+        inputs = wasmApp.node_inputs(nodeId);
+    } catch (error) {
+        return [];
+    }
+
+    const videoEls = [];
+    for (const input of inputs) {
+        if (input.source === null || input.source === undefined) continue;
+        videoEls.push(...findVideoElementsForNode(input.source, visited));
+    }
+    return videoEls;
+}
+
 export function currentPreviewContentId() {
     // Check if there's an active node selection from the NODES menu
     const selectedNode = nodeSelectionState.getSelectedNode();

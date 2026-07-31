@@ -38,6 +38,13 @@ export function renderPreview() {
     }
 }
 
+// What node the output panel is actually showing right now - a live-preview
+// override if one is set, otherwise the wired LIVE OUTPUT node. Used by the
+// Space-bar transport to find the video(s) actually driving that panel.
+export function getDisplayedOutputNodeId() {
+    return liveNodeId ?? getOutputNodeId();
+}
+
 window.addEventListener("setLiveNode", e => {
     liveNodeId = e.detail.nodeId;
     liveNodeLabel = e.detail.label;

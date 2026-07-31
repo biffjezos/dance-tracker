@@ -8,9 +8,6 @@ import {
     resolveMaskSourceLabel
 } from "../state/registry.js";
 import {
-    state
-} from "./state.js";
-import {
     renderPreview
 } from "./render.js";
 import { nodeSelectionState } from "./nodeSelection.js";
@@ -23,9 +20,7 @@ function updateLayerStatusDisplay(entry) {
     }
     const bar = document.querySelector(".statusbar");
     if (bar) {
-        bar.children[2].innerText = "VISIBILITY: " + (entry.id !== null && entry.id === state.outputEntryId ? "ON" :
-            "OFF");
-        bar.children[3].innerText = "TYPE: " + (entry.kind ? entry.kind.toUpperCase() : "NONE");
+        bar.children[2].innerText = "TYPE: " + (entry.kind ? entry.kind.toUpperCase() : "NONE");
     }
 }
 
@@ -39,8 +34,7 @@ function updateNodeSelectionDisplay() {
     // Also update status bar if needed
     const bar = document.querySelector(".statusbar");
     if (bar && selectedNode) {
-        bar.children[2].innerText = "VISIBILITY: " + (selectedNode.id !== null && selectedNode.id === state.outputEntryId ? "ON" : "OFF");
-        bar.children[3].innerText = "TYPE: " + (selectedNode.kind ? selectedNode.kind.toUpperCase() : "NONE");
+        bar.children[2].innerText = "TYPE: " + (selectedNode.kind ? selectedNode.kind.toUpperCase() : "NONE");
     }
     
     // Trigger preview render
@@ -65,8 +59,7 @@ export function reportSelection(scope) {
             scope,
             id: entry.id,
             label: entry.label,
-            kind: entry.kind,
-            visibilityMode: entry.id !== null && entry.id === state.outputEntryId ? "on" : "off"
+            kind: entry.kind
         }
     }));
     renderPreview();

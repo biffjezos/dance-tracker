@@ -68,8 +68,8 @@ export function applyOutputSize() {
     wasmApp.set_resolution(state.outputWidth, state.outputHeight);
     const aspectRatio = (state.outputWidth / state.outputHeight).toFixed(3);
     const bar = document.querySelector(".statusbar");
-    if (bar && bar.children[5]) {
-        bar.children[5].innerText = state.outputWidth + "x" + state.outputHeight + " " + aspectRatio;
+    if (bar && bar.children[4]) {
+        bar.children[4].innerText = state.outputWidth + "x" + state.outputHeight + " " + aspectRatio;
     }
 }
 window.addEventListener("outputSizeUp", () => {
@@ -92,13 +92,13 @@ window.addEventListener("toggleRecord", () => {
     const bar = document.querySelector(".statusbar");
     if (recorder.recording) {
         recorder.stop();
-        if (bar && bar.children[4]) {
-            bar.children[4].innerText = "REC: OFF";
+        if (bar && bar.children[3]) {
+            bar.children[3].innerText = "REC: OFF";
         }
     } else {
         recorder.start();
-        if (bar && bar.children[4]) {
-            bar.children[4].innerText = "REC: ON";
+        if (bar && bar.children[3]) {
+            bar.children[3].innerText = "REC: ON";
         }
     }
 });

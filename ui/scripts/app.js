@@ -8,11 +8,11 @@ import { startRenderLoop } from "./engine/render.js";
 import { applyOutputSize } from "./features/output.js";
 import { reportSelection } from "./engine/status.js";
 
-import { nodeSelectionState } from "./engine/nodeSelection.js";
 import "./engine/nodeEditContexts.js";
 import { initCanvasFocus, getFocusedPanel } from "./engine/canvasFocus.js";
-import { togglePlayback } from "./engine/transport.js";
 import { initPanelExpand } from "./engine/panelExpand.js";
+import { currentPreviewContentId, findVideoElementsForNode } from "./engine/graph.js";
+import { getDisplayedOutputNodeId } from "./engine/render.js";
 
 import "./features/image.js";
 import "./features/video.js";
@@ -34,18 +34,37 @@ menu.init();
 initCanvasFocus();
 initPanelExpand();
 
-// Space play/stops the selected node's video, but only when a canvas is
-// focused (clicked) - otherwise Space scrolling the page or doing nothing
-// unexpectedly would be surprising.
+// Space play/stops the video(s) actually driving whatever the focused
+// canvas is showing right now - not just a raw video/camera layer that
+// happens to be selected, but walked upstream through the graph, since the
+// displayed node is often something downstream (a blend mode, a transform)
+// rather than the source itself. Only fires when a canvas is focused
+// (clicked) - otherwise Space scrolling the page unexpectedly would be
+// surprising.
 window.addEventListener("keydown", e => {
-    if (e.code !== "Space" || !getFocusedPanel()) return;
+    const panel = getFocusedPanel();
+    if (e.code !== "Space" || !panel) return;
 
-    const selectedNode = nodeSelectionState.getSelectedNode();
-    const videoEl = selectedNode?.layer?.videoEl;
-    if (!videoEl) return;
+    const nodeId = panel === "output"
+        ? getDisplayedOutputNodeId()
+        : currentPreviewContentId();
+
+    const videoEls = findVideoElementsForNode(nodeId);
+    if (videoEls.length === 0) return;
 
     e.preventDefault();
-    togglePlayback(videoEl);
+
+    // There's no single canonical video once more than one feeds the same
+    // node - toggle them all the same way, based on the first one's state,
+    // so they move together rather than fighting each other's paused state.
+    const shouldPlay = videoEls[0].paused;
+    videoEls.forEach(videoEl => {
+        if (shouldPlay) {
+            videoEl.play().catch(() => {});
+        } else {
+            videoEl.pause();
+        }
+    });
 });
 
 
