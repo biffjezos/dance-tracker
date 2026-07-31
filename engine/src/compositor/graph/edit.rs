@@ -112,11 +112,6 @@ impl Graph {
             node.inputs.retain(|(_, other)| *other != id);
         }
 
-
-        if self.output == Some(id) {
-            self.output = None;
-        }
-
         // Ensure node_validation vector is large enough
         if index >= self.node_validation.len() {
             self.node_validation.resize(index + 1, NodeValidation::Valid);
@@ -171,26 +166,6 @@ impl Graph {
         self.validation = ValidationState::Dirty;
 
         Ok(())
-    }
-
-    pub fn set_output(
-        &mut self,
-        id: NodeId,
-    ) -> Result<(), OperationError> {
-
-        if self.resolve(id).is_none() {
-            return Err(OperationError::UnknownNode);
-        }
-
-        self.output = Some(id);
-
-        Ok(())
-    }
-
-
-
-    pub fn output(&self) -> Option<NodeId> {
-        self.output
     }
 
     pub fn validate(

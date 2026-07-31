@@ -10,10 +10,10 @@ impl Graph {
     /// Resolve a bare slot index (as passed across the WASM boundary, which
     /// only ever carries a `u32` index, never a generation) into the
     /// current, generation-checked `NodeId` for whatever node currently
-    /// occupies that slot. Returns `None` if the slot is empty - this is
-    /// distinct from `NodeId::from_index`, which always assumes generation
-    /// 0 and silently mismatches a live node after its slot's generation
-    /// has been bumped by a prior removal.
+    /// occupies that slot. Returns `None` if the slot is empty - this is the
+    /// only way to turn a JS-supplied index into a NodeId, precisely so a
+    /// stale slot (reused after a node was removed) can never silently
+    /// resolve to the wrong live node.
     pub fn current_id(
         &self,
         index: u32,

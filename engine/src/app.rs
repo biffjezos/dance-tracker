@@ -47,9 +47,9 @@ fn now_ms() -> f64 {
 Resolve a bare JS-supplied slot index into the current, generation-checked
 NodeId for whatever node actually occupies that slot right now. JS only ever
 holds a `u32` index (never a generation), so after a node has been removed
-and its slot reused, `NodeId::from_index` would reconstruct a stale
-generation and silently fail to resolve the live node - this looks up the
-real current generation instead.
+and its slot reused, reconstructing a NodeId with a stale/assumed generation
+would silently fail to resolve the live node - this looks up the real
+current generation via Graph::current_id instead.
 */
 fn resolve_id(graph: &Graph, index: u32) -> Result<NodeId, JsValue> {
     graph.current_id(index)

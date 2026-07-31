@@ -3,7 +3,6 @@ import {
     getWasmApp
 } from "../core/wasm.js";
 import {
-    getOutputNodeId,
     currentPreviewContentId
 } from "./graph.js";
 import { isPanelVisible } from "./panelExpand.js";
@@ -40,11 +39,13 @@ export function renderPreview() {
     }
 }
 
-// What node the output panel is actually showing right now - a live-preview
-// override if one is set, otherwise the wired LIVE OUTPUT node. Used by the
-// Space-bar transport to find the video(s) actually driving that panel.
+// What node the output panel is actually showing right now, if anything -
+// the OUTPUT panel only ever shows a node once the user has explicitly set
+// it as the LIVE PREVIEW override (there is no other, implicit way to reach
+// it). Used by the Space-bar transport to find the video(s) actually
+// driving that panel.
 export function getDisplayedOutputNodeId() {
-    return liveNodeId ?? getOutputNodeId();
+    return liveNodeId;
 }
 
 // Lets menu.js render the LIVE PREVIEW button as a toggle (and dispatch
@@ -71,7 +72,7 @@ function loop() {
 
     if (isPanelVisible("output")) {
         const wasmApp = getWasmApp();
-        const outputNodeId = liveNodeId ?? getOutputNodeId();
+        const outputNodeId = liveNodeId;
         const masterCanvas = document.getElementById("master-layer");
 
         if (wasmApp && outputNodeId !== null && outputNodeId !== undefined) {

@@ -21,7 +21,6 @@ import {
 const layerNodeIds = new Map(); // layerId -> wasmNodeId
 const layerSettingsHash = new Map(); // layerId -> hash of settings for change detection
 
-let outputNodeId = null;
 let lastPreviewScope = "video";
 
 // Helper to create a stable hash from settings for change detection
@@ -129,23 +128,9 @@ export function rebuildGraph() {
     // Cache the node ids this rebuild produced, for preview/output/wiring
     // lookups between rebuilds.
     cachedNodeIds = contentIds;
-
-    updateOutputNodeId();
 }
 
 export let cachedNodeIds = new Map();
-
-export function updateOutputNodeId() {
-    if (state.outputEntryId === null) {
-        outputNodeId = null;
-        return;
-    }
-    outputNodeId = cachedNodeIds.get(state.outputEntryId) ?? layerNodeIds.get(state.outputEntryId) ?? null;
-}
-
-export function getOutputNodeId() {
-    return outputNodeId;
-}
 
 // Resolve the current WASM node ID backing a registry entry, wherever it
 // sits in the wiring pipeline - used to connect one node's input to another.
