@@ -14,36 +14,11 @@ use crate::compositor::{
 };
 use crate::graphics::{Color, Frame, Image};
 
-/// What an unconnected SOURCE shows. A mask-producing node has nothing to
-/// key "removal" against, so the busy missing()/transparency checker reads
-/// as more confusing than helpful here - and is easy to mistake for real
-/// content when eyedropping a colour straight off the canvas. SOLID (a
-/// flat, obviously-fake colour) is the default; CHECKERBOARD is still
-/// available for anyone who wants the usual missing-input convention.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Placeholder {
-    Solid,
-    Checkerboard,
-}
-
-pub const PLACEHOLDER_OPTIONS: &[&str] = &["SOLID", "CHECKERBOARD"];
-
-impl Placeholder {
-    pub fn to_str(&self) -> &'static str {
-        match self {
-            Placeholder::Solid => "SOLID",
-            Placeholder::Checkerboard => "CHECKERBOARD",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_uppercase().as_str() {
-            "SOLID" => Some(Placeholder::Solid),
-            "CHECKERBOARD" => Some(Placeholder::Checkerboard),
-            _ => None,
-        }
-    }
-}
+/// What an unconnected SOURCE shows: a flat, obviously-fake magenta - a
+/// mask-producing node has nothing to key "removal" against, so the usual
+/// missing()/transparency checker reads as more confusing than helpful
+/// here. Not user-configurable; there's exactly one placeholder.
+const PLACEHOLDER_COLOR: Color = Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };
 
 /// Chroma-key: cuts a pixel's alpha to 0 wherever its colour is within
 /// THRESHOLD of KEY_COLOR, leaving everything else untouched. Distance is
@@ -52,8 +27,6 @@ impl Placeholder {
 pub struct ChromaKey {
     pub key_color: Color,
     pub threshold: f64,
-    pub placeholder: Placeholder,
-    pub placeholder_color: Color,
 }
 
 impl ChromaKey {
@@ -61,8 +34,6 @@ impl ChromaKey {
         Self {
             key_color: Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 },
             threshold: 0.3,
-            placeholder: Placeholder::Solid,
-            placeholder_color: Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 },
         }
     }
 
@@ -141,16 +112,6 @@ impl Operation for ChromaKey {
                 kind: ParameterKind::Number { step: 0.01, min: Some(0.0), max: Some(1.0) },
                 group: None,
             },
-            ParameterDescriptor {
-                name: "PLACEHOLDER",
-                kind: ParameterKind::Enum(PLACEHOLDER_OPTIONS),
-                group: Some("PLACEHOLDER"),
-            },
-            ParameterDescriptor {
-                name: "PLACEHOLDER_COLOR",
-                kind: ParameterKind::Color,
-                group: Some("PLACEHOLDER"),
-            },
         ]
     }
 
@@ -158,8 +119,6 @@ impl Operation for ChromaKey {
         match name {
             "KEY_COLOR" => Some(Value::Color(self.key_color)),
             "THRESHOLD" => Some(Value::Number(self.threshold)),
-            "PLACEHOLDER" => Some(Value::Text(self.placeholder.to_str().to_string())),
-            "PLACEHOLDER_COLOR" => Some(Value::Color(self.placeholder_color)),
             _ => None,
         }
     }
@@ -180,26 +139,13 @@ impl Operation for ChromaKey {
                 self.threshold = v;
                 Ok(())
             }
-            ("PLACEHOLDER", Value::Text(s)) => {
-                self.placeholder = Placeholder::from_str(&s)
-                    .ok_or_else(|| OperationError::InvalidParameterValue(name.to_string(), s))?;
-                Ok(())
-            }
-            ("PLACEHOLDER_COLOR", Value::Color(color)) => {
-                self.placeholder_color = color;
-                Ok(())
-            }
             (name, _) => Err(OperationError::InvalidParameterType(name.to_string())),
         }
     }
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
-            let placeholder = match self.placeholder {
-                Placeholder::Solid => Image::solid(self.placeholder_color, ctx.meta.width, ctx.meta.height),
-                Placeholder::Checkerboard => Image::missing(ctx.meta.width, ctx.meta.height),
-            };
-            return Ok(vec![Value::Image(placeholder)]);
+            return Ok(vec![Value::Image(Image::solid(PLACEHOLDER_COLOR, ctx.meta.width, ctx.meta.height))]);
         };
 
         match value {
@@ -370,23 +316,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn checkerboard_placeholder_is_still_available_as_an_option() {
-        let mut chromakey = ChromaKey::new();
-        chromakey.set_parameter("PLACEHOLDER", Value::Text("CHECKERBOARD".into())).unwrap();
-
-        let values = chromakey.execute(&context(2, 1), &[]).unwrap();
-
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, Image::missing(2, 1).pixels),
-            other => panic!("expected an image, got {:?}", other),
-        }
-    }
-
-    #[test]
-    fn set_parameter_rejects_an_unknown_placeholder() {
-        let mut chromakey = ChromaKey::new();
-        let err = chromakey.set_parameter("PLACEHOLDER", Value::Text("RAINBOW".into())).unwrap_err();
-        assert!(matches!(err, OperationError::InvalidParameterValue(_, _)));
-    }
 }
