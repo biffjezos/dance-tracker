@@ -25,12 +25,16 @@ html, body {
   /* Menu/status rows are auto, not a fixed px height, because the
      main-menu can be a two-line toggle+collapse below lg, the sub-menu
      wraps onto more than one line once a node has several parameters,
-     and the status bar wraps below lg too. */
-  grid-template-rows: 45px auto auto auto 1fr auto;
+     and the status bar wraps below lg too. Exactly one row per direct
+     child of #app - a child that's conditionally display:none (there
+     used to be one here) skips its row entirely during grid
+     auto-placement, silently shifting every row after it up by one and
+     handing the workspace's real space to the status bar instead. Only
+     ever add a row here alongside a #app child that's always present. */
+  grid-template-rows: 45px auto auto 1fr auto;
   border: 3px solid var(--color-border-app);
   background: var(--color-bg-app);
   box-shadow: 0 0 20px var(--color-shadow-app);
-  overflow: auto;
 }
 
 /* ========================================== TITLE BAR ========================================== */
@@ -44,14 +48,31 @@ html, body {
   border-bottom: 2px solid var(--color-border-titlebar-bottom);
 }
 
-.titlebar div:first-child {
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--font-size-title);
   font-weight: bold;
+  flex-shrink: 0;
+}
+
+/* Below lg, only the icon shows - the full "DANCE TRACKER 5000" text and
+   the subtitle can't both fit on one line at a narrow width, and the
+   subtitle (REALTIME DEMO SCENE VIDEO SYNTHESIZER) is the one that needs
+   the room to stay on a single line without wrapping. */
+@media (max-width: 991.98px) {
+  .title-text {
+    display: none;
+  }
 }
 
 .subtitle {
   font-size: var(--font-size-subtitle);
   color: var(--color-text-subtitle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ========================================== MENUS ========================================== */
@@ -66,10 +87,10 @@ html, body {
 }
 
 /* Below lg, the eight main-menu buttons collapse behind a single toggle
-   (Bootstrap's Collapse component) instead of wrapping onto several rows
-   of their own - at lg and up, the toggle is hidden and the full list is
-   always shown exactly as it always has been. */
+   (Bootstrap's Collapse component) - at lg and up, the toggle is hidden
+   and the full list is always shown exactly as it always has been. */
 .main-menu {
+  position: relative;
   flex-direction: column;
   align-items: stretch;
 }
@@ -89,6 +110,32 @@ html, body {
   gap: 4px;
 }
 
+/* Opened, this is a real dropdown - a floating vertical list overlaying
+   whatever's beneath it, not just the same button row wrapped onto more
+   lines in place. It doesn't push the rest of the page down (it's
+   positioned out of flow), and stacking the items vertically instead of
+   wrapping them reads as an actual menu rather than a second copy of the
+   desktop bar. */
+@media (max-width: 991.98px) {
+  .main-menu-items.collapse.show {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: var(--color-bg-menu);
+    border: 1px solid var(--color-border-menu-bottom);
+    padding: 4px;
+  }
+
+  .main-menu-items.collapse.show button {
+    text-align: left;
+  }
+}
+
 /* Bootstrap's Collapse *component* (bootstrap.bundle.min.js) is vendored,
    but not the full bootstrap.css its default .collapse styling normally
    comes from - only the grid + utilities CSS, to keep Bootstrap out of
@@ -106,26 +153,22 @@ html, body {
   transition: height 0.2s ease;
 }
 
-.main-menu-items.collapse.show {
-  display: flex;
-  flex-wrap: wrap;
+/* Shown in a panel's own title bar only while it's the sole visible
+   panel (see panelExpand.js) - lets you flip to the other one without
+   needing to guess where a hidden expand button even is. Not a #app
+   grid child, so it can be hidden/shown per-panel with zero effect on
+   the outer layout. */
+.panel-switch-inline {
+  display: none;
+  border: none;
+  padding: 0 8px;
+  height: 100%;
+  font-size: var(--font-size-panel-title);
 }
 
-/* Below lg, only one workspace panel is ever shown at a time (see
-   panelExpand.js) - this switch is how it's picked, standing in for the
-   per-panel expand buttons that would otherwise require guessing which
-   panel is even the hidden one. */
-.panel-switch {
-  display: flex;
-  gap: 4px;
-  padding: 4px 8px;
-  background: var(--color-bg-menu);
-  border-bottom: 1px solid var(--color-border-menu-bottom);
-}
-
-.panel-switch button.active {
-  background: var(--color-bg-button-hover);
-  color: var(--color-text-button-hover);
+.workspace.expanded-preview .camera-panel .panel-switch-inline,
+.workspace.expanded-output .output-panel .panel-switch-inline {
+  display: inline-block;
 }
 
 button {

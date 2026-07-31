@@ -10,10 +10,12 @@ not computing it either.
 Below MOBILE_BREAKPOINT (matches Bootstrap's lg), the two panels never
 show side by side at all - squeezed to half width each isn't usable on a
 narrow screen. With no explicit choice made yet, one panel (preview)
-fills the screen by default there, and the #panel-switch buttons (shown
-only below that width) are how the other one gets picked - the per-panel
-expand buttons still work too, they're just harder to reach for than a
-dedicated switch when only one panel is even visible to click on.
+fills the screen by default there. Whenever only one panel is visible
+(that default, or either panel manually expanded at any width), its own
+title bar shows a .panel-switch-inline button to flip to the other one -
+the per-panel expand buttons still work too, they're just harder to
+reach for than a dedicated switch when only one panel is even visible to
+click on.
 ==================================================
 */
 
@@ -48,9 +50,12 @@ export function initPanelExpand() {
         });
     });
 
-    document.querySelectorAll("#panel-switch [data-switch-panel]").forEach(button => {
+    // Each panel's inline switch is only ever visible while its own panel
+    // is the one currently shown (see the CSS), so clicking it always
+    // means "go to the other one".
+    document.querySelectorAll("[data-toggle-panel]").forEach(button => {
         button.addEventListener("click", () => {
-            expandedPanel = button.dataset.switchPanel;
+            expandedPanel = button.dataset.togglePanel === "preview" ? "output" : "preview";
             applyExpandState();
         });
     });
@@ -68,9 +73,5 @@ function applyExpandState() {
 
     document.querySelectorAll(".expand-button").forEach(button => {
         button.innerText = button.dataset.panel === panel ? "⤡" : "⤢";
-    });
-
-    document.querySelectorAll("#panel-switch [data-switch-panel]").forEach(button => {
-        button.classList.toggle("active", button.dataset.switchPanel === panel);
     });
 }
