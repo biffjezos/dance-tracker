@@ -10,7 +10,9 @@ import { isPanelVisible } from "./panelExpand.js";
 
 let liveNodeId = null;
 let liveNodeLabel = null;
-const LIVE_OUTPUT_DEFAULT_TITLE = "LIVE OUTPUT";
+// Prefixed so which canvas is which is still obvious when only one is on
+// screen at a time (single-panel/expanded mode).
+const LIVE_OUTPUT_PREFIX = "LIVE: ";
 
 export function renderPreview() {
     if (!isPanelVisible("preview")) return;
@@ -57,7 +59,7 @@ window.addEventListener("clearLiveNode", () => {
 function loop() {
     const liveOutputTitle = document.getElementById("live-output-title");
     if (liveOutputTitle) {
-        liveOutputTitle.innerText = liveNodeId !== null ? liveNodeLabel : LIVE_OUTPUT_DEFAULT_TITLE;
+        liveOutputTitle.innerText = LIVE_OUTPUT_PREFIX + (liveNodeId !== null ? liveNodeLabel : "NONE");
     }
 
     if (isPanelVisible("output")) {

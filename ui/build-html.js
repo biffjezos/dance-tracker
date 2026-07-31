@@ -37,7 +37,7 @@ const data = {
         preview: {
             sectionClass: "camera-panel",
             titleId: "camera-panel-title",
-            titleText: "NODE PREVIEW",
+            titleText: "PREVIEW: NONE",
             panelKey: "preview",
             hasVideo: true,
             canvasId: "camera-preview",
@@ -45,7 +45,7 @@ const data = {
         output: {
             sectionClass: "output-panel",
             titleId: "live-output-title",
-            titleText: "LIVE OUTPUT",
+            titleText: "LIVE: NONE",
             panelKey: "output",
             screenExtraClass: "output-stack",
             canvasId: "master-layer",

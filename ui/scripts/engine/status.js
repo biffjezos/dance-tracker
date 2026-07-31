@@ -11,12 +11,16 @@ import {
     renderPreview
 } from "./render.js";
 import { nodeSelectionState } from "./nodeSelection.js";
-const PREVIEW_PANEL_DEFAULT_TITLE = "NODE PREVIEW";
+// Prefixed so which canvas is which is still obvious when only one is on
+// screen at a time (single-panel/expanded mode) - otherwise both panels
+// just show whatever node happens to be selected, with nothing to tell
+// them apart.
+const PREVIEW_PANEL_PREFIX = "PREVIEW: ";
 
 function updateLayerStatusDisplay(entry) {
     const panelTitle = document.getElementById("camera-panel-title");
     if (panelTitle) {
-        panelTitle.innerText = entry.label || PREVIEW_PANEL_DEFAULT_TITLE;
+        panelTitle.innerText = PREVIEW_PANEL_PREFIX + (entry.label || "NONE");
     }
     const bar = document.querySelector(".statusbar");
     if (bar) {
@@ -28,7 +32,7 @@ function updateNodeSelectionDisplay() {
     const selectedNode = nodeSelectionState.getSelectedNode();
     const panelTitle = document.getElementById("camera-panel-title");
     if (panelTitle) {
-        panelTitle.innerText = selectedNode ? selectedNode.label : PREVIEW_PANEL_DEFAULT_TITLE;
+        panelTitle.innerText = PREVIEW_PANEL_PREFIX + (selectedNode ? selectedNode.label : "NONE");
     }
     
     // Also update status bar if needed
