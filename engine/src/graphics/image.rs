@@ -50,6 +50,51 @@ impl Image {
         })
     }
 
+    /// Resample this image into a `width`x`height` canvas, preserving
+    /// aspect ratio and centering the result - the same "contain fit" a
+    /// live video/camera source already gets in `VideoElementPixelSource`,
+    /// so a loaded image conforms to the graph's current resolution the
+    /// same way every other source does. Anything left uncovered (when
+    /// the aspect ratios differ) comes out fully transparent, same as
+    /// RESIZE's own out-of-bounds behaviour. Returns `self` unchanged
+    /// (same Arc-worthy pixels, just re-wrapped) when the size already
+    /// matches, so callers that cache by size can skip the no-op case.
+    pub fn contain_fit(&self, width: u32, height: u32) -> Image {
+        if self.width == width && self.height == height {
+            return self.clone();
+        }
+
+        let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
+
+        if self.width == 0 || self.height == 0 || width == 0 || height == 0 {
+            return Image { pixels, width, height, format: self.format };
+        }
+
+        let scale = (width as f64 / self.width as f64).min(height as f64 / self.height as f64);
+        let drawn_width = self.width as f64 * scale;
+        let drawn_height = self.height as f64 * scale;
+        let offset_x = (width as f64 - drawn_width) / 2.0;
+        let offset_y = (height as f64 - drawn_height) / 2.0;
+
+        for y in 0..height {
+            for x in 0..width {
+                let src_x = (x as f64 - offset_x) / scale;
+                let src_y = (y as f64 - offset_y) / scale;
+
+                if src_x < 0.0 || src_y < 0.0 || src_x >= self.width as f64 || src_y >= self.height as f64 {
+                    continue;
+                }
+
+                let dest_index = ((y * width + x) * 4) as usize;
+                let src_index = ((src_y as u32 * self.width + src_x as u32) * 4) as usize;
+                pixels[dest_index..dest_index + 4]
+                    .copy_from_slice(&self.pixels[src_index..src_index + 4]);
+            }
+        }
+
+        Image { pixels, width, height, format: self.format }
+    }
+
     /// The classic compositing-app "missing" placeholder - a magenta/black
     /// checker - used instead of black when an operation's input isn't
     /// wired, so a never-connected or since-removed source is visibly
@@ -123,6 +168,25 @@ pub enum ImageFormat {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn contain_fit_returns_the_same_pixels_when_size_already_matches() {
+        let image = Image { pixels: vec![1, 2, 3, 4], width: 1, height: 1, format: ImageFormat::Rgba8 };
+        let fitted = image.contain_fit(1, 1);
+        assert_eq!(fitted.pixels, image.pixels);
+    }
+
+    #[test]
+    fn contain_fit_pillarboxes_a_narrower_image_into_a_wider_canvas() {
+        // 1x1 opaque red into a 3x1 canvas - centered, with transparent
+        // pillarbars on either side.
+        let image = Image { pixels: vec![255, 0, 0, 255], width: 1, height: 1, format: ImageFormat::Rgba8 };
+        let fitted = image.contain_fit(3, 1);
+
+        assert_eq!(&fitted.pixels[0..4], &[0, 0, 0, 0]);
+        assert_eq!(&fitted.pixels[4..8], &[255, 0, 0, 255]);
+        assert_eq!(&fitted.pixels[8..12], &[0, 0, 0, 0]);
+    }
 
     #[test]
     fn solid_fills_every_pixel_with_the_given_opaque_colour() {
