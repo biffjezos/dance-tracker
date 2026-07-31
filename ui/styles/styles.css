@@ -86,17 +86,27 @@ html, body {
   border-bottom: 1px solid var(--color-border-menu-bottom);
 }
 
-/* One parameter/input per line in an edit context - the UP button, node
-   selector, and separator stay on the sub-menu's first line (they're
-   appended straight into it, not wrapped in a row), but every parameter
-   or wired-input control after that gets its own .param-row. flex: 1 0
-   100% is what forces the break: a flex item exactly as wide as the
-   whole wrapped line pushes everything after it onto a new one. */
+/* Below lg, one parameter/input per line in an edit context - the UP
+   button, node selector, and separator stay on the sub-menu's first line
+   (they're appended straight into it, not wrapped in a row), but every
+   parameter or wired-input control after that gets its own .param-row.
+   flex: 1 0 100% is what forces the break: a flex item exactly as wide as
+   the whole wrapped line pushes everything after it onto a new one. At lg
+   and up there's room for several parameters side by side, so each row
+   just sizes to its own content and wraps only if the sub-menu's actual
+   width runs out, same as .sub-menu's own flex-wrap already does for
+   everything else in it. */
 .param-row {
   display: flex;
   align-items: center;
   flex: 1 0 100%;
   gap: 4px;
+}
+
+@media (min-width: 992px) {
+  .param-row {
+    flex: 0 0 auto;
+  }
 }
 
 /* Below lg, the eight main-menu buttons collapse behind a single toggle
