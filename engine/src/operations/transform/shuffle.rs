@@ -145,22 +145,22 @@ impl Operation for Shuffle {
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![
             ParameterDescriptor {
-                name: "RED_CHANNEL",
+                name: "RED",
                 kind: ParameterKind::Enum(SHUFFLE_CHANNELS),
                 group: None,
             },
             ParameterDescriptor {
-                name: "GREEN_CHANNEL",
+                name: "GREEN",
                 kind: ParameterKind::Enum(SHUFFLE_CHANNELS),
                 group: None,
             },
             ParameterDescriptor {
-                name: "BLUE_CHANNEL",
+                name: "BLUE",
                 kind: ParameterKind::Enum(SHUFFLE_CHANNELS),
                 group: None,
             },
             ParameterDescriptor {
-                name: "ALPHA_CHANNEL",
+                name: "ALPHA",
                 kind: ParameterKind::Enum(SHUFFLE_CHANNELS),
                 group: None,
             },
@@ -169,10 +169,10 @@ impl Operation for Shuffle {
 
     fn get_parameter(&self, name: &str) -> Option<Value> {
         match name {
-            "RED_CHANNEL" => Some(Value::Text(self.red.to_str().to_string())),
-            "GREEN_CHANNEL" => Some(Value::Text(self.green.to_str().to_string())),
-            "BLUE_CHANNEL" => Some(Value::Text(self.blue.to_str().to_string())),
-            "ALPHA_CHANNEL" => Some(Value::Text(self.alpha.to_str().to_string())),
+            "RED" => Some(Value::Text(self.red.to_str().to_string())),
+            "GREEN" => Some(Value::Text(self.green.to_str().to_string())),
+            "BLUE" => Some(Value::Text(self.blue.to_str().to_string())),
+            "ALPHA" => Some(Value::Text(self.alpha.to_str().to_string())),
             _ => None,
         }
     }
@@ -180,19 +180,19 @@ impl Operation for Shuffle {
     fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
         if let Value::Text(s) = value {
             match name {
-                "RED_CHANNEL" => {
+                "RED" => {
                     self.red = ShuffleChannel::from_str(&s)
                         .ok_or_else(|| OperationError::InvalidParameterValue(name.to_string(), s))?;
                 }
-                "GREEN_CHANNEL" => {
+                "GREEN" => {
                     self.green = ShuffleChannel::from_str(&s)
                         .ok_or_else(|| OperationError::InvalidParameterValue(name.to_string(), s))?;
                 }
-                "BLUE_CHANNEL" => {
+                "BLUE" => {
                     self.blue = ShuffleChannel::from_str(&s)
                         .ok_or_else(|| OperationError::InvalidParameterValue(name.to_string(), s))?;
                 }
-                "ALPHA_CHANNEL" => {
+                "ALPHA" => {
                     self.alpha = ShuffleChannel::from_str(&s)
                         .ok_or_else(|| OperationError::InvalidParameterValue(name.to_string(), s))?;
                 }
@@ -315,10 +315,10 @@ mod tests {
     fn channels_are_taken_from_the_selected_source_channel() {
         let mut shuffle = Shuffle::new();
 
-        shuffle.set_parameter("RED_CHANNEL", Value::Text("GREEN".into())).unwrap();
-        shuffle.set_parameter("GREEN_CHANNEL", Value::Text("BLUE".into())).unwrap();
-        shuffle.set_parameter("BLUE_CHANNEL", Value::Text("RED".into())).unwrap();
-        shuffle.set_parameter("ALPHA_CHANNEL", Value::Text("OFF".into())).unwrap();
+        shuffle.set_parameter("RED", Value::Text("GREEN".into())).unwrap();
+        shuffle.set_parameter("GREEN", Value::Text("BLUE".into())).unwrap();
+        shuffle.set_parameter("BLUE", Value::Text("RED".into())).unwrap();
+        shuffle.set_parameter("ALPHA", Value::Text("OFF".into())).unwrap();
 
         let input = Value::Image(image(vec![10, 20, 30, 40], 1, 1));
 
@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn off_zeroes_a_channel_without_touching_the_others() {
         let mut shuffle = Shuffle::new();
-        shuffle.set_parameter("GREEN_CHANNEL", Value::Text("OFF".into())).unwrap();
+        shuffle.set_parameter("GREEN", Value::Text("OFF".into())).unwrap();
 
         let input = Value::Image(image(vec![1, 2, 3, 4], 1, 1));
 
@@ -395,7 +395,7 @@ mod tests {
         let source_id = graph.add_node(Box::new(source));
 
         let mut shuffle = Shuffle::new();
-        shuffle.set_parameter("RED_CHANNEL", Value::Text("BLUE".into())).unwrap();
+        shuffle.set_parameter("RED", Value::Text("BLUE".into())).unwrap();
 
         let shuffle_id = graph.add_node(Box::new(shuffle));
 

@@ -151,6 +151,14 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
     if (!wasmApp) return;
 
     const nodeId = nodeEntry.layer.nodeId;
+
+    // Wired inputs (SOURCE, FOREGROUND, BACKGROUND, ...) come first - what
+    // this node is connected to is more fundamental than its own parameter
+    // settings, and finding it shouldn't depend on scrolling past however
+    // many parameters the operation happens to have. Renders nothing for a
+    // node that declares no inputs (a source), so this is safe unconditionally.
+    renderInputSteppers(menuManager, nodeEntry, nodeId);
+
     const parameters = wasmApp.node_parameters(nodeId);
 
     // Ungrouped parameters render inline, same as always. Grouped ones
@@ -171,8 +179,6 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
         groupButton.onclick = () => menuManager.enterParameterGroup(groupName);
         menuManager.subMenu.appendChild(groupButton);
     });
-
-    renderInputSteppers(menuManager, nodeEntry, nodeId);
 }
 
 /**
@@ -243,6 +249,20 @@ function renderColorParameter(menuManager, nodeId, parameter) {
 }
 
 /**
+ * Round to the number of decimal places the step size itself has, so
+ * repeated fractional steps (e.g. 0.3 + 0.01 several times over) don't
+ * accumulate binary floating-point noise into values like
+ * 0.5700000000000002 - both in what gets sent to Rust and what the
+ * stepper displays next.
+ */
+function roundToStepPrecision(value, step) {
+    const decimals = (String(step).split(".")[1] || "").length;
+    if (decimals === 0) return Math.round(value);
+    const factor = 10 ** decimals;
+    return Math.round(value * factor) / factor;
+}
+
+/**
  * Render a Number-kind parameter as a stepper moving by the step size the
  * operation itself declares, clamped to its declared min/max so the
  * stepper can never send a value the operation would reject.
@@ -254,7 +274,7 @@ function renderNumberParameter(menuManager, nodeId, parameter) {
     const step = parameter.step ?? 1;
 
     renderStepperButtons(menuManager, parameter.value, direction => {
-        let next = current + direction * step;
+        let next = roundToStepPrecision(current + direction * step, step);
         if (parameter.min != null) next = Math.max(parameter.min, next);
         if (parameter.max != null) next = Math.min(parameter.max, next);
         dispatchParameterUpdate(nodeId, parameter.name, String(next));
