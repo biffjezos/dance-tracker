@@ -57,3 +57,57 @@ at the Rust level (actual DOM/canvas/browser behaviour), and don't
 commit elaborate one-off test suites as project deliverables. A passing
 test suite is not the goal - a working app is. If the app is broken,
 say so, don't paper over it with more tests.
+
+## Parked work (postponed on purpose - read before touching these)
+
+### MOVE operation / `graphics/geometry.rs` (`Point2D`, `Center`)
+
+`Point2D`/`Center` exist but are unused - they're scaffolding for a
+planned MOVE transform operation that was never implemented. Postponed
+specifically because MOVE's intended UI (arrow keys nudge the selected
+node's position while its EDIT screen is open) collides with keyboard
+scrubbing (arrow keys step the focused canvas's video forward/back) -
+today there is exactly one global `keydown` listener (Space-bar only,
+in `app.js`) with no concept of "what do arrow keys mean right now."
+Bolting a MOVE-specific special case onto that would just relocate the
+conflict, not solve it.
+
+Before starting MOVE (or any other operation that wants its own
+keybindings - ROTATE/SCALE are likely next), design a general keyboard-
+context system first: something like a stack of "current input context"
+that a node's EDIT mode can push (claiming arrow keys) and pop on exit,
+falling back to whatever scrub/transport context was underneath. Open
+questions to resolve before implementing, from the last discussion:
+
+1. Should scrub-while-editing-MOVE ever work simultaneously, or is it
+   always strictly one-or-the-other?
+2. What other keys/operations need this same context-switching, besides
+   arrow keys for MOVE?
+3. Should the context be tied to "a node is in EDIT mode" specifically,
+   or more generally to whatever menu/screen is currently open?
+
+### Video playback: two different approaches, only one is live
+
+There are two unconnected ways to get a video frame into the graph:
+
+- **Live (what's actually used today):** hand Rust an `HtmlVideoElement`
+  (`set_pixel_source_on_node`); every tick, draw whatever the browser is
+  currently showing onto a scratch canvas and read pixels back. The
+  browser owns `currentTime`/seeking/play-pause entirely. Keyboard
+  scrubbing (accelerating hold-to-scrub, ideally via a sigmoid ramp on
+  hold duration - discussed but not built) would extend this: an arrow-
+  key handler nudging `videoEl.currentTime` directly. `engine/transport.js`
+  already flags that scrub/seek was deliberately deferred - only
+  play/stop/rewindToStart exist so far.
+- **Dead (`operations/sources/video.rs`'s `VideoSource::set_video`/
+  `get_video`, `Value::Video`, `Video::frame_at`):** pre-decode an entire
+  video into a `Vec<Arc<Image>>` in memory, then index into it by time.
+  Nothing on the JS side ever calls `set_video()`, so this path is inert.
+  It exists because it would give frame-exact stepping (a `<video>`
+  element only exposes continuous seconds, not discrete frame indices)
+  and true reverse playback (browsers don't support that reliably via
+  `currentTime`/negative playback rate) - relevant if the live approach's
+  scrub ever feels imprecise, or for a future frame-accurate export
+  feature, but far heavier (decode + hold the whole video in memory) and
+  currently unfinished on both the Rust and JS sides. Don't wire it up
+  without deciding it's actually worth that cost over the live path.
