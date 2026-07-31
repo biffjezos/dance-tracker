@@ -133,11 +133,19 @@ input[type="color"]::-webkit-color-swatch {
   align-items: center;
 }
 
-/* Node selector styles */
+/* Node selector styles - fixed width so a value's own text length (a
+   node name, a parameter name, a stepped value) never reflows the menu
+   around it. */
 .node-selector-label {
   font-family: var(--font-family-primary);
   font-size: var(--font-size-body);
   color: var(--color-text-primary);
+  display: inline-block;
+  width: 18ch;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Node name display - fixed width for 23 characters */
