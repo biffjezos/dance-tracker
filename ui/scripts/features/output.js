@@ -84,6 +84,17 @@ window.addEventListener("outputSizeDown", () => {
     state.outputHeight = OUTPUT_RESOLUTIONS[state.outputResolutionIndex].height;
     applyOutputSize();
 });
+
+// Clicking the resolution readout in the status bar cycles through the
+// common resolutions, wrapping back to the first after the last - the
+// simplest single-gesture way to reach every entry without a separate
+// up/down control.
+document.getElementById("output-resolution")?.addEventListener("click", () => {
+    state.outputResolutionIndex = (state.outputResolutionIndex + 1) % OUTPUT_RESOLUTIONS.length;
+    state.outputWidth = OUTPUT_RESOLUTIONS[state.outputResolutionIndex].width;
+    state.outputHeight = OUTPUT_RESOLUTIONS[state.outputResolutionIndex].height;
+    applyOutputSize();
+});
 let recorder = null;
 window.addEventListener("toggleRecord", () => {
     if (!recorder) {
