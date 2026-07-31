@@ -30,6 +30,23 @@ export function getAllRealEntries() {
         ...state.nodes.map(toEntry)
     ];
 }
+// The only place state.videoLayers/state.nodes should be written from -
+// two functions rather than one generic "addLayer", since a caller always
+// already knows which array it's adding to from how the layer was created
+// (video/image/camera vs. a create_node-backed operation).
+export function addVideoLayer(layer) {
+    state.videoLayers.push(layer);
+}
+export function addNodeLayer(layer) {
+    state.nodes.push(layer);
+}
+// A given layer only ever lives in one of the two arrays - filtering both
+// is a no-op for whichever one it isn't in, so the caller doesn't need to
+// know which kind of layer it's removing.
+export function removeLayer(layer) {
+    state.videoLayers = state.videoLayers.filter(l => l !== layer);
+    state.nodes = state.nodes.filter(l => l !== layer);
+}
 export function getVideoRegistry() {
     // Every real node is a candidate source/preview target by default - new
     // kinds are included automatically, no filter list to maintain here.

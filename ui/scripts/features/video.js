@@ -14,7 +14,8 @@ import {
 } from "../engine/status.js";
 import {
     defaultUniversalSettings,
-    setSelectedVideoEntry
+    setSelectedVideoEntry,
+    addVideoLayer
 } from "../state/registry.js";
 import {
     getWasmApp
@@ -82,7 +83,7 @@ window.addEventListener("menuOperation", e => {
                 videoEl: video,
                 settings: defaultUniversalSettings()
             };
-            state.videoLayers.push(layer);
+            addVideoLayer(layer);
             state.transportPlaying = true;
             rebuildGraph();
             setSelectedVideoEntry(layer);
@@ -121,7 +122,7 @@ function activateCamera() {
     // which only exists once the stream has loaded metadata.
     const attach = () => {
         layer.nodeId = createLiveSourceNode(wasmApp, "camera_source", video);
-        state.videoLayers.push(layer);
+        addVideoLayer(layer);
         rebuildGraph();
         setSelectedVideoEntry(layer);
         reportSelection("video");
