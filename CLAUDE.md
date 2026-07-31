@@ -137,3 +137,12 @@ decoder from the same org - looked promising from its README, but its
 own conformance tests pass 0/56 official JVET streams, and H.266 has
 near-zero real-world adoption to decode anyway. Not revisited unless
 that changes substantially.)
+
+WASM feasibility check, passed:
+- `oxideav-prores` builds clean for `wasm32-unknown-unknown` (~44KB release)
+- `oxideav-mov` (QTFF demuxer) builds clean too, off `Cursor<Vec<u8>>` (~336KB combined)
+- native roundtrip (encode→decode, several profiles/bit depths) via the
+  crate's own example: correct
+
+Still open: never tested against a real camera/NLE-exported ProRes file
+(only the crate's own encoder output and its own conformance claims).
