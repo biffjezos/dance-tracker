@@ -316,6 +316,28 @@ input[type="color"]::-webkit-color-swatch {
   white-space: nowrap;
 }
 
+/* Only ever attached when there's a real node behind this label (see
+   renderNodeNameLabel) - the cursor is the only hint that clicking the
+   name starts a rename, so it only shows up where that's actually true. */
+.node-name-label-editable {
+  cursor: text;
+}
+
+/* Replaces .node-name-label in place while renaming (see
+   startRenamingNode) - same size so nothing else in the row reflows, pink
+   border (the app's existing accent colour, --color-border-button) is
+   the one visual cue that this field is live and editable right now. */
+.node-name-input {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-body);
+  color: var(--color-text-input);
+  background: var(--color-bg-input);
+  border: 2px solid var(--color-border-button);
+  width: 25ch;
+  text-align: center;
+  padding: 0;
+}
+
 .menu-separator {
   font-family: var(--font-family-primary);
   font-size: var(--font-size-body);

@@ -129,8 +129,6 @@ export function renderImageEditContext(menuManager, nodeEntry) {
  * Shows: ANIMATION CONTROLS
  */
 export function renderVideoEditContext(menuManager, nodeEntry) {
-    renderRenameRow(menuManager, nodeEntry);
-
     const videoLabel = document.createElement("span");
     videoLabel.innerText = " VIDEO EDIT: ANIMATION CONTROLS ";
     videoLabel.className = "node-selector-label";
@@ -154,12 +152,7 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
 
     const nodeId = nodeEntry.layer.nodeId;
 
-    // The node's own display name comes first - identifying which node
-    // you're looking at is more fundamental than either its wiring or its
-    // parameters.
-    renderRenameRow(menuManager, nodeEntry);
-
-    // Wired inputs (SOURCE, FOREGROUND, BACKGROUND, ...) come next - what
+    // Wired inputs (SOURCE, FOREGROUND, BACKGROUND, ...) come first - what
     // this node is connected to is more fundamental than its own parameter
     // settings, and finding it shouldn't depend on scrolling past however
     // many parameters the operation happens to have. Renders nothing for a
@@ -219,44 +212,6 @@ function startParamRow(menuManager) {
     row.className = "param-row";
     menuManager.subMenu.appendChild(row);
     return row;
-}
-
-/**
- * The node's own display name, editable free text - the only identifier
- * that's ever user-facing. It's purely a label: the WASM graph only ever
- * knows this node by its own immutable NodeId (nodeEntry.layer.nodeId),
- * and the registry only ever knows it by its own immutable layer id
- * (nodeEntry.layer.id) - renaming just changes what's displayed
- * everywhere that already reads layer.name (the node selector, wiring
- * dropdowns, LIVE OUTPUT's title), not what any of them are keyed by.
- * Shared by the generic and video edit contexts rather than duplicated,
- * since every node kind has a name to rename regardless of what else it
- * has to edit.
- */
-function renderRenameRow(menuManager, nodeEntry) {
-    const row = startParamRow(menuManager);
-    renderParameterLabel(row, "NAME");
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "menu-input";
-    input.value = nodeEntry.layer.name;
-    input.onchange = () => {
-        const trimmed = input.value.trim();
-        if (trimmed) {
-            nodeEntry.layer.name = trimmed;
-            // nodeEntry is the exact object nodeSelectionState is holding
-            // as the current selection (EDIT always operates on
-            // getSelectedNode()'s own entry) - its own .label is a
-            // snapshot taken at selection time, not a live read of
-            // layer.name, so it needs updating too or the node selector
-            // row and LIVE OUTPUT's title would keep showing the old name
-            // until something else reselects this node.
-            nodeEntry.label = trimmed;
-        }
-        menuManager.render();
-    };
-    row.appendChild(input);
 }
 
 /**
