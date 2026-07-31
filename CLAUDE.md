@@ -111,3 +111,29 @@ There are two unconnected ways to get a video frame into the graph:
   feature, but far heavier (decode + hold the whole video in memory) and
   currently unfinished on both the Rust and JS sides. Don't wire it up
   without deciding it's actually worth that cost over the live path.
+
+**If/when this gets built:** decode the codec in Rust rather than relying
+on the browser - browsers don't decode any professional intermediate
+codec (ProRes/DNxHD/CineForm) natively, and this app has no server to
+transcode uploads first. All-intra codecs (frame independent, no inter-
+frame prediction) are what make random-access frame decode cheap
+regardless of position in an hour-long file - that's the actual property
+being bought here, not "Rust decode" per se.
+
+Decided: **ProRes**, via `OxideAV/oxideav-prores` (pure Rust, MIT,
+decode+encode, all 6 profiles, 8/10/12/16-bit) - over DNxHD/CineForm,
+which have no pure-Rust implementation and would mean wrapping `ffmpeg`
+(DNxHD) or GoPro's open-sourced reference C SDK (CineForm) via FFI.
+Pure-Rust isn't a hard requirement, but is preferred when two options are
+otherwise equal - and ProRes is the more prevalent format in real footage
+today anyway, so it wins either way. Sanity-check `oxideav-prores`
+against real camera/NLE-exported ProRes files before depending on it -
+its own claims (fuzzed, benched, beats reference encoders on PSNR) are a
+good maturity signal but aren't the same as passing an independent
+conformance suite.
+
+(Ruled out separately: `OxideAV/oxideav-h266`, a pure-Rust H.266/VVC
+decoder from the same org - looked promising from its README, but its
+own conformance tests pass 0/56 official JVET streams, and H.266 has
+near-zero real-world adoption to decode anyway. Not revisited unless
+that changes substantially.)
