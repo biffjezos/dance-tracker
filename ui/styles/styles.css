@@ -312,6 +312,12 @@ input[type="color"]::-webkit-color-swatch {
   color: var(--color-text-primary);
 }
 
+.menu-empty {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-body);
+  color: var(--color-text-disabled);
+}
+
 /* ========================================== WORKSPACE ========================================== */
 /* Deliberately plain CSS Grid, not Bootstrap's row/col - Bootstrap's grid
    is flexbox-based, and a flex line's height is computed from its items'
