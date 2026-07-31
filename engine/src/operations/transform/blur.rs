@@ -134,7 +134,7 @@ impl Operation for Blur {
         OperationMetadata {
             display_name: "Blur",
             category: OperationCategory::Color,
-            inputs: vec![Input::Source],
+            inputs: vec![Input::Source, Input::Mask],
             outputs: vec![OutputKind::Image],
         }
     }
@@ -177,9 +177,16 @@ impl Operation for Blur {
             return Ok(vec![Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
 
+        // Resolved once up front - MASK is independent of which concrete
+        // Value variant SOURCE turns out to be below.
+        let mask = find_input(inputs, Input::Mask)
+            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .transpose()?;
+
         match value {
             Value::Frame(frame) => {
                 let blurred = self.blur_pixels(&frame.pixels, frame.width, frame.height);
+                let blurred = crate::graphics::apply_mask(&frame.pixels, blurred, mask.as_ref(), frame.width, frame.height)?;
                 Ok(vec![Value::Frame(Arc::new(Frame {
                     pixels: blurred,
                     width: frame.width,
@@ -190,6 +197,7 @@ impl Operation for Blur {
 
             Value::Image(image) => {
                 let blurred = self.blur_pixels(&image.pixels, image.width, image.height);
+                let blurred = crate::graphics::apply_mask(&image.pixels, blurred, mask.as_ref(), image.width, image.height)?;
                 Ok(vec![Value::Image(Arc::new(Image {
                     pixels: blurred,
                     width: image.width,
@@ -201,6 +209,7 @@ impl Operation for Blur {
             Value::Video(video) => {
                 let image = video.frame_at(ctx.meta.time)?;
                 let blurred = self.blur_pixels(&image.pixels, image.width, image.height);
+                let blurred = crate::graphics::apply_mask(&image.pixels, blurred, mask.as_ref(), image.width, image.height)?;
                 Ok(vec![Value::Image(Arc::new(Image {
                     pixels: blurred,
                     width: image.width,
@@ -322,5 +331,66 @@ mod tests {
             Value::Image(out) => assert_ne!(out.pixels, input.pixels),
             other => panic!("expected image, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn a_zero_alpha_mask_suppresses_the_blur_entirely() {
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(5.0)).unwrap();
+
+        let input = image(vec![255, 255, 255, 255, 0, 0, 0, 255], 2, 1);
+        let mask = image(vec![0, 0, 0, 0, 0, 0, 0, 0], 2, 1);
+
+        let values = blur
+            .execute(&context(2, 1), &[
+                (Input::Source, Value::Image(input.clone())),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, input.pixels, "MASK=0 must reproduce the unblurred source exactly"),
+            other => panic!("expected image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_full_alpha_mask_applies_the_blur_exactly_as_unmasked() {
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(1.0)).unwrap();
+
+        let input = image(vec![255, 255, 255, 255, 0, 0, 0, 255], 2, 1);
+        let mask = image(vec![0, 0, 0, 255, 0, 0, 0, 255], 2, 1);
+
+        let unmasked = blur
+            .execute(&context(2, 1), &[(Input::Source, Value::Image(input.clone()))])
+            .unwrap();
+        let masked = blur
+            .execute(&context(2, 1), &[
+                (Input::Source, Value::Image(input)),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match (&unmasked[0], &masked[0]) {
+            (Value::Image(a), Value::Image(b)) => assert_eq!(a.pixels, b.pixels),
+            other => panic!("expected two images, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_mismatched_mask_size_errors_instead_of_being_silently_ignored() {
+        let blur = Blur::new();
+        let input = image(vec![255, 255, 255, 255, 0, 0, 0, 255], 2, 1);
+        let mask = image(vec![0, 0, 0, 255], 1, 1);
+
+        let err = blur
+            .execute(&context(2, 1), &[
+                (Input::Source, Value::Image(input)),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap_err();
+
+        assert!(matches!(err, OperationError::InvalidInputType(_)));
     }
 }

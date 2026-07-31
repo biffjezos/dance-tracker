@@ -130,6 +130,12 @@ impl Operation for Resize {
         OperationMetadata {
             display_name: "Resize",
             category: OperationCategory::Color,
+            // Deliberately no Input::Mask: a MASK input needs to be the
+            // same dimensions as both the "identity" pass-through and the
+            // processed result it blends against (see graphics::apply_mask),
+            // but Resize's own output is a *different* size than its input
+            // at any scale != 100% - there's no single pixel-for-pixel
+            // identity to blend a mask against here.
             inputs: vec![Input::Source],
             outputs: vec![OutputKind::Image],
         }

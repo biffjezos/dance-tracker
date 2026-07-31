@@ -89,7 +89,9 @@ impl Operation for Subtract {
         OperationMetadata {
             display_name: "Subtract",
             category: OperationCategory::Color,
-            inputs: vec![Input::Foreground, Input::Background],
+            // Identity (MASK=0) is Foreground unmodified - see add.rs's
+            // metadata() for why Foreground and not Background.
+            inputs: vec![Input::Foreground, Input::Background, Input::Mask],
             outputs: vec![OutputKind::Image],
         }
     }
@@ -124,8 +126,15 @@ impl Operation for Subtract {
             ));
         }
 
+        let mask = find_input(inputs, Input::Mask)
+            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .transpose()?;
+
+        let subtracted = Self::subtract_pixels(&first_image.pixels, &second_image.pixels);
+        let subtracted = crate::graphics::apply_mask(&first_image.pixels, subtracted, mask.as_ref(), first_image.width, first_image.height)?;
+
         Ok(vec![Value::Image(Arc::new(Image {
-            pixels: Self::subtract_pixels(&first_image.pixels, &second_image.pixels),
+            pixels: subtracted,
             width: first_image.width,
             height: first_image.height,
             format: first_image.format,
@@ -165,5 +174,33 @@ mod tests {
         let out = Subtract::subtract_pixels(&color.pixels, &black.pixels);
 
         assert_eq!(out, color.pixels);
+    }
+
+    fn context(width: u32, height: u32) -> Context {
+        Context {
+            meta: crate::compositor::Meta { width, height, ..Default::default() },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_zero_alpha_mask_passes_through_foreground_unsubtracted() {
+        let subtract = Subtract::new();
+        let fg = image(vec![100, 100, 100, 255], 1, 1);
+        let bg = image(vec![10, 20, 30, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 0], 1, 1);
+
+        let values = subtract
+            .execute(&context(1, 1), &[
+                (Input::Foreground, Value::Image(fg.clone())),
+                (Input::Background, Value::Image(bg)),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, fg.pixels),
+            other => panic!("expected an image, got {:?}", other),
+        }
     }
 }

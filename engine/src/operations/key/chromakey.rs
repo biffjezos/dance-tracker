@@ -95,7 +95,7 @@ impl Operation for ChromaKey {
         OperationMetadata {
             display_name: "Chroma Key",
             category: OperationCategory::Mask,
-            inputs: vec![Input::Source],
+            inputs: vec![Input::Source, Input::Mask],
             outputs: vec![OutputKind::Image],
         }
     }
@@ -148,25 +148,39 @@ impl Operation for ChromaKey {
             return Ok(vec![Value::Image(Image::solid(PLACEHOLDER_COLOR, ctx.meta.width, ctx.meta.height))]);
         };
 
-        match value {
-            Value::Frame(frame) => Ok(vec![Value::Frame(Arc::new(Frame {
-                pixels: Self::key_pixels(&frame.pixels, self.key_color, self.threshold),
-                width: frame.width,
-                height: frame.height,
-                timestamp: frame.timestamp,
-            }))]),
+        let mask = find_input(inputs, Input::Mask)
+            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .transpose()?;
 
-            Value::Image(image) => Ok(vec![Value::Image(Arc::new(Image {
-                pixels: Self::key_pixels(&image.pixels, self.key_color, self.threshold),
-                width: image.width,
-                height: image.height,
-                format: image.format,
-            }))]),
+        match value {
+            Value::Frame(frame) => {
+                let keyed = Self::key_pixels(&frame.pixels, self.key_color, self.threshold);
+                let keyed = crate::graphics::apply_mask(&frame.pixels, keyed, mask.as_ref(), frame.width, frame.height)?;
+                Ok(vec![Value::Frame(Arc::new(Frame {
+                    pixels: keyed,
+                    width: frame.width,
+                    height: frame.height,
+                    timestamp: frame.timestamp,
+                }))])
+            }
+
+            Value::Image(image) => {
+                let keyed = Self::key_pixels(&image.pixels, self.key_color, self.threshold);
+                let keyed = crate::graphics::apply_mask(&image.pixels, keyed, mask.as_ref(), image.width, image.height)?;
+                Ok(vec![Value::Image(Arc::new(Image {
+                    pixels: keyed,
+                    width: image.width,
+                    height: image.height,
+                    format: image.format,
+                }))])
+            }
 
             Value::Video(video) => {
                 let image = video.frame_at(ctx.meta.time)?;
+                let keyed = Self::key_pixels(&image.pixels, self.key_color, self.threshold);
+                let keyed = crate::graphics::apply_mask(&image.pixels, keyed, mask.as_ref(), image.width, image.height)?;
                 Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: Self::key_pixels(&image.pixels, self.key_color, self.threshold),
+                    pixels: keyed,
                     width: image.width,
                     height: image.height,
                     format: image.format,
@@ -316,4 +330,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_zero_alpha_mask_suppresses_keying_entirely() {
+        let chromakey = ChromaKey::new();
+        let green = image(vec![0, 255, 0, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 0], 1, 1);
+
+        let values = chromakey
+            .execute(&context(1, 1), &[
+                (Input::Source, Value::Image(green.clone())),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, green.pixels, "MASK=0 must leave the source unkeyed"),
+            other => panic!("expected an image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_full_alpha_mask_keys_exactly_as_unmasked() {
+        let chromakey = ChromaKey::new();
+        let green = image(vec![0, 255, 0, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 255], 1, 1);
+
+        let values = chromakey
+            .execute(&context(1, 1), &[
+                (Input::Source, Value::Image(green)),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, vec![0, 255, 0, 0]),
+            other => panic!("expected an image, got {:?}", other),
+        }
+    }
 }
