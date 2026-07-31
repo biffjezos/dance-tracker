@@ -183,8 +183,6 @@ export class MenuManager {
      * never jumps the layout around.
      */
     renderNodeSelector(disabled = false) {
-        const selectionState = nodeSelectionState;
-
         const minusButton = document.createElement("button");
         minusButton.innerText = "-";
         minusButton.disabled = disabled;
@@ -193,10 +191,7 @@ export class MenuManager {
         }
         this.subMenu.appendChild(minusButton);
 
-        const nodeLabel = document.createElement("span");
-        nodeLabel.innerText = ` ${selectionState.getSelectedNodeName()} `;
-        nodeLabel.className = "node-name-label";
-        this.subMenu.appendChild(nodeLabel);
+        this.renderNodeNameLabel();
 
         const plusButton = document.createElement("button");
         plusButton.innerText = "+";
@@ -205,6 +200,69 @@ export class MenuManager {
             plusButton.onclick = () => this.selectNextNode();
         }
         this.subMenu.appendChild(plusButton);
+    }
+
+    /**
+     * The node name display itself, click-to-rename: click the text (not
+     * the -/+ step buttons around it, which keep stepping through
+     * different nodes exactly as before regardless of this) and it
+     * becomes a real text input with a pink focus border; losing focus
+     * commits whatever's typed as the node's new display name and reverts
+     * to plain text. Renaming only ever changes what's displayed - the
+     * WASM graph and the JS registry still only ever know this node by
+     * its own immutable id, never by this label. The single shared
+     * display used by NODES/EDIT/param-group alike, so renaming works
+     * the same way everywhere the name shows up, not just from EDIT.
+     */
+    renderNodeNameLabel() {
+        const selectedNode = nodeSelectionState.getSelectedNode();
+
+        const nodeLabel = document.createElement("span");
+        nodeLabel.innerText = ` ${nodeSelectionState.getSelectedNodeName()} `;
+        nodeLabel.className = "node-name-label";
+
+        if (selectedNode) {
+            nodeLabel.classList.add("node-name-label-editable");
+            nodeLabel.title = "Click to rename";
+            nodeLabel.onclick = () => this.startRenamingNode(selectedNode, nodeLabel);
+        }
+
+        this.subMenu.appendChild(nodeLabel);
+    }
+
+    startRenamingNode(selectedNode, nodeLabel) {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "node-name-input";
+        input.value = selectedNode.layer.name;
+
+        const commit = () => {
+            const trimmed = input.value.trim();
+            if (trimmed) {
+                selectedNode.layer.name = trimmed;
+                // selectedNode is the exact object nodeSelectionState holds
+                // as the current selection - its own .label is a snapshot
+                // taken at selection time, not a live read of layer.name,
+                // so it needs updating too or other displays of this same
+                // selection (e.g. LIVE OUTPUT's title) would keep showing
+                // the old name until something else reselects this node.
+                selectedNode.label = trimmed;
+            }
+            this.render();
+        };
+
+        input.onblur = commit;
+        input.onkeydown = e => {
+            if (e.key === "Enter") input.blur();
+            if (e.key === "Escape") {
+                input.value = selectedNode.layer.name;
+                input.blur();
+            }
+        };
+
+        nodeLabel.replaceWith(input);
+        input.focus();
+        input.select();
     }
 
     renderEditButton() {
