@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use super::color::Color;
+
 #[derive(Debug, Clone)]
 pub struct Image {
     pub pixels: Vec<u8>,
@@ -16,6 +18,28 @@ impl Image {
 
         for pixel in pixels.chunks_exact_mut(4) {
             pixel[3] = 255;
+        }
+
+        Arc::new(Image {
+            pixels,
+            width,
+            height,
+            format: ImageFormat::Rgba8,
+        })
+    }
+
+    /// An opaque image filled with a single solid colour - an alternative
+    /// "unconnected input" placeholder for operations where the busy
+    /// missing()/transparency checker is more confusing than helpful (e.g.
+    /// a mask-producing node, where there's nothing to key "removal"
+    /// against, and a checker pattern is easy to mistake for real content
+    /// when eyedropping a colour off the canvas).
+    pub fn solid(color: Color, width: u32, height: u32) -> Arc<Image> {
+        let rgba = color.to_rgba_u8();
+        let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
+
+        for pixel in pixels.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&rgba);
         }
 
         Arc::new(Image {
@@ -99,6 +123,13 @@ pub enum ImageFormat {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn solid_fills_every_pixel_with_the_given_opaque_colour() {
+        let pink = Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };
+        let image = Image::solid(pink, 2, 1);
+        assert_eq!(image.pixels, vec![255, 0, 255, 255, 255, 0, 255, 255]);
+    }
 
     #[test]
     fn fully_opaque_pixels_pass_through_unchanged() {
