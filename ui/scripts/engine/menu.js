@@ -431,6 +431,19 @@ export class MenuManager {
 
         console.log("Filtered operations:", filteredOps);
 
+        // A category button only renders when something is actually
+        // registered under it (see renderCategoryButtons), so this is
+        // currently unreachable in practice - kept as a defensive fallback
+        // rather than silently leaving the sub-menu blank, per "if a
+        // registry is empty, say so".
+        if (filteredOps.length === 0) {
+            const empty = document.createElement("span");
+            empty.innerText = "NOTHING HERE YET";
+            empty.className = "menu-empty";
+            this.subMenu.appendChild(empty);
+            return;
+        }
+
         filteredOps.forEach(op => {
             console.log("Creating button for:", op.label || op.name || op);
             const button = document.createElement("button");
