@@ -7,7 +7,6 @@ export const state = {
     videoLayers: [],
     nodes: [],
     selectedVideoId: null,
-    outputEntryId: null,
     transportPlaying: false,
     outputResolutionIndex: 0,
     outputWidth: 320,

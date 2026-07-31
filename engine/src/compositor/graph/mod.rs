@@ -14,8 +14,6 @@ pub struct Graph {
     pub(crate) generations: Vec<u32>,
     pub(crate) free: Vec<u32>,
 
-    output: Option<NodeId>,
-
     pub width: u32,
     pub height: u32,
 
@@ -30,7 +28,6 @@ impl Graph {
             nodes: Vec::new(),
             generations: Vec::new(),
             free: Vec::new(),
-            output: None,
             width,
             height,
             validation: validate::ValidationState::Dirty,

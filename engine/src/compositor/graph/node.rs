@@ -12,13 +12,6 @@ pub struct NodeId {
 }
 
 impl NodeId {
-    pub fn from_index(index: u32) -> Self {
-        Self {
-            index,
-            generation: 0,
-        }
-    }
-
     pub fn index(&self) -> u32 {
         self.index
     }
@@ -27,13 +20,4 @@ impl NodeId {
 pub struct Node {
     pub operation: Box<dyn Operation>,
     pub inputs: Vec<(Input, NodeId)>,
-}
-
-impl Node {
-    pub fn input(&self, key: Input) -> Option<NodeId> {
-        self.inputs
-            .iter()
-            .find(|(k, _)| *k == key)
-            .map(|(_, id)| *id)
-    }
 }
