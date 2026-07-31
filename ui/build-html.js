@@ -24,6 +24,7 @@ function registerPartials() {
 
 const data = {
     menus: [
+        { key: "project", label: "PROJECT" },
         { key: "input", label: "INPUT" },
         { key: "nodes", label: "NODES" },
         { key: "key", label: "KEY" },
