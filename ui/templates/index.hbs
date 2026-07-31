@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dance Tracker 5000</title>
+        <link rel="stylesheet" href="./vendor/bootstrap/bootstrap-grid.min.css">
+        <link rel="stylesheet" href="./vendor/bootstrap/bootstrap-utilities.min.css">
+        <link rel="stylesheet" href="./styles/colors.css">
+        <link rel="stylesheet" href="./styles/fonts.css">
+        <link rel="stylesheet" href="./styles/styles.css">
+    </head>
+    <body>
+        <div id="app">
+{{> titlebar}}
+{{> mainmenu menus=menus}}
+            <nav id="sub-menu" class="sub-menu"></nav>
+
+            <div class="panel-switch d-lg-none" id="panel-switch">
+                <button data-switch-panel="preview">PREVIEW</button>
+                <button data-switch-panel="output">OUTPUT</button>
+            </div>
+
+            <main class="workspace">
+{{> panel panels.preview}}
+
+{{> panel panels.output}}
+            </main>
+
+{{> statusbar}}
+        </div>
+        <script src="./vendor/bootstrap/bootstrap.bundle.min.js"></script>
+        <script type="module" src="./scripts/app.js"></script>
+    </body>
+</html>

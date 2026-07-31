@@ -4,6 +4,8 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Dance Tracker 5000</title>
+        <link rel="stylesheet" href="./vendor/bootstrap/bootstrap-grid.min.css">
+        <link rel="stylesheet" href="./vendor/bootstrap/bootstrap-utilities.min.css">
         <link rel="stylesheet" href="./styles/colors.css">
         <link rel="stylesheet" href="./styles/fonts.css">
         <link rel="stylesheet" href="./styles/styles.css">
@@ -19,19 +21,34 @@
                     REALTIME DEMO SCENE VIDEO SYNTHESIZER
                 </div>
             </header>
-
             <nav class="main-menu">
-                <button data-menu="input"> INPUT </button>
-                <button data-menu="nodes"> NODES </button>
-                <button data-menu="key"> KEY </button>
-                <button data-menu="generate"> GENERATE </button>
-                <button data-menu="animate"> ANIMATE </button>
-                <button data-menu="compose"> COMPOSE </button>
-                <button data-menu="transform"> TRANSFORM </button>
-                <button data-menu="output"> OUTPUT </button>
-            </nav>
+                <button
+                    id="main-menu-toggle"
+                    class="menu-toggle-button d-lg-none"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#main-menu-items"
+                    aria-expanded="false"
+                    aria-controls="main-menu-items"
+                > ☰ MENU </button>
 
+                <div class="main-menu-items collapse d-lg-flex" id="main-menu-items">
+                    <button data-menu="input"> INPUT </button>
+                    <button data-menu="nodes"> NODES </button>
+                    <button data-menu="key"> KEY </button>
+                    <button data-menu="generate"> GENERATE </button>
+                    <button data-menu="animate"> ANIMATE </button>
+                    <button data-menu="compose"> COMPOSE </button>
+                    <button data-menu="transform"> TRANSFORM </button>
+                    <button data-menu="output"> OUTPUT </button>
+                </div>
+            </nav>
             <nav id="sub-menu" class="sub-menu"></nav>
+
+            <div class="panel-switch d-lg-none" id="panel-switch">
+                <button data-switch-panel="preview">PREVIEW</button>
+                <button data-switch-panel="output">OUTPUT</button>
+            </div>
 
             <main class="workspace">
                 <section class="panel camera-panel">
@@ -67,6 +84,7 @@
                 <span id="output-resolution" title="Click to change canvas resolution">  320x240 1.333 </span>
             </footer>
         </div>
+        <script src="./vendor/bootstrap/bootstrap.bundle.min.js"></script>
         <script type="module" src="./scripts/app.js"></script>
     </body>
 </html>
