@@ -251,6 +251,47 @@ mod tests {
     }
 
     #[test]
+    fn rewiring_source_through_the_graph_picks_up_the_new_value() {
+        use crate::compositor::graph::Graph;
+        use crate::compositor::executors::{Execute, PreviewExecutor};
+        use crate::operations::sources::ImageSource;
+
+        let ctx = Context {
+            meta: crate::compositor::Meta { width: 4, height: 4, ..Default::default() },
+            ..Default::default()
+        };
+
+        let mut graph = Graph::new(4, 4);
+
+        let chroma_id = graph.add_node(Box::new(ChromaKey::new()));
+
+        let mut src_a = ImageSource::new();
+        src_a.set_image(image(vec![255, 0, 0, 255], 1, 1));
+        let src_a_id = graph.add_node(Box::new(src_a));
+
+        graph.connect(chroma_id, Input::Source, src_a_id).unwrap();
+
+        let executor = PreviewExecutor;
+        let values = executor.execute(&graph, chroma_id, &ctx).unwrap();
+        match &values[0] {
+            Value::Image(out) => assert_eq!(&out.pixels[0..4], &[255, 0, 0, 255], "expected red from src_a"),
+            other => panic!("expected an image, got {:?}", other),
+        }
+
+        graph.disconnect(chroma_id, Input::Source).unwrap();
+        let mut src_b = ImageSource::new();
+        src_b.set_image(image(vec![0, 255, 0, 255], 1, 1));
+        let src_b_id = graph.add_node(Box::new(src_b));
+        graph.connect(chroma_id, Input::Source, src_b_id).unwrap();
+
+        let values = executor.execute(&graph, chroma_id, &ctx).unwrap();
+        match &values[0] {
+            Value::Image(out) => assert_eq!(&out.pixels[0..4], &[0, 255, 0, 0], "expected keyed-out green from src_b"),
+            other => panic!("expected an image, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn pure_green_is_keyed_out_at_default_settings() {
         let chromakey = ChromaKey::new();
         let green = image(vec![0, 255, 0, 255], 1, 1);
