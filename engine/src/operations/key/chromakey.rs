@@ -144,12 +144,12 @@ impl Operation for ChromaKey {
             ParameterDescriptor {
                 name: "PLACEHOLDER",
                 kind: ParameterKind::Enum(PLACEHOLDER_OPTIONS),
-                group: None,
+                group: Some("PLACEHOLDER"),
             },
             ParameterDescriptor {
                 name: "PLACEHOLDER_COLOR",
                 kind: ParameterKind::Color,
-                group: None,
+                group: Some("PLACEHOLDER"),
             },
         ]
     }

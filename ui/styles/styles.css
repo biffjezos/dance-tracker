@@ -86,6 +86,19 @@ html, body {
   border-bottom: 1px solid var(--color-border-menu-bottom);
 }
 
+/* One parameter/input per line in an edit context - the UP button, node
+   selector, and separator stay on the sub-menu's first line (they're
+   appended straight into it, not wrapped in a row), but every parameter
+   or wired-input control after that gets its own .param-row. flex: 1 0
+   100% is what forces the break: a flex item exactly as wide as the
+   whole wrapped line pushes everything after it onto a new one. */
+.param-row {
+  display: flex;
+  align-items: center;
+  flex: 1 0 100%;
+  gap: 4px;
+}
+
 /* Below lg, the eight main-menu buttons collapse behind a single toggle
    (Bootstrap's Collapse component) - at lg and up, the toggle is hidden
    and the full list is always shown exactly as it always has been. */
@@ -254,20 +267,30 @@ input[type="color"]::-webkit-color-swatch {
   color: var(--color-text-primary);
 }
 
-/* A stepper's current *value* (a wired node's name, a stepped number, an
-   enum choice, ...) - this is the text that actually changes, so it's the
-   one that needs a fixed width: otherwise picking a longer/shorter value
-   reflows every button after it. */
+/* A stepper's current *value* - a stepped number, an enum choice, a
+   boolean - this is the text that actually changes, so it's the one
+   that needs a fixed width: otherwise picking a longer/shorter value
+   reflows every button after it. Sized for what these actually are
+   (0.30, TRUE, RED, ...), not for a hypothetical worst case - a fixed
+   width is about consistency, not about fitting the longest string that
+   could ever theoretically appear. */
 .node-value-label {
   font-family: var(--font-family-primary);
   font-size: var(--font-size-body);
   color: var(--color-text-primary);
   display: inline-block;
-  width: 18ch;
+  width: 10ch;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A wired-input stepper's value is a real node's display name (e.g.
+   "CHROMA KEY 12"), which genuinely needs more room than a short
+   parameter value does. */
+.node-value-label-wide {
+  width: 18ch;
 }
 
 /* Node name display - fixed width for 23 characters */
