@@ -14,7 +14,8 @@ import {
     reportSelection
 } from "../engine/status.js";
 import {
-    defaultUniversalSettings
+    defaultUniversalSettings,
+    setSelectedVideoEntry
 } from "../state/registry.js";
 import {
     getWasmApp
@@ -67,6 +68,7 @@ window.addEventListener("menuOperation", e => {
             state.transportPlaying = true;
 
             rebuildGraph();
+            setSelectedVideoEntry(layer);
             reportSelection("video");
 
         } catch (error) {
