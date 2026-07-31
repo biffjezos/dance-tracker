@@ -1,12 +1,18 @@
 // src/compositor/registry.rs
 
 use crate::compositor::{
+    metadata::OperationCategory,
     Operation,
     OperationDescriptor,
 };
 
 pub struct RegisteredOperation {
     pub descriptor: OperationDescriptor,
+    // Captured from the same throwaway instance descriptor() is read from,
+    // at registration time - so callers that just want "what kind of thing
+    // is this" (e.g. a future generic menu grouping) don't need to
+    // construct an operation just to ask its metadata().
+    pub category: OperationCategory,
     pub constructor: fn() -> Box<dyn Operation>,
 }
 
@@ -37,6 +43,7 @@ impl OperationRegistry {
 
         self.operations.push(RegisteredOperation {
             descriptor: operation.descriptor(),
+            category: operation.metadata().category,
             constructor,
         });
     }
@@ -50,6 +57,16 @@ impl OperationRegistry {
         self.operations
             .iter()
             .map(|op| op.descriptor.clone())
+            .collect()
+    }
+
+    /// Every registered operation's descriptor paired with its category -
+    /// the JS-facing view a future generic menu grouping (Phase 4) would
+    /// read instead of only the hand-maintained `menu` string.
+    pub fn describe_all(&self) -> Vec<(OperationDescriptor, OperationCategory)> {
+        self.operations
+            .iter()
+            .map(|op| (op.descriptor.clone(), op.category))
             .collect()
     }
 

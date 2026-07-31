@@ -12,7 +12,7 @@ use crate::compositor::{
         PreviewExecutor,
         RenderExecutor
     },
-    graph::{ Graph, NodeId },
+    graph::{ Graph, NodeId, NodeValidation },
     Input,
     Meta,
     metadata::ParameterKind,
@@ -57,6 +57,24 @@ fn resolve_id(graph: &Graph, index: u32) -> Result<NodeId, JsValue> {
 }
 
 /*
+What the UI is told about one registered operation: its own descriptor
+fields plus the category its metadata() declares - carried as a plain
+string (not the enum) since this is the JS boundary, and added ahead of
+any UI code reading it yet so a future generic menu/list grouping (Phase 4)
+has it available without another engine change.
+*/
+#[derive(Serialize)]
+struct OperationView {
+    id: &'static str,
+    menu: &'static str,
+    label: &'static str,
+    action: Option<&'static str>,
+    ui_action: Option<&'static str>,
+    create_node: Option<&'static str>,
+    category: &'static str,
+}
+
+/*
 What the UI is told about one editable parameter of a node. The options list
 comes from the operation, so a selector can never offer a value the operation
 does not accept.
@@ -81,6 +99,40 @@ declares, and the node currently feeding it, if any.
 struct InputView {
     name: &'static str,
     source: Option<u32>,
+}
+
+/*
+Whether a node is safe to evaluate, translated from the engine's internal
+NodeValidation (which carries NodeId, not JS-safe on its own) into a tag the
+UI can match on plus a human-readable detail string - e.g. so the NODES
+list can badge a node with a dangling or cyclic wire instead of the user
+only finding out when the whole graph refuses to render.
+*/
+#[derive(Serialize)]
+struct NodeValidationView {
+    state: &'static str,
+    detail: Option<String>,
+}
+
+impl From<NodeValidation> for NodeValidationView {
+    fn from(state: NodeValidation) -> Self {
+        match state {
+            NodeValidation::Valid => Self { state: "valid", detail: None },
+            NodeValidation::MissingInput(input) => Self {
+                state: "missing_input",
+                detail: Some(input.name().to_string()),
+            },
+            NodeValidation::UnknownInput(id) => Self {
+                state: "unknown_input",
+                detail: Some(id.index().to_string()),
+            },
+            NodeValidation::InvalidDependency(id) => Self {
+                state: "invalid_dependency",
+                detail: Some(id.index().to_string()),
+            },
+            NodeValidation::Cycle => Self { state: "cycle", detail: None },
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -121,10 +173,22 @@ impl App {
     // becomes a catchable JS error instead of panicking the WASM instance,
     // matching every other JS-facing method in this file.
     pub fn get_operations(&self) -> Result<JsValue, JsValue> {
-        serde_wasm_bindgen::to_value(
-            &self.registry.descriptors()
-        )
-        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
+        let views: Vec<OperationView> = self.registry
+            .describe_all()
+            .into_iter()
+            .map(|(descriptor, category)| OperationView {
+                id: descriptor.id,
+                menu: descriptor.menu,
+                label: descriptor.label,
+                action: descriptor.action,
+                ui_action: descriptor.ui_action,
+                create_node: descriptor.create_node,
+                category: category.as_str(),
+            })
+            .collect();
+
+        serde_wasm_bindgen::to_value(&views)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
     }
 
     pub fn execute_operation(&mut self, id: &str) {
@@ -250,6 +314,22 @@ impl App {
             .collect::<Vec<_>>();
 
         serde_wasm_bindgen::to_value(&views)
+            .map_err(|err| JsValue::from_str(&err.to_string()))
+    }
+
+    /// Whether a node is safe to evaluate right now, and why not if it
+    /// isn't - reflects the graph's validation state as of the last render/
+    /// preview tick (or `Valid` if nothing has ticked yet), not a fresh
+    /// re-validation, since recomputing per call would be wasted work the
+    /// next tick already does for free.
+    pub fn node_validation(&self, node_id: u32) -> Result<JsValue, JsValue> {
+        let node_id = resolve_id(&self.graph, node_id)?;
+
+        let state = self.graph
+            .node_validation(node_id)
+            .unwrap_or(NodeValidation::Valid);
+
+        serde_wasm_bindgen::to_value(&NodeValidationView::from(state))
             .map_err(|err| JsValue::from_str(&err.to_string()))
     }
 
