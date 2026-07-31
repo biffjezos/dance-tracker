@@ -34,6 +34,19 @@ fn js_err(err: OperationError) -> JsValue {
 }
 
 /*
+Resolve a bare JS-supplied slot index into the current, generation-checked
+NodeId for whatever node actually occupies that slot right now. JS only ever
+holds a `u32` index (never a generation), so after a node has been removed
+and its slot reused, `NodeId::from_index` would reconstruct a stale
+generation and silently fail to resolve the live node - this looks up the
+real current generation instead.
+*/
+fn resolve_id(graph: &Graph, index: u32) -> Result<NodeId, JsValue> {
+    graph.current_id(index)
+        .ok_or_else(|| JsValue::from_str(&format!("Node {} not found", index)))
+}
+
+/*
 What the UI is told about one editable parameter of a node. The options list
 comes from the operation, so a selector can never offer a value the operation
 does not accept.
@@ -141,14 +154,16 @@ impl App {
     /// a dangling reference), and its render cache entry is dropped so it
     /// doesn't linger forever under a NodeId that can never be reused.
     pub fn remove_node(&mut self, node_id: u32) -> Result<(), JsValue> {
-        let node_id = NodeId::from_index(node_id);
+        let node_id = resolve_id(&self.graph, node_id)?;
         self.render_executor.invalidate(node_id);
         self.graph.remove_node(node_id).map_err(js_err)
     }
 
     /// Check if a node supports editing (has editable parameters)
     pub fn node_supports_edit(&self, node_id: u32) -> bool {
-        let node_id = NodeId::from_index(node_id);
+        let Some(node_id) = self.graph.current_id(node_id) else {
+            return false;
+        };
         self.graph.get_node(&node_id)
             .map(|op| op.supports_edit())
             .unwrap_or(false)
@@ -157,7 +172,7 @@ impl App {
     /// The editable parameters of a node, with their current values and the
     /// values they accept. The UI builds its controls from exactly this.
     pub fn node_parameters(&self, node_id: u32) -> Result<JsValue, JsValue> {
-        let node_id = NodeId::from_index(node_id);
+        let node_id = resolve_id(&self.graph, node_id)?;
 
         let operation = self.graph
             .get_node(&node_id)
@@ -191,7 +206,7 @@ impl App {
 
     /// The inputs a node declares, and what is currently wired into each.
     pub fn node_inputs(&self, node_id: u32) -> Result<JsValue, JsValue> {
-        let node_id = NodeId::from_index(node_id);
+        let node_id = resolve_id(&self.graph, node_id)?;
 
         let description = self.graph
             .describe(node_id)
@@ -233,11 +248,14 @@ impl App {
                 )
             })?;
 
+        let node_id = resolve_id(&self.graph, node_id)?;
+        let source_id = resolve_id(&self.graph, source_id)?;
+
         self.graph
             .connect(
-                NodeId::from_index(node_id),
+                node_id,
                 key,
-                NodeId::from_index(source_id),
+                source_id,
             )
             .map_err(js_err)
     }
@@ -255,8 +273,10 @@ impl App {
                 )
             })?;
 
+        let node_id = resolve_id(&self.graph, node_id)?;
+
         self.graph
-            .disconnect(NodeId::from_index(node_id), key)
+            .disconnect(node_id, key)
             .map_err(js_err)
     }
 
@@ -269,7 +289,7 @@ impl App {
         width: u32,
         height: u32,
     ) -> Result<(), JsValue> {
-        let node_id = NodeId::from_index(node_id);
+        let node_id = resolve_id(&self.graph, node_id)?;
 
         // Get the operation from the graph
         let operation = self.graph.get_node_mut(&node_id)
@@ -306,7 +326,7 @@ impl App {
         scratch_canvas: HtmlCanvasElement,
     ) -> Result<(), JsValue> {
 
-        let node_id = NodeId::from_index(node_id);
+        let node_id = resolve_id(&self.graph, node_id)?;
 
         let operation = self.graph
             .get_node_mut(&node_id)
@@ -335,7 +355,7 @@ impl App {
         parameter: String,
         value: String,
     ) -> Result<(), JsValue> {
-        let node_id = NodeId::from_index(node_id);
+        let node_id = resolve_id(&self.graph, node_id)?;
 
         let operation = self.graph.get_node_mut(&node_id)
             .ok_or_else(|| JsValue::from_str(&format!("Node {:?} not found", node_id)))?;
@@ -407,12 +427,14 @@ impl App {
 
         self.frame_counter += 1;
 
+        let output_node = resolve_id(&self.graph, output_node as u32)?;
+
         let ctx = self.context(false);
 
         let values = self.render_executor
             .execute(
                 &self.graph,
-                NodeId::from_index(output_node as u32),
+                output_node,
                 &ctx,
             )
             .map_err(js_err)?;
@@ -437,6 +459,8 @@ impl App {
 
         self.graph.validate().map_err(js_err)?;
 
+        let node = resolve_id(&self.graph, node as u32)?;
+
         let ctx = self.context(true);
 
         let executor = PreviewExecutor;
@@ -444,7 +468,7 @@ impl App {
         let values = executor
             .execute(
                 &self.graph,
-                NodeId::from_index(node as u32),
+                node,
                 &ctx,
             )
             .map_err(js_err)?;
