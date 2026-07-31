@@ -3,6 +3,7 @@ pub mod compose;
 pub mod converters;
 pub mod generators;
 pub mod inventory;
+pub mod key;
 pub mod register;
 pub mod sources;
 pub mod transform;
