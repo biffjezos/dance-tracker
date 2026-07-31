@@ -249,14 +249,25 @@ function renderColorParameter(menuManager, nodeId, parameter) {
 }
 
 /**
- * Round to the number of decimal places the step size itself has, so
- * repeated fractional steps (e.g. 0.3 + 0.01 several times over) don't
- * accumulate binary floating-point noise into values like
- * 0.5700000000000002 - both in what gets sent to Rust and what the
- * stepper displays next.
+ * How many decimal places a step size implies (0.01 -> 2, 1 -> 0). The
+ * single source of truth for both rounding a computed next-value and
+ * formatting a value already on screen, so a NUMBER parameter's displayed
+ * text is always the same fixed number of decimal digits - never 17 digits
+ * of binary floating-point noise, and never a value with a different
+ * decimal count than its neighbours.
+ */
+function stepDecimals(step) {
+    return (String(step).split(".")[1] || "").length;
+}
+
+/**
+ * Round to the step size's own decimal precision, so repeated fractional
+ * steps (e.g. 0.3 + 0.01 several times over) don't accumulate binary
+ * floating-point noise into values like 0.5700000000000002 in what gets
+ * sent to Rust.
  */
 function roundToStepPrecision(value, step) {
-    const decimals = (String(step).split(".")[1] || "").length;
+    const decimals = stepDecimals(step);
     if (decimals === 0) return Math.round(value);
     const factor = 10 ** decimals;
     return Math.round(value * factor) / factor;
@@ -273,7 +284,14 @@ function renderNumberParameter(menuManager, nodeId, parameter) {
     const current = parseFloat(parameter.value) || 0;
     const step = parameter.step ?? 1;
 
-    renderStepperButtons(menuManager, parameter.value, direction => {
+    // Always format for display at the step's own fixed decimal precision -
+    // regardless of how many digits the raw value from Rust happens to
+    // have (a value stepped before this fix existed is still just as
+    // "dirty" as one stepped just now, and this formats it the same way
+    // either way).
+    const displayValue = current.toFixed(stepDecimals(step));
+
+    renderStepperButtons(menuManager, displayValue, direction => {
         let next = roundToStepPrecision(current + direction * step, step);
         if (parameter.min != null) next = Math.max(parameter.min, next);
         if (parameter.max != null) next = Math.min(parameter.max, next);
