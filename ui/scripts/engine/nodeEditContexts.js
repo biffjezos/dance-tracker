@@ -170,14 +170,15 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
             if (!groupNames.includes(parameter.group)) groupNames.push(parameter.group);
             return;
         }
-        renderParameter(menuManager, nodeId, parameter);
+        renderParameter(menuManager, startParamRow(menuManager), nodeId, parameter);
     });
 
     groupNames.forEach(groupName => {
+        const row = startParamRow(menuManager);
         const groupButton = document.createElement("button");
         groupButton.innerText = `${groupName} >`;
         groupButton.onclick = () => menuManager.enterParameterGroup(groupName);
-        menuManager.subMenu.appendChild(groupButton);
+        row.appendChild(groupButton);
     });
 }
 
@@ -193,39 +194,54 @@ export function renderGroupContext(menuManager, nodeEntry, groupName) {
     const nodeId = nodeEntry.layer.nodeId;
     const parameters = wasmApp.node_parameters(nodeId).filter(p => p.group === groupName);
 
-    renderParameterLabel(menuManager, groupName);
+    renderParameterLabel(startParamRow(menuManager), groupName);
 
-    parameters.forEach(parameter => renderParameter(menuManager, nodeId, parameter));
+    parameters.forEach(parameter => renderParameter(menuManager, startParamRow(menuManager), nodeId, parameter));
+}
+
+/**
+ * A parameter/input's entire row - its label, its control, nothing else -
+ * always starts a fresh line regardless of how many other parameters this
+ * node has or how wide the window is. flex: 1 0 100% inside the sub-menu's
+ * own flex-wrap row is what forces the line break: a row item that's
+ * always exactly as wide as the whole line pushes everything after it
+ * onto the next one.
+ */
+function startParamRow(menuManager) {
+    const row = document.createElement("div");
+    row.className = "param-row";
+    menuManager.subMenu.appendChild(row);
+    return row;
 }
 
 /**
  * Render one parameter's control, dispatched by its kind. Shared by the
  * top-level (ungrouped) view and a parameter group's own sub-pane.
  */
-function renderParameter(menuManager, nodeId, parameter) {
+function renderParameter(menuManager, container, nodeId, parameter) {
     if (parameter.kind === "COLOR") {
-        renderColorParameter(menuManager, nodeId, parameter);
+        renderColorParameter(container, nodeId, parameter);
         return;
     }
 
     if (parameter.kind === "NUMBER") {
-        renderNumberParameter(menuManager, nodeId, parameter);
+        renderNumberParameter(menuManager, container, nodeId, parameter);
         return;
     }
 
     if (parameter.kind === "BOOLEAN") {
-        renderBooleanParameter(menuManager, nodeId, parameter);
+        renderBooleanParameter(menuManager, container, nodeId, parameter);
         return;
     }
 
     if (!parameter.options || parameter.options.length === 0) return;
 
-    renderParameterLabel(menuManager, parameter.name);
+    renderParameterLabel(container, parameter.name);
 
     const options = parameter.options;
     const currentIndex = Math.max(0, options.indexOf(parameter.value));
 
-    renderStepperButtons(menuManager, parameter.value, direction => {
+    renderStepperButtons(container, parameter.value, direction => {
         const nextIndex = (currentIndex + direction + options.length) % options.length;
         dispatchParameterUpdate(nodeId, parameter.name, options[nextIndex]);
         menuManager.render();
@@ -238,14 +254,14 @@ function renderParameter(menuManager, nodeId, parameter) {
  * so the input's own value/change semantics are the entire implementation -
  * no palette, no bespoke widget.
  */
-function renderColorParameter(menuManager, nodeId, parameter) {
-    renderParameterLabel(menuManager, parameter.name);
+function renderColorParameter(container, nodeId, parameter) {
+    renderParameterLabel(container, parameter.name);
 
     const input = document.createElement("input");
     input.type = "color";
     input.value = parameter.value;
     input.oninput = () => dispatchParameterUpdate(nodeId, parameter.name, input.value);
-    menuManager.subMenu.appendChild(input);
+    container.appendChild(input);
 }
 
 /**
@@ -278,8 +294,8 @@ function roundToStepPrecision(value, step) {
  * operation itself declares, clamped to its declared min/max so the
  * stepper can never send a value the operation would reject.
  */
-function renderNumberParameter(menuManager, nodeId, parameter) {
-    renderParameterLabel(menuManager, parameter.name);
+function renderNumberParameter(menuManager, container, nodeId, parameter) {
+    renderParameterLabel(container, parameter.name);
 
     const current = parseFloat(parameter.value) || 0;
     const step = parameter.step ?? 1;
@@ -291,7 +307,7 @@ function renderNumberParameter(menuManager, nodeId, parameter) {
     // either way).
     const displayValue = current.toFixed(stepDecimals(step));
 
-    renderStepperButtons(menuManager, displayValue, direction => {
+    renderStepperButtons(container, displayValue, direction => {
         let next = roundToStepPrecision(current + direction * step, step);
         if (parameter.min != null) next = Math.max(parameter.min, next);
         if (parameter.max != null) next = Math.min(parameter.max, next);
@@ -303,24 +319,24 @@ function renderNumberParameter(menuManager, nodeId, parameter) {
 /**
  * Render a Boolean-kind parameter as a two-state stepper (TRUE/FALSE).
  */
-function renderBooleanParameter(menuManager, nodeId, parameter) {
-    renderParameterLabel(menuManager, parameter.name);
+function renderBooleanParameter(menuManager, container, nodeId, parameter) {
+    renderParameterLabel(container, parameter.name);
 
     const current = parameter.value === "true";
 
-    renderStepperButtons(menuManager, current ? "TRUE" : "FALSE", () => {
+    renderStepperButtons(container, current ? "TRUE" : "FALSE", () => {
         dispatchParameterUpdate(nodeId, parameter.name, String(!current));
         menuManager.render();
     });
 }
 
-function renderParameterLabel(menuManager, text) {
+function renderParameterLabel(container, text) {
     const label = document.createElement("span");
     // Parameter/input names are plain identifiers (KEY_COLOR, SCALE_X) -
     // shown with spaces instead of underscores, never the raw identifier.
     label.innerText = ` ${text.replace(/_/g, " ")} `;
     label.className = "node-selector-label";
-    menuManager.subMenu.appendChild(label);
+    container.appendChild(label);
 }
 
 function dispatchParameterUpdate(nodeId, parameterName, value) {
@@ -337,27 +353,26 @@ function dispatchParameterUpdate(nodeId, parameterName, value) {
 
 /**
  * Render a "- value +" stepper triplet. onStep(direction) is called with
- * -1 or +1 and is responsible for dispatching the update.
+ * -1 or +1 and is responsible for dispatching the update. `wide` widens
+ * the value field for content that's legitimately longer than a typical
+ * parameter value - a wired node's own display name, not a short number
+ * or enum choice.
  */
-function renderStepperButtons(menuManager, valueText, onStep) {
-    const separator = document.createElement("span");
-    separator.innerText = " ";
-    menuManager.subMenu.appendChild(separator);
-
+function renderStepperButtons(container, valueText, onStep, wide = false) {
     const minusButton = document.createElement("button");
     minusButton.innerText = "-";
     minusButton.onclick = () => onStep(-1);
-    menuManager.subMenu.appendChild(minusButton);
+    container.appendChild(minusButton);
 
     const valueLabel = document.createElement("span");
     valueLabel.innerText = ` ${valueText} `;
-    valueLabel.className = "node-value-label";
-    menuManager.subMenu.appendChild(valueLabel);
+    valueLabel.className = wide ? "node-value-label node-value-label-wide" : "node-value-label";
+    container.appendChild(valueLabel);
 
     const plusButton = document.createElement("button");
     plusButton.innerText = "+";
     plusButton.onclick = () => onStep(1);
-    menuManager.subMenu.appendChild(plusButton);
+    container.appendChild(plusButton);
 }
 
 /**
@@ -381,9 +396,10 @@ function renderInputSteppers(menuManager, nodeEntry, nodeId) {
         });
         const currentIndex = currentEntry ? candidates.indexOf(currentEntry) + 1 : 0;
 
-        renderParameterLabel(menuManager, input.name);
+        const row = startParamRow(menuManager);
+        renderParameterLabel(row, input.name);
 
-        renderStepperButtons(menuManager, options[currentIndex], direction => {
+        renderStepperButtons(row, options[currentIndex], direction => {
             const nextIndex = (currentIndex + direction + options.length) % options.length;
             if (nextIndex === 0) {
                 wasmApp.disconnect_node_input(nodeId, input.name);
