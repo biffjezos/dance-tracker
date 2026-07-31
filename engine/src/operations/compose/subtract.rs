@@ -127,7 +127,7 @@ impl Operation for Subtract {
         }
 
         let mask = find_input(inputs, Input::Mask)
-            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
         let subtracted = Self::subtract_pixels(&first_image.pixels, &second_image.pixels);

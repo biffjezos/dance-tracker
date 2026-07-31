@@ -180,7 +180,7 @@ impl Operation for Blur {
         // Resolved once up front - MASK is independent of which concrete
         // Value variant SOURCE turns out to be below.
         let mask = find_input(inputs, Input::Mask)
-            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
         match value {

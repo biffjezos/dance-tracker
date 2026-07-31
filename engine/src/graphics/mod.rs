@@ -10,6 +10,6 @@ pub mod video;
 pub use color::Color;
 pub use frame::Frame;
 pub use image::{ Image, ImageFormat };
-pub use mask::{ apply_mask, resolve_mask_pixels };
+pub use mask::{ apply_mask, resolve_pixels };
 pub use video::Video;
 
