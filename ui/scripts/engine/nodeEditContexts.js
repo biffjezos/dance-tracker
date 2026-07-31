@@ -214,6 +214,8 @@ function renderParameter(menuManager, nodeId, parameter) {
 
     if (!parameter.options || parameter.options.length === 0) return;
 
+    renderParameterLabel(menuManager, parameter.name);
+
     const options = parameter.options;
     const currentIndex = Math.max(0, options.indexOf(parameter.value));
 
