@@ -129,7 +129,7 @@ impl Operation for Add {
         }
 
         let mask = find_input(inputs, Input::Mask)
-            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
         let added = Self::add_pixels(&first_image.pixels, &second_image.pixels);

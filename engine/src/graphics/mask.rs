@@ -11,7 +11,7 @@ pub struct Mask {
 /// the same Frame/Image/Video normalization every operation already
 /// repeats for its own SOURCE, reused here so each operation doesn't have
 /// to duplicate it a second time just to read a mask.
-pub fn resolve_mask_pixels(value: &Value, ctx: &Context) -> Result<(Vec<u8>, u32, u32), OperationError> {
+pub fn resolve_pixels(value: &Value, ctx: &Context) -> Result<(Vec<u8>, u32, u32), OperationError> {
     match value {
         Value::Frame(frame) => Ok((frame.pixels.clone(), frame.width, frame.height)),
         Value::Image(image) => Ok((image.pixels.clone(), image.width, image.height)),

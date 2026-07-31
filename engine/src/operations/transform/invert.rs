@@ -84,7 +84,7 @@ impl Operation for Invert {
         };
 
         let mask = find_input(inputs, Input::Mask)
-            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
         match value {
