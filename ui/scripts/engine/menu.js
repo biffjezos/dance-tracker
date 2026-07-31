@@ -52,12 +52,30 @@ export class MenuManager {
     }
 
     init() {
-        document.querySelectorAll(".main-menu button").forEach(button => {
+        // Only the actual category buttons - not the "☰ MENU" toggle
+        // itself, which lives in .main-menu too but has no data-menu.
+        document.querySelectorAll(".main-menu-items button").forEach(button => {
             button.addEventListener("click", () => {
                 console.log("Main menu clicked:", button.dataset.menu);
                 this.show(button.dataset.menu);
+                this.closeMobileMenu();
             });
         });
+    }
+
+    /*
+    Below lg, the category list is a floating dropdown (position:absolute)
+    over the sub-menu it's about to populate - Bootstrap's Collapse never
+    closes it on its own just because a button inside it was clicked, so
+    without this the sub-menu renders correctly but stays completely
+    hidden underneath the still-open dropdown. At lg+ this is a no-op:
+    the dropdown markup is simply always shown there (d-lg-flex), so
+    hiding the Collapse instance has nothing visible to do.
+    */
+    closeMobileMenu() {
+        const items = document.getElementById("main-menu-items");
+        if (!items || !window.bootstrap) return;
+        window.bootstrap.Collapse.getOrCreateInstance(items, { toggle: false }).hide();
     }
 
     getContextPath() {
