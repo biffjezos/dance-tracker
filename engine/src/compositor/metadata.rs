@@ -91,6 +91,21 @@ pub enum OperationCategory {
     Color,
 }
 
+impl OperationCategory {
+    /// JS-facing tag - lets a future generic menu/list grouping switch on
+    /// this instead of a hand-maintained per-menu category string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OperationCategory::Source => "source",
+            OperationCategory::Generator => "generator",
+            OperationCategory::Mask => "mask",
+            OperationCategory::Composite => "composite",
+            OperationCategory::Reference => "reference",
+            OperationCategory::Color => "color",
+        }
+    }
+}
+
 /*
 Which Value variant(s) an operation's execute() can return - every
 operation here only ever produces exactly one output today, but this

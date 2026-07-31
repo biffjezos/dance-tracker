@@ -323,6 +323,13 @@ input[type="color"]::-webkit-color-swatch {
   cursor: text;
 }
 
+/* Attached only when applyValidationBadge finds an actually-broken wire
+   (dangling reference, cycle, or depending on either) - never for a node
+   that's simply not fully wired yet, which is normal mid-edit state. */
+.node-name-label-invalid {
+  color: var(--color-text-warning);
+}
+
 /* Replaces .node-name-label in place while renaming (see
    startRenamingNode) - same size so nothing else in the row reflows, pink
    border (the app's existing accent colour, --color-border-button) is

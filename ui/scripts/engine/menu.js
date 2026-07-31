@@ -47,6 +47,23 @@ const VISIBILITY_MODE_LABELS = {
     maskWhite: "MASK WHITE",
     off: "OFF"
 };
+
+// Only the states that mean something is actually broken get a tooltip -
+// "missing_input" is the normal in-progress state of a node the user
+// hasn't finished wiring yet, not an error to flag.
+function describeNodeValidation(validation) {
+    if (!validation) return null;
+    switch (validation.state) {
+        case "unknown_input":
+            return `Wired to a removed node (#${validation.detail})`;
+        case "invalid_dependency":
+            return `Depends on a broken node (#${validation.detail})`;
+        case "cycle":
+            return "Part of a wiring cycle";
+        default:
+            return null;
+    }
+}
 export class MenuManager {
     constructor() {
         this.subMenu = document.getElementById("sub-menu");
@@ -226,9 +243,34 @@ export class MenuManager {
             nodeLabel.classList.add("node-name-label-editable");
             nodeLabel.title = "Click to rename";
             nodeLabel.onclick = () => this.startRenamingNode(selectedNode, nodeLabel);
+
+            this.applyValidationBadge(nodeLabel, selectedNode);
         }
 
         this.subMenu.appendChild(nodeLabel);
+    }
+
+    // Flags a node whose wiring is actually broken (a dangling reference, a
+    // cycle, or depending on either), not merely not-yet-wired - an unwired
+    // input on a freshly added node is completely normal per "no default
+    // anything", not something to badge as an error.
+    applyValidationBadge(nodeLabel, selectedNode) {
+        const wasmApp = getWasmApp();
+        const nodeId = resolveNodeId(selectedNode.id);
+        if (!wasmApp || nodeId === null || nodeId === undefined) return;
+
+        let validation;
+        try {
+            validation = wasmApp.node_validation(nodeId);
+        } catch (error) {
+            return;
+        }
+
+        const message = describeNodeValidation(validation);
+        if (!message) return;
+
+        nodeLabel.classList.add("node-name-label-invalid");
+        nodeLabel.title = message;
     }
 
     startRenamingNode(selectedNode, nodeLabel) {
