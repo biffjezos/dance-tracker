@@ -9,9 +9,10 @@
                     aria-controls="main-menu-items"
                 > ☰ MENU </button>
 
-                <div class="main-menu-items collapse d-lg-flex" id="main-menu-items">
-{{#each menus}}
-                    <button data-menu="{{this.key}}"> {{this.label}} </button>
-{{/each}}
-                </div>
+                {{! Category buttons are rendered client-side (menu.js,
+                    renderCategoryButtons) from the operations the engine
+                    actually reports via get_operations() - never listed
+                    here, so a category with nothing registered under it
+                    just doesn't get a button. }}
+                <div class="main-menu-items collapse d-lg-flex" id="main-menu-items"></div>
             </nav>
