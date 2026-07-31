@@ -76,6 +76,13 @@ impl Operation for CameraSource {
         Ok(())
     }
 
+    // A running camera stream produces a new frame every tick with neither
+    // its (nonexistent) parameters nor its (nonexistent) inputs ever
+    // changing - never safe to serve from RenderExecutor's cross-tick cache.
+    fn is_live(&self) -> bool {
+        true
+    }
+
     fn execute(
         &self,
         ctx: &Context,
