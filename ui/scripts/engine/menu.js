@@ -32,6 +32,14 @@ class MenuContext {
 const rootMenu = new MenuContext("root");
 const nodesMenu = new MenuContext("nodes", rootMenu);
 
+// Purely cosmetic left-to-right preference for categories that already
+// have a settled spot in the day-to-day workflow - it never gates
+// whether a button appears (that's decided solely by what get_operations()
+// actually reports, plus the always-present NODES browser). A category
+// this list doesn't know about still gets a button, just appended
+// alphabetically after the known ones.
+const CATEGORY_ORDER = ["INPUT", "NODES", "KEY", "GENERATE", "ANIMATE", "COMPOSE", "TRANSFORM", "OUTPUT"];
+
 const VISIBILITY_MODE_LABELS = {
     on: "ON",
     alpha: "ALPHA",
@@ -48,18 +56,52 @@ export class MenuManager {
         window.addEventListener("operationsLoaded", e => {
             console.log("Operations loaded:", e.detail);
             this.operations = e.detail;
+            this.renderCategoryButtons();
+        });
+    }
+
+    // The main-menu category buttons are derived from whatever operations
+    // are actually registered, not a hand-maintained list - a category
+    // with nothing registered under it (yet) simply gets no button, per
+    // "only display what actually exists". NODES is the one built-in
+    // exception: it's always present since it's how you browse/edit nodes
+    // that already exist, not tied to any operation's own menu field.
+    renderCategoryButtons() {
+        const items = document.getElementById("main-menu-items");
+        if (!items) return;
+
+        const categories = new Set(["NODES"]);
+        this.operations.forEach(op => {
+            const menu = (op.menu || op.Menu || "").toUpperCase();
+            if (menu) categories.add(menu);
+        });
+
+        const known = CATEGORY_ORDER.filter(c => categories.has(c));
+        const rest = [...categories].filter(c => !CATEGORY_ORDER.includes(c)).sort();
+
+        items.innerHTML = "";
+        [...known, ...rest].forEach(category => {
+            const button = document.createElement("button");
+            button.dataset.menu = category.toLowerCase();
+            button.innerText = category;
+            items.appendChild(button);
         });
     }
 
     init() {
-        // Only the actual category buttons - not the "☰ MENU" toggle
-        // itself, which lives in .main-menu too but has no data-menu.
-        document.querySelectorAll(".main-menu-items button").forEach(button => {
-            button.addEventListener("click", () => {
-                console.log("Main menu clicked:", button.dataset.menu);
-                this.show(button.dataset.menu);
-                this.closeMobileMenu();
-            });
+        // Delegated on the container rather than bound per-button: category
+        // buttons render dynamically once operations load (renderCategoryButtons),
+        // so they don't exist yet at init() time. This naturally excludes the
+        // "☰ MENU" toggle too, since it's a sibling of #main-menu-items, not
+        // one of its children.
+        const items = document.getElementById("main-menu-items");
+        if (!items) return;
+        items.addEventListener("click", e => {
+            const button = e.target.closest("button[data-menu]");
+            if (!button) return;
+            console.log("Main menu clicked:", button.dataset.menu);
+            this.show(button.dataset.menu);
+            this.closeMobileMenu();
         });
     }
 

@@ -23,17 +23,6 @@ function registerPartials() {
 }
 
 const data = {
-    menus: [
-        { key: "project", label: "PROJECT" },
-        { key: "input", label: "INPUT" },
-        { key: "nodes", label: "NODES" },
-        { key: "key", label: "KEY" },
-        { key: "generate", label: "GENERATE" },
-        { key: "animate", label: "ANIMATE" },
-        { key: "compose", label: "COMPOSE" },
-        { key: "transform", label: "TRANSFORM" },
-        { key: "output", label: "OUTPUT" },
-    ],
     panels: {
         preview: {
             sectionClass: "camera-panel",
