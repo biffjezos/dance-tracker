@@ -351,7 +351,7 @@ function renderStepperButtons(menuManager, valueText, onStep) {
 
     const valueLabel = document.createElement("span");
     valueLabel.innerText = ` ${valueText} `;
-    valueLabel.className = "node-selector-label";
+    valueLabel.className = "node-value-label";
     menuManager.subMenu.appendChild(valueLabel);
 
     const plusButton = document.createElement("button");

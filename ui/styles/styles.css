@@ -133,10 +133,20 @@ input[type="color"]::-webkit-color-swatch {
   align-items: center;
 }
 
-/* Node selector styles - fixed width so a value's own text length (a
-   node name, a parameter name, a stepped value) never reflows the menu
-   around it. */
+/* A parameter/input's own name (SOURCE, THRESHOLD, ...) - static text that
+   never changes for a given node, so it sizes to its own content instead
+   of wasting space padded out to match a fixed width. */
 .node-selector-label {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+}
+
+/* A stepper's current *value* (a wired node's name, a stepped number, an
+   enum choice, ...) - this is the text that actually changes, so it's the
+   one that needs a fixed width: otherwise picking a longer/shorter value
+   reflows every button after it. */
+.node-value-label {
   font-family: var(--font-family-primary);
   font-size: var(--font-size-body);
   color: var(--color-text-primary);
