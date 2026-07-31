@@ -316,7 +316,9 @@ function renderBooleanParameter(menuManager, nodeId, parameter) {
 
 function renderParameterLabel(menuManager, text) {
     const label = document.createElement("span");
-    label.innerText = ` ${text} `;
+    // Parameter/input names are plain identifiers (KEY_COLOR, SCALE_X) -
+    // shown with spaces instead of underscores, never the raw identifier.
+    label.innerText = ` ${text.replace(/_/g, " ")} `;
     label.className = "node-selector-label";
     menuManager.subMenu.appendChild(label);
 }
