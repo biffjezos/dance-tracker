@@ -89,30 +89,35 @@ impl RenderExecutor {
         }
 
         let param_fingerprint = Self::fingerprint(node_data.operation.as_ref());
+        let live = node_data.operation.is_live();
 
-        if let Some(cached) = self.cache.borrow().get(&node) {
-            let inputs_match = cached.inputs.len() == input_values.len()
-                && cached
-                    .inputs
-                    .iter()
-                    .zip(&input_values)
-                    .all(|((ck, cv), (k, v))| ck == k && value_ptr_eq(cv, v));
+        if !live {
+            if let Some(cached) = self.cache.borrow().get(&node) {
+                let inputs_match = cached.inputs.len() == input_values.len()
+                    && cached
+                        .inputs
+                        .iter()
+                        .zip(&input_values)
+                        .all(|((ck, cv), (k, v))| ck == k && value_ptr_eq(cv, v));
 
-            if inputs_match && cached.param_fingerprint == param_fingerprint {
-                let value = cached.value.clone();
-                memo.insert(node, value.clone());
-                return Ok(value);
+                if inputs_match && cached.param_fingerprint == param_fingerprint {
+                    let value = cached.value.clone();
+                    memo.insert(node, value.clone());
+                    return Ok(value);
+                }
             }
         }
 
         let outputs = node_data.operation.execute(ctx, &input_values)?;
         let value = outputs.into_iter().next().unwrap();
 
-        self.cache.borrow_mut().insert(node, CachedNode {
-            param_fingerprint,
-            inputs: input_values,
-            value: value.clone(),
-        });
+        if !live {
+            self.cache.borrow_mut().insert(node, CachedNode {
+                param_fingerprint,
+                inputs: input_values,
+                value: value.clone(),
+            });
+        }
 
         memo.insert(node, value.clone());
 
@@ -478,5 +483,97 @@ mod tests {
         assert!(rendered.contains("CountingSource:"));
         assert!(rendered.contains("Combine:"));
         assert!(rendered.contains("Total:"));
+    }
+
+    /// Stands in for CameraSource/VideoSource: zero inputs, zero parameters
+    /// (so its fingerprint never changes), but is_live() opts it out of the
+    /// cross-tick cache anyway - the same shape a live camera/video stream
+    /// has, which is exactly what made LIVE OUTPUT freeze on its first
+    /// captured frame before is_live() existed.
+    struct LiveCountingSource {
+        calls: Cell<u32>,
+    }
+
+    impl Operation for LiveCountingSource {
+        fn descriptor(&self) -> OperationDescriptor {
+            test_descriptor("live_counting_source", "LIVE COUNTING SOURCE")
+        }
+
+        fn as_any(&self) -> &dyn Any { self }
+        fn as_any_mut(&mut self) -> &mut dyn Any { self }
+
+        fn metadata(&self) -> OperationMetadata {
+            OperationMetadata {
+                display_name: "LiveCountingSource",
+                category: OperationCategory::Source,
+                inputs: vec![],
+                outputs: vec![],
+            }
+        }
+
+        fn is_live(&self) -> bool {
+            true
+        }
+
+        fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
+            self.calls.set(self.calls.get() + 1);
+            Ok(vec![Value::Number(self.calls.get() as f64)])
+        }
+    }
+
+    #[test]
+    fn a_live_node_is_re_executed_every_tick_despite_unchanged_state_and_inputs() {
+        let mut graph = Graph::new(1, 1);
+        let source_id = graph.add_node(Box::new(LiveCountingSource { calls: Cell::new(0) }));
+
+        let ctx = Context::default();
+        let executor = RenderExecutor::new();
+        executor.execute(&graph, source_id, &ctx).expect("should succeed");
+        executor.execute(&graph, source_id, &ctx).expect("should succeed");
+        executor.execute(&graph, source_id, &ctx).expect("should succeed");
+
+        let calls = graph
+            .resolve(source_id)
+            .unwrap()
+            .operation
+            .as_any()
+            .downcast_ref::<LiveCountingSource>()
+            .unwrap()
+            .calls
+            .get();
+
+        assert_eq!(calls, 3, "a live source must never be served from the cross-tick cache");
+    }
+
+    #[test]
+    fn a_live_sources_consumer_also_re_evaluates_every_tick() {
+        let mut graph = Graph::new(1, 1);
+
+        let source_id = graph.add_node(Box::new(LiveCountingSource { calls: Cell::new(0) }));
+        let combine_id = graph.add_node(Box::new(Combine));
+        graph.connect(combine_id, Input::Foreground, source_id).unwrap();
+        graph.connect(combine_id, Input::Background, source_id).unwrap();
+
+        let ctx = Context::default();
+        let executor = RenderExecutor::new();
+        executor.execute(&graph, combine_id, &ctx).expect("should succeed");
+        executor.execute(&graph, combine_id, &ctx).expect("should succeed");
+
+        let calls = graph
+            .resolve(source_id)
+            .unwrap()
+            .operation
+            .as_any()
+            .downcast_ref::<LiveCountingSource>()
+            .unwrap()
+            .calls
+            .get();
+
+        assert_eq!(
+            calls, 2,
+            "the live source's output value differs each tick, so its non-live consumer \
+             must see a resolved-input mismatch (value_ptr_eq) and re-execute too, not \
+             just the source itself"
+        );
     }
 }

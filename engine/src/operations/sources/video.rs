@@ -87,6 +87,16 @@ impl Operation for VideoSource {
         Ok(())
     }
 
+    // A video's frame content changes over playback time with neither its
+    // (nonexistent) parameters nor its (nonexistent) inputs ever changing -
+    // never safe to serve from RenderExecutor's cross-tick cache, whether
+    // it's reading a live pixel source or the pre-loaded Video fallback
+    // (whose own per-time sampling happens downstream, keyed off ctx.meta.time
+    // - something the cache doesn't see either).
+    fn is_live(&self) -> bool {
+        true
+    }
+
     fn execute(
         &self,
         ctx: &Context,

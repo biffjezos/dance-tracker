@@ -61,4 +61,15 @@ pub trait Operation: Any {
             )
         ))
     }
+
+    /// Whether this operation's output can change from tick to tick with
+    /// neither its own parameters nor its resolved inputs changing - true
+    /// for anything pulling frames out of an external, host-owned source
+    /// (a playing camera stream, a decoded video element). A cross-tick
+    /// cache keyed only on parameters + inputs (see RenderExecutor) has no
+    /// way to see that kind of change, so a live operation must always be
+    /// re-executed rather than served from that cache.
+    fn is_live(&self) -> bool {
+        false
+    }
 }
