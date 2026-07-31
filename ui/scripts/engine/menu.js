@@ -48,6 +48,19 @@ const VISIBILITY_MODE_LABELS = {
     off: "OFF"
 };
 
+// render() dispatches on MenuContext.id through this table instead of a
+// growing if/else chain - adding a new special context (its own fixed
+// layout, not a flat operation list) means adding one entry here, not
+// another branch in render() itself. Contexts not listed here (the normal
+// operation-category menus - INPUT, KEY, GENERATE, ...) fall through to
+// the generic renderOperationList().
+const CONTEXT_HANDLERS = {
+    nodes: "renderNodesTopContext",
+    node_edit: "renderNodeEditContext",
+    param_group: "renderParamGroupContext",
+    create_node: "renderCreateNodeContext"
+};
+
 // Only the states that mean something is actually broken get a tooltip -
 // "missing_input" is the normal in-progress state of a node the user
 // hasn't finished wiring yet, not an error to flag.
@@ -421,111 +434,110 @@ export class MenuManager {
             return;
         }
 
-        // Special handling for NODES menu - only at the top of the nodes
-        // stack. Once EDIT (or anything else) has pushed a deeper context,
-        // that context's own branch below must render instead.
-        //
-        // Every NODES-family context (this one, node_edit, param_group)
-        // shares the same static part - [UP] [-] <node name> [+] - so
-        // switching between them never jumps the layout. Only here is the
-        // selector actually interactive; elsewhere it renders disabled.
-        if (this.category === "nodes" && this.currentContext === nodesMenu) {
-            if (this.currentContext.parent !== null) {
-                this.renderUpButton();
+        // MenuContext.id is unique per kind of pushed context (the nodesMenu
+        // singleton is the only context ever built with id "nodes"), so a
+        // straight lookup replaces what used to be a chain of === checks.
+        const handlerName = this.currentContext && CONTEXT_HANDLERS[this.currentContext.id];
+        if (handlerName) {
+            this[handlerName]();
+            return;
+        }
+
+        this.renderOperationList();
+    }
+
+    // Every NODES-family context (top selector, EDIT, a parameter group)
+    // shares this static part - [UP] [-] <node name> [+] - so switching
+    // between them never jumps the layout. Only the top NODES context
+    // (interactive=true) actually lets -/+ step through nodes; elsewhere
+    // it renders disabled, same shape, so the layout still doesn't move.
+    renderNodesFamilyHeader(interactive) {
+        if (this.currentContext.parent !== null) {
+            this.renderUpButton();
+        }
+        this.renderNodeSelector(!interactive);
+        this.renderSeparator();
+    }
+
+    renderNodesTopContext() {
+        this.renderNodesFamilyHeader(true);
+
+        this.renderEditButton();
+        this.renderRemoveButton();
+
+        // biffjezos: added [> live] button
+        // Toggle, not a one-way setter: clicking again on the node that's
+        // already the live override releases it (dispatches clearLiveNode)
+        // instead of leaving no way back to the wired LIVE OUTPUT node.
+        const nodeId = currentPreviewContentId();
+        const isLive = nodeId !== null && nodeId !== undefined && getLiveNodeId() === nodeId;
+        const liveButton = document.createElement("button");
+        liveButton.innerText = isLive ? "> RELEASE LIVE PREVIEW" : "> LIVE PREVIEW";
+        liveButton.onclick = () => {
+            if (isLive) {
+                window.dispatchEvent(new CustomEvent("clearLiveNode"));
+                this.render();
+                return;
             }
-            this.renderNodeSelector();
+
+            if (nodeId !== null && nodeId !== undefined) {
+                window.dispatchEvent(
+                    new CustomEvent("setLiveNode", {
+                        detail: {
+                            nodeId,
+                            label: nodeSelectionState.getSelectedNodeName()
+                        }
+                    })
+                );
+                this.render();
+            }
+        };
+        this.subMenu.appendChild(liveButton);
+    }
+
+    renderNodeEditContext() {
+        this.renderNodesFamilyHeader(false);
+
+        const selectedNode = nodeSelectionState.getSelectedNode();
+        if (selectedNode) {
+            nodeEditContextRegistry.renderContext(this, selectedNode);
+        }
+    }
+
+    // A parameter-group sub-pane, pushed from within an edit context when a
+    // parameter declares a group (e.g. "COLOUR"). Generic across every node
+    // kind - node_parameters() already tells us which parameters belong to
+    // the group.
+    renderParamGroupContext() {
+        this.renderNodesFamilyHeader(false);
+
+        const selectedNode = nodeSelectionState.getSelectedNode();
+        if (selectedNode) {
+            renderGroupContext(this, selectedNode, this.currentContext.group);
+        }
+    }
+
+    renderCreateNodeContext() {
+        if (this.currentContext.parent !== null) {
+            this.renderUpButton();
             this.renderSeparator();
-
-            this.renderEditButton();
-            this.renderRemoveButton();
-
-            // biffjezos: added [> live] button
-            // Toggle, not a one-way setter: clicking again on the node that's
-            // already the live override releases it (dispatches clearLiveNode)
-            // instead of leaving no way back to the wired LIVE OUTPUT node.
-            const nodeId = currentPreviewContentId();
-            const isLive = nodeId !== null && nodeId !== undefined && getLiveNodeId() === nodeId;
-            const liveButton = document.createElement("button");
-            liveButton.innerText = isLive ? "> RELEASE LIVE PREVIEW" : "> LIVE PREVIEW";
-            liveButton.onclick = () => {
-                if (isLive) {
-                    window.dispatchEvent(new CustomEvent("clearLiveNode"));
-                    this.render();
-                    return;
-                }
-
-                if (nodeId !== null && nodeId !== undefined) {
-                    window.dispatchEvent(
-                        new CustomEvent("setLiveNode", {
-                            detail: {
-                                nodeId,
-                                label: nodeSelectionState.getSelectedNodeName()
-                            }
-                        })
-                    );
-                    this.render();
-                }
-            };
-            this.subMenu.appendChild(liveButton);
-            return;
         }
 
-        // Special handling for EDIT context.
-        if (this.currentContext && this.currentContext.id === "node_edit") {
-            if (this.currentContext.parent !== null) {
-                this.renderUpButton();
+        const addButton = document.createElement("button");
+        addButton.innerText = "ADD";
+        addButton.onclick = () => {
+            const opId = this.currentContext.opId;
+            if (opId) {
+                this.createNodeAndSelect(opId);
             }
-            this.renderNodeSelector(true);
-            this.renderSeparator();
+        };
+        this.subMenu.appendChild(addButton);
+    }
 
-            const selectedNode = nodeSelectionState.getSelectedNode();
-            if (selectedNode) {
-                nodeEditContextRegistry.renderContext(this, selectedNode);
-            }
-            return;
-        }
-
-        // Special handling for a parameter-group sub-pane (pushed from
-        // within an edit context when a parameter declares a group - e.g.
-        // "COLOUR"). Generic across every node kind - node_parameters()
-        // already tells us which parameters belong to the group.
-        if (this.currentContext && this.currentContext.id === "param_group") {
-            if (this.currentContext.parent !== null) {
-                this.renderUpButton();
-            }
-            this.renderNodeSelector(true);
-            this.renderSeparator();
-
-            const selectedNode = nodeSelectionState.getSelectedNode();
-            if (selectedNode) {
-                renderGroupContext(this, selectedNode, this.currentContext.group);
-            }
-            return;
-        }
-
-        // Special handling for create_node context
-        if (this.currentContext && this.currentContext.id === "create_node") {
-            if (this.currentContext.parent !== null) {
-                this.renderUpButton();
-                this.renderSeparator();
-            }
-
-
-            // Render ADD button
-            const addButton = document.createElement("button");
-            addButton.innerText = "ADD";
-            addButton.onclick = () => {
-                // Get the operation ID from the context
-                const opId = this.currentContext.opId;
-                if (opId) {
-                    this.createNodeAndSelect(opId);
-                }
-            };
-            this.subMenu.appendChild(addButton);
-            return;
-        }
-
-        // Render UP button if currentContext has a parent
+    // The fallback for any context not in CONTEXT_HANDLERS - a normal
+    // operation-category menu (INPUT, KEY, GENERATE, ...), rendered
+    // entirely from get_operations() with no per-category code anywhere.
+    renderOperationList() {
         if (this.currentContext && this.currentContext.parent !== null) {
             this.renderUpButton();
             this.renderSeparator();
