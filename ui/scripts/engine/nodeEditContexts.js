@@ -151,6 +151,14 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
     if (!wasmApp) return;
 
     const nodeId = nodeEntry.layer.nodeId;
+
+    // Wired inputs (SOURCE, FOREGROUND, BACKGROUND, ...) come first - what
+    // this node is connected to is more fundamental than its own parameter
+    // settings, and finding it shouldn't depend on scrolling past however
+    // many parameters the operation happens to have. Renders nothing for a
+    // node that declares no inputs (a source), so this is safe unconditionally.
+    renderInputSteppers(menuManager, nodeEntry, nodeId);
+
     const parameters = wasmApp.node_parameters(nodeId);
 
     // Ungrouped parameters render inline, same as always. Grouped ones
@@ -171,8 +179,6 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
         groupButton.onclick = () => menuManager.enterParameterGroup(groupName);
         menuManager.subMenu.appendChild(groupButton);
     });
-
-    renderInputSteppers(menuManager, nodeEntry, nodeId);
 }
 
 /**
