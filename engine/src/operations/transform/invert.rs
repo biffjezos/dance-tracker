@@ -61,7 +61,7 @@ impl Operation for Invert {
         OperationMetadata {
             display_name: "Invert",
             category: OperationCategory::Color,
-            inputs: vec![Input::Source],
+            inputs: vec![Input::Source, Input::Mask],
             outputs: vec![OutputKind::Image],
         }
     }
@@ -83,25 +83,39 @@ impl Operation for Invert {
             return Ok(vec![Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
 
-        match value {
-            Value::Frame(frame) => Ok(vec![Value::Frame(Arc::new(Frame {
-                pixels: Self::invert_pixels(&frame.pixels),
-                width: frame.width,
-                height: frame.height,
-                timestamp: frame.timestamp,
-            }))]),
+        let mask = find_input(inputs, Input::Mask)
+            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .transpose()?;
 
-            Value::Image(image) => Ok(vec![Value::Image(Arc::new(Image {
-                pixels: Self::invert_pixels(&image.pixels),
-                width: image.width,
-                height: image.height,
-                format: image.format,
-            }))]),
+        match value {
+            Value::Frame(frame) => {
+                let inverted = Self::invert_pixels(&frame.pixels);
+                let inverted = crate::graphics::apply_mask(&frame.pixels, inverted, mask.as_ref(), frame.width, frame.height)?;
+                Ok(vec![Value::Frame(Arc::new(Frame {
+                    pixels: inverted,
+                    width: frame.width,
+                    height: frame.height,
+                    timestamp: frame.timestamp,
+                }))])
+            }
+
+            Value::Image(image) => {
+                let inverted = Self::invert_pixels(&image.pixels);
+                let inverted = crate::graphics::apply_mask(&image.pixels, inverted, mask.as_ref(), image.width, image.height)?;
+                Ok(vec![Value::Image(Arc::new(Image {
+                    pixels: inverted,
+                    width: image.width,
+                    height: image.height,
+                    format: image.format,
+                }))])
+            }
 
             Value::Video(video) => {
                 let image = video.frame_at(ctx.meta.time)?;
+                let inverted = Self::invert_pixels(&image.pixels);
+                let inverted = crate::graphics::apply_mask(&image.pixels, inverted, mask.as_ref(), image.width, image.height)?;
                 Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: Self::invert_pixels(&image.pixels),
+                    pixels: inverted,
                     width: image.width,
                     height: image.height,
                     format: image.format,
@@ -172,6 +186,44 @@ mod tests {
                 assert_eq!(out.width, 2);
                 assert_eq!(out.height, 1);
             }
+            other => panic!("expected image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_zero_alpha_mask_leaves_the_source_uninverted() {
+        let invert = Invert::new();
+        let input = image(vec![10, 200, 50, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 0], 1, 1);
+
+        let values = invert
+            .execute(&context(1, 1), &[
+                (Input::Source, Value::Image(input.clone())),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, input.pixels),
+            other => panic!("expected image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_full_alpha_mask_inverts_exactly_as_unmasked() {
+        let invert = Invert::new();
+        let input = image(vec![10, 200, 50, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 255], 1, 1);
+
+        let values = invert
+            .execute(&context(1, 1), &[
+                (Input::Source, Value::Image(input)),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, vec![245, 55, 205, 0]),
             other => panic!("expected image, got {:?}", other),
         }
     }

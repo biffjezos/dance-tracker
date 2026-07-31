@@ -90,7 +90,10 @@ impl Operation for Add {
         OperationMetadata {
             display_name: "Add",
             category: OperationCategory::Color,
-            inputs: vec![Input::Foreground, Input::Background],
+            // Identity (MASK=0) is Foreground unmodified - it's the input
+            // that still makes sense to show on its own with no compositing
+            // applied, unlike Background which is meaningless alone here.
+            inputs: vec![Input::Foreground, Input::Background, Input::Mask],
             outputs: vec![OutputKind::Image],
         }
     }
@@ -125,8 +128,15 @@ impl Operation for Add {
             ));
         }
 
+        let mask = find_input(inputs, Input::Mask)
+            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .transpose()?;
+
+        let added = Self::add_pixels(&first_image.pixels, &second_image.pixels);
+        let added = crate::graphics::apply_mask(&first_image.pixels, added, mask.as_ref(), first_image.width, first_image.height)?;
+
         Ok(vec![Value::Image(Arc::new(Image {
-            pixels: Self::add_pixels(&first_image.pixels, &second_image.pixels),
+            pixels: added,
             width: first_image.width,
             height: first_image.height,
             format: first_image.format,
@@ -166,5 +176,54 @@ mod tests {
         let out = Add::add_pixels(&black.pixels, &color.pixels);
 
         assert_eq!(out, color.pixels);
+    }
+
+    fn context(width: u32, height: u32) -> Context {
+        Context {
+            meta: crate::compositor::Meta { width, height, ..Default::default() },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_zero_alpha_mask_passes_through_foreground_unadded() {
+        let add = Add::new();
+        let fg = image(vec![10, 20, 30, 255], 1, 1);
+        let bg = image(vec![100, 100, 100, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 0], 1, 1);
+
+        let values = add
+            .execute(&context(1, 1), &[
+                (Input::Foreground, Value::Image(fg.clone())),
+                (Input::Background, Value::Image(bg)),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, fg.pixels),
+            other => panic!("expected an image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_full_alpha_mask_adds_exactly_as_unmasked() {
+        let add = Add::new();
+        let fg = image(vec![10, 20, 30, 255], 1, 1);
+        let bg = image(vec![100, 100, 100, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 255], 1, 1);
+
+        let values = add
+            .execute(&context(1, 1), &[
+                (Input::Foreground, Value::Image(fg.clone())),
+                (Input::Background, Value::Image(bg.clone())),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, Add::add_pixels(&fg.pixels, &bg.pixels)),
+            other => panic!("expected an image, got {:?}", other),
+        }
     }
 }

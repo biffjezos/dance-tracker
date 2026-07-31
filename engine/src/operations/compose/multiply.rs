@@ -90,9 +90,12 @@ impl Operation for Multiply {
         OperationMetadata {
             display_name: "Multiply",
             category: OperationCategory::Color,
+            // Identity (MASK=0) is Foreground unmodified - see add.rs's
+            // metadata() for why Foreground and not Background.
             inputs: vec![
                  Input::Foreground,
-                 Input::Background
+                 Input::Background,
+                 Input::Mask
             ],
             outputs: vec![OutputKind::Image],
         }
@@ -142,12 +145,25 @@ impl Operation for Multiply {
             ));
         }
 
+        let mask = find_input(inputs, Input::Mask)
+            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .transpose()?;
+
+        let multiplied = Self::multiply_pixels(
+            &first_image.pixels,
+            &second_image.pixels,
+        );
+        let multiplied = crate::graphics::apply_mask(
+            &first_image.pixels,
+            multiplied,
+            mask.as_ref(),
+            first_image.width,
+            first_image.height,
+        )?;
+
         Ok(vec![
             Value::Image(Arc::new(Image {
-                pixels: Self::multiply_pixels(
-                    &first_image.pixels,
-                    &second_image.pixels,
-                ),
+                pixels: multiplied,
                 width: first_image.width,
                 height: first_image.height,
                 format: first_image.format,
@@ -236,5 +252,44 @@ mod tests {
             Value::Image(out) => assert_eq!(out.pixels, vec![10, 20, 30, 255]),
             other => panic!("expected image, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn a_zero_alpha_mask_passes_through_foreground_unmultiplied() {
+        let multiply = Multiply::new();
+        let fg = image(vec![10, 20, 30, 255], 1, 1);
+        let bg = image(vec![0, 0, 0, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 0], 1, 1);
+
+        let values = multiply
+            .execute(&context(1, 1), &[
+                (Input::Foreground, Value::Image(fg.clone())),
+                (Input::Background, Value::Image(bg)),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, fg.pixels),
+            other => panic!("expected image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_mismatched_mask_size_errors_instead_of_being_silently_ignored() {
+        let multiply = Multiply::new();
+        let fg = image(vec![10, 20, 30, 255], 1, 1);
+        let bg = image(vec![0, 0, 0, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 255, 0, 0, 0, 255], 2, 1);
+
+        let err = multiply
+            .execute(&context(1, 1), &[
+                (Input::Foreground, Value::Image(fg)),
+                (Input::Background, Value::Image(bg)),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap_err();
+
+        assert!(matches!(err, OperationError::InvalidInputType(_)));
     }
 }

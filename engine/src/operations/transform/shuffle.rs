@@ -137,7 +137,7 @@ impl Operation for Shuffle {
         OperationMetadata {
             display_name: "Shuffle",
             category: OperationCategory::Color,
-            inputs: vec![Input::Source],
+            inputs: vec![Input::Source, Input::Mask],
             outputs: vec![OutputKind::Image],
         }
     }
@@ -215,14 +215,20 @@ impl Operation for Shuffle {
             ]);
         };
 
+        let mask = find_input(inputs, Input::Mask)
+            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .transpose()?;
+
         /*
         Any pixel-bearing input is shuffled the same way; the output keeps the
         kind it came in as, so a live Frame stays a Frame down the chain.
         */
         match value {
             Value::Frame(frame) => {
+                let shuffled = self.shuffle_pixels(&frame.pixels);
+                let shuffled = crate::graphics::apply_mask(&frame.pixels, shuffled, mask.as_ref(), frame.width, frame.height)?;
                 Ok(vec![Value::Frame(Arc::new(Frame {
-                    pixels: self.shuffle_pixels(&frame.pixels),
+                    pixels: shuffled,
                     width: frame.width,
                     height: frame.height,
                     timestamp: frame.timestamp,
@@ -230,8 +236,10 @@ impl Operation for Shuffle {
             }
 
             Value::Image(image) => {
+                let shuffled = self.shuffle_pixels(&image.pixels);
+                let shuffled = crate::graphics::apply_mask(&image.pixels, shuffled, mask.as_ref(), image.width, image.height)?;
                 Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: self.shuffle_pixels(&image.pixels),
+                    pixels: shuffled,
                     width: image.width,
                     height: image.height,
                     format: image.format,
@@ -240,9 +248,11 @@ impl Operation for Shuffle {
 
             Value::Video(video) => {
                 let image = video.frame_at(ctx.meta.time)?;
+                let shuffled = self.shuffle_pixels(&image.pixels);
+                let shuffled = crate::graphics::apply_mask(&image.pixels, shuffled, mask.as_ref(), image.width, image.height)?;
 
                 Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: self.shuffle_pixels(&image.pixels),
+                    pixels: shuffled,
                     width: image.width,
                     height: image.height,
                     format: image.format,
@@ -411,6 +421,27 @@ mod tests {
 
         match &values[0] {
             Value::Image(output) => assert_eq!(output.pixels, vec![30, 20, 30, 40]),
+            other => panic!("expected an image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_zero_alpha_mask_leaves_the_channels_unshuffled() {
+        let mut shuffle = Shuffle::new();
+        shuffle.set_parameter("RED", Value::Text("GREEN".into())).unwrap();
+
+        let input = image(vec![10, 20, 30, 40], 1, 1);
+        let mask = image(vec![0, 0, 0, 0], 1, 1);
+
+        let values = shuffle
+            .execute(&context(1, 1), &[
+                (Input::Source, Value::Image(input.clone())),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(output) => assert_eq!(output.pixels, input.pixels),
             other => panic!("expected an image, got {:?}", other),
         }
     }

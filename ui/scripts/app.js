@@ -41,6 +41,15 @@ initPanelExpand();
 // rather than the source itself. Only fires when a canvas is focused
 // (clicked) - otherwise Space scrolling the page unexpectedly would be
 // surprising.
+//
+// TODO(independent per-panel playback): this toggles the shared
+// videoEl.play()/.pause() directly, so the same CAMERA/VIDEO node can't be
+// playing for one panel's chain and paused for another's - there's only
+// one clock. Planned fix: move to a per-executor freeze-hold instead (see
+// Operation::is_live() in the Rust engine, already added) - each panel
+// gets its own frozen/live map keyed by node id, the underlying DOM
+// element always keeps playing, and Space toggles that panel's freeze
+// state via a new WASM binding rather than touching videoEl directly.
 window.addEventListener("keydown", e => {
     const panel = getFocusedPanel();
     if (e.code !== "Space" || !panel) return;

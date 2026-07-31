@@ -93,7 +93,9 @@ impl Operation for Screen {
         OperationMetadata {
             display_name: "Screen",
             category: OperationCategory::Color,
-            inputs: vec![Input::Foreground, Input::Background],
+            // Identity (MASK=0) is Foreground unmodified - see add.rs's
+            // metadata() for why Foreground and not Background.
+            inputs: vec![Input::Foreground, Input::Background, Input::Mask],
             outputs: vec![OutputKind::Image],
         }
     }
@@ -128,8 +130,15 @@ impl Operation for Screen {
             ));
         }
 
+        let mask = find_input(inputs, Input::Mask)
+            .map(|v| crate::graphics::resolve_mask_pixels(v, ctx))
+            .transpose()?;
+
+        let screened = Self::screen_pixels(&first_image.pixels, &second_image.pixels);
+        let screened = crate::graphics::apply_mask(&first_image.pixels, screened, mask.as_ref(), first_image.width, first_image.height)?;
+
         Ok(vec![Value::Image(Arc::new(Image {
-            pixels: Self::screen_pixels(&first_image.pixels, &second_image.pixels),
+            pixels: screened,
             width: first_image.width,
             height: first_image.height,
             format: first_image.format,
@@ -214,6 +223,27 @@ mod tests {
 
         match &values[0] {
             Value::Image(out) => assert_eq!(out.pixels, vec![10, 20, 30, 255]),
+            other => panic!("expected image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_zero_alpha_mask_passes_through_foreground_unscreened() {
+        let screen = Screen::new();
+        let fg = image(vec![10, 20, 30, 255], 1, 1);
+        let bg = image(vec![255, 255, 255, 255], 1, 1);
+        let mask = image(vec![0, 0, 0, 0], 1, 1);
+
+        let values = screen
+            .execute(&context(1, 1), &[
+                (Input::Foreground, Value::Image(fg.clone())),
+                (Input::Background, Value::Image(bg)),
+                (Input::Mask, Value::Image(mask)),
+            ])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels, fg.pixels),
             other => panic!("expected image, got {:?}", other),
         }
     }
