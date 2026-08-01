@@ -63,3 +63,33 @@ say so, don't paper over it with more tests.
 Specific features that have been deliberately postponed (MOVE operation,
 frame-accurate video decode) are tracked in `PARKED_WORK.md`, not here -
 read it before touching either of those areas.
+
+## Codebase audit tasks
+
+When asked to audit this codebase (quality, maintainability, bug count,
+dead code, etc.) rather than to implement something, report first - don't
+fix anything as part of the audit unless separately asked to. Cover:
+
+- Overall quality and ease of maintenance (Rust engine vs. JS UI can
+  differ - say so if they do).
+- How many files must be touched to add a new operation, and separately,
+  a new menu/menu item - this changes as the architecture evolves, so
+  re-derive it from the current code rather than assuming a past answer
+  still holds.
+- How many app-breaking or silent bugs can be identified.
+- How much dead/unused code, or scaffolding for a planned-but-unbuilt
+  feature, exists - including stale documentation that no longer matches
+  the code (a guide describing a removed API is as much a liability as
+  dead code, since it actively misleads whoever follows it next).
+
+Then categorize every finding into **MUST / SHOULD / COULD / NICE TO
+HAVE**, prioritized within each group (most important first, not just
+listed in the order found). For each finding, give an effort estimate as
+`(work Xh, complexity Y/6)`:
+
+- **work** - realistic engineering hours to fix, as a plain number (e.g.
+  `0.25h`, `1.5h`), not a percentage or ratio.
+- **complexity** - 1 to 6, how much thinking effort the fix takes for
+  Claude Sonnet at this repo's usual working effort. A rating above 6
+  means the task is dense/high-stakes enough to warrant switching to
+  Opus rather than attempting it at Sonnet's default effort.
