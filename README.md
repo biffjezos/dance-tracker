@@ -68,7 +68,7 @@ Built for the future. Designed like the past.
 
 v0.1
 
-![DANCE TRACKER 5000 v0.1](dance-tracker-0.1.png)
-![DANCE TRACKER 5000 v0.1](rings.png)
-![DANCE TRACKER 5000 v0.1](key-rings.png)
-![DANCE TRACKER 5000 v0.1](key-rings-2.png)
+![DANCE TRACKER 5000 v0.1](ui/assets/dance-tracker-0.1.png)
+![DANCE TRACKER 5000 v0.1](ui/assets/rings.png)
+![DANCE TRACKER 5000 v0.1](ui/assets/key-rings.png)
+![DANCE TRACKER 5000 v0.1](ui/assets/key-rings-2.png)
