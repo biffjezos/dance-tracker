@@ -116,9 +116,11 @@ doesn't need the shape to change.
 pub enum OutputKind {
     Frame,
     Mask,
+    // Bounded (u8) - what a source (ImageSource/CameraSource/VideoSource)
+    // naturally produces, and what CLAMP converts back to.
     Image,
-    // Unclamped RGBA - see graphics::FloatImage. Only ADD/SUBTRACT declare
-    // this today; CLAMP is what converts it back to Image.
+    // Unbounded RGBA - see graphics::FloatImage. What every other
+    // operation works in and declares by default.
     FloatImage,
     Video,
     Number,

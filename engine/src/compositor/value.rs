@@ -6,7 +6,7 @@ use crate::graphics::{
     float_image::FloatImage,
     frame::Frame,
     geometry::Center,
-    image::Image,
+    u8_image::U8Image,
     mask::Mask,
     video::Video
 };
@@ -15,10 +15,12 @@ use crate::graphics::{
 pub enum Value {
     Frame(Arc<Frame>),
     Mask(Arc<Mask>),
-    Image(Arc<Image>),
-    // Unclamped RGBA - see FloatImage's own doc comment. Never produced by
-    // a source; only by an operation whose math can legitimately go out of
-    // gamut (ADD, SUBTRACT). CLAMP is the explicit way back to Image.
+    // Bounded (u8, always 0..255) - what a loaded file/camera/video frame
+    // naturally is on the way in, and what CLAMP produces on the way out.
+    Image(Arc<U8Image>),
+    // Unbounded RGBA - see FloatImage's own doc comment. What every other
+    // operation works in and produces by default; CLAMP is the explicit
+    // way back to a bounded Image.
     FloatImage(Arc<FloatImage>),
     Video(Arc<Video>),
     Number(f64),

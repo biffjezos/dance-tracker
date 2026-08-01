@@ -13,17 +13,17 @@ use crate::compositor::{
     Value
 };
 
-use crate::graphics::Image;
+use crate::graphics::U8Image;
 
 pub struct ImageSource {
-    pub image: Option<Arc<Image>>,
+    pub image: Option<Arc<U8Image>>,
     // The loaded image contain-fitted to whatever resolution it was last
     // asked for, cached by that resolution - so a graph resolution that
     // hasn't changed since last tick reuses the exact same Arc (RefCell,
     // not recomputed inside execute(&self, ..)), keeping the
     // frame-to-frame cache's pointer-identity comparison meaningful for
     // every node downstream of this one.
-    fitted: RefCell<Option<(u32, u32, Arc<Image>)>>,
+    fitted: RefCell<Option<(u32, u32, Arc<U8Image>)>>,
 }
 
 impl ImageSource {
@@ -34,12 +34,12 @@ impl ImageSource {
         }
     }
 
-    pub fn set_image(&mut self, image: Arc<Image>) {
+    pub fn set_image(&mut self, image: Arc<U8Image>) {
         self.image = Some(image);
         *self.fitted.borrow_mut() = None;
     }
 
-    pub fn get_image(&self) -> Option<Arc<Image>> {
+    pub fn get_image(&self) -> Option<Arc<U8Image>> {
         self.image.clone()
     }
 }
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn conforms_a_mismatched_image_to_the_graphs_current_resolution() {
         let mut source = ImageSource::new();
-        source.set_image(Arc::new(Image {
+        source.set_image(Arc::new(U8Image {
             pixels: vec![255, 0, 0, 255],
             width: 1,
             height: 1,
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn reuses_the_same_arc_when_the_resolution_is_unchanged() {
         let mut source = ImageSource::new();
-        source.set_image(Arc::new(Image {
+        source.set_image(Arc::new(U8Image {
             pixels: vec![255, 0, 0, 255],
             width: 1,
             height: 1,
@@ -166,7 +166,7 @@ mod tests {
     #[test]
     fn re_fits_when_the_resolution_changes() {
         let mut source = ImageSource::new();
-        source.set_image(Arc::new(Image {
+        source.set_image(Arc::new(U8Image {
             pixels: vec![255, 0, 0, 255],
             width: 1,
             height: 1,

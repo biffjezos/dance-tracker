@@ -12,7 +12,7 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
     Value,
 };
-use crate::graphics::{Color, Frame, Image};
+use crate::graphics::{Color, FloatImage};
 
 /// Target packed representation. Only HSV exists today - the enum and the
 /// single-entry options list both exist already so adding another color
@@ -48,8 +48,8 @@ impl ColorFormat {
 
 /// Converts each pixel's RGB into a packed representation of the chosen
 /// color space; alpha always passes through unchanged. For HSV: hue
-/// (0..360 degrees) packed into the red channel, saturation into green,
-/// value into blue, each scaled to 0..255. The output isn't meant for
+/// (0..360 degrees, normalized to 0.0..1.0) packed into the red channel,
+/// saturation into green, value into blue. The output isn't meant for
 /// display - it's data for a downstream operation (HUE KEY) to read.
 pub struct RgbToHsv {
     pub format: ColorFormat,
@@ -60,23 +60,23 @@ impl RgbToHsv {
         Self { format: ColorFormat::default() }
     }
 
-    pub fn convert_pixels(pixels: &[u8], format: ColorFormat) -> Vec<u8> {
-        let mut output = vec![0u8; pixels.len()];
+    pub fn convert_pixels(pixels: &[f32], format: ColorFormat) -> Vec<f32> {
+        let mut output = vec![0f32; pixels.len()];
 
         for (source, target) in pixels.chunks_exact(4).zip(output.chunks_exact_mut(4)) {
             match format {
                 ColorFormat::Hsv => {
                     let color = Color {
-                        r: source[0] as f32 / 255.0,
-                        g: source[1] as f32 / 255.0,
-                        b: source[2] as f32 / 255.0,
+                        r: source[0],
+                        g: source[1],
+                        b: source[2],
                         a: 1.0,
                     };
                     let (h, s, v) = color.to_hsv();
 
-                    target[0] = ((h / 360.0) * 255.0).round() as u8;
-                    target[1] = (s * 255.0).round() as u8;
-                    target[2] = (v * 255.0).round() as u8;
+                    target[0] = (h / 360.0) as f32;
+                    target[1] = s as f32;
+                    target[2] = v as f32;
                     target[3] = source[3];
                 }
             }
@@ -121,7 +121,7 @@ impl Operation for RgbToHsv {
             // HSV-packed values pixel-by-pixel has no meaningful result -
             // there's no "partially converted", only converted or not.
             inputs: vec![Input::Source],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -153,39 +153,16 @@ impl Operation for RgbToHsv {
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
-            return Ok(vec![Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))]);
+            return Ok(vec![Value::Image(crate::graphics::U8Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
 
-        match value {
-            Value::Frame(frame) => Ok(vec![Value::Frame(Arc::new(Frame {
-                pixels: Self::convert_pixels(&frame.pixels, self.format),
-                width: frame.width,
-                height: frame.height,
-                timestamp: frame.timestamp,
-            }))]),
+        let source = FloatImage::from_value(value, ctx)?;
 
-            Value::Image(image) => Ok(vec![Value::Image(Arc::new(Image {
-                pixels: Self::convert_pixels(&image.pixels, self.format),
-                width: image.width,
-                height: image.height,
-                format: image.format,
-            }))]),
-
-            Value::Video(video) => {
-                let image = video.frame_at(ctx.meta.time)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: Self::convert_pixels(&image.pixels, self.format),
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            other => Err(OperationError::InvalidInputType(format!(
-                "RgbToHsv cannot process {:?}",
-                other
-            ))),
-        }
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
+            pixels: Self::convert_pixels(&source.pixels, self.format),
+            width: source.width,
+            height: source.height,
+        }))])
     }
 }
 
@@ -198,7 +175,7 @@ inventory::submit! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphics::ImageFormat;
+    use crate::graphics::{ImageFormat, U8Image};
 
     fn context(width: u32, height: u32) -> Context {
         Context {
@@ -207,27 +184,33 @@ mod tests {
         }
     }
 
-    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
-        Arc::new(Image { pixels, width, height, format: ImageFormat::Rgba8 })
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<U8Image> {
+        Arc::new(U8Image { pixels, width, height, format: ImageFormat::Rgba8 })
+    }
+
+    fn assert_close(actual: &[f32], expected: &[f32]) {
+        for (a, e) in actual.iter().zip(expected.iter()) {
+            assert!((a - e).abs() < 0.01, "expected {:?}, got {:?}", expected, actual);
+        }
     }
 
     #[test]
-    fn pure_green_packs_to_the_expected_hsv_bytes() {
-        // Green: H=120 (120/360*255 ~= 85), S=255, V=255.
-        let out = RgbToHsv::convert_pixels(&[0, 255, 0, 255], ColorFormat::Hsv);
-        assert_eq!(out, vec![85, 255, 255, 255]);
+    fn pure_green_packs_to_the_expected_normalized_hsv() {
+        // Green: H=120/360 ~= 0.333, S=1.0, V=1.0.
+        let out = RgbToHsv::convert_pixels(&[0.0, 1.0, 0.0, 1.0], ColorFormat::Hsv);
+        assert_close(&out, &[0.333, 1.0, 1.0, 1.0]);
     }
 
     #[test]
     fn black_packs_to_zero_hue_and_saturation() {
-        let out = RgbToHsv::convert_pixels(&[0, 0, 0, 255], ColorFormat::Hsv);
-        assert_eq!(out, vec![0, 0, 0, 255]);
+        let out = RgbToHsv::convert_pixels(&[0.0, 0.0, 0.0, 1.0], ColorFormat::Hsv);
+        assert_close(&out, &[0.0, 0.0, 0.0, 1.0]);
     }
 
     #[test]
     fn alpha_always_passes_through_unchanged() {
-        let out = RgbToHsv::convert_pixels(&[0, 255, 0, 137], ColorFormat::Hsv);
-        assert_eq!(out[3], 137);
+        let out = RgbToHsv::convert_pixels(&[0.0, 1.0, 0.0, 0.537], ColorFormat::Hsv);
+        assert!((out[3] - 0.537).abs() < 0.001);
     }
 
     #[test]
@@ -263,8 +246,8 @@ mod tests {
             .unwrap();
 
         match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, vec![85, 255, 255, 255]),
-            other => panic!("expected an image, got {:?}", other),
+            Value::FloatImage(out) => assert_close(&out.pixels, &[0.333, 1.0, 1.0, 1.0]),
+            other => panic!("expected a float image, got {:?}", other),
         }
     }
 }

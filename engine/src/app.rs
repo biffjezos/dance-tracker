@@ -21,7 +21,7 @@ use crate::compositor::{
     Value,
     value_to_text
 };
-use crate::graphics::{ Color, Image, ImageFormat };
+use crate::graphics::{ Color, U8Image, ImageFormat };
 use crate::dom::{ VideoElementPixelSource, write_frame_to_canvas};
 use crate::operations::sources::ImageSource;
 
@@ -408,8 +408,8 @@ impl App {
         let image_source = operation.as_any_mut().downcast_mut::<ImageSource>()
             .ok_or_else(|| JsValue::from_str(&format!("Node {:?} is not an ImageSource", node_id)))?;
 
-        // Create Image from the pixel data
-        let image = Arc::new(Image {
+        // Create U8Image from the pixel data
+        let image = Arc::new(U8Image {
             pixels: pixels.to_vec(),
             width,
             height,

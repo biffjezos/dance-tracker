@@ -12,7 +12,7 @@
 
 use std::sync::Arc;
 use crate::compositor::Value;
-use crate::graphics::{Frame, Image, float_image::FloatImage, mask::Mask, video::Video};
+use crate::graphics::{Frame, u8_image::U8Image, float_image::FloatImage, mask::Mask, video::Video};
 use crate::compositor::OperationError;
 
 /// Trait for types that can be converted to a Frame for rendering.
@@ -53,8 +53,8 @@ impl ToRenderFrame for Arc<Frame> {
     }
 }
 
-// Implement ToRenderFrame for Image (convert to Frame with timestamp 0.0)
-impl ToRenderFrame for Arc<Image> {
+// Implement ToRenderFrame for U8Image (convert to Frame with timestamp 0.0)
+impl ToRenderFrame for Arc<U8Image> {
     fn to_render_frame(&self) -> Result<Arc<Frame>, OperationError> {
         Ok(Arc::new(Frame {
             pixels: self.pixels.clone(),
@@ -69,8 +69,8 @@ impl ToRenderFrame for Arc<Image> {
 // display range and quantizes to u8, since a canvas can only ever show a
 // bounded image regardless. This is a display-only convenience (common
 // practice in any compositor's viewer), not a substitute for an explicit
-// CLAMP node - see App::is_output_out_of_gamut/is_preview_out_of_gamut,
-// which flag exactly this happening so it isn't silently hidden from the
+// CLAMP node - see App::is_output_out_of_gamut, which flags exactly this
+// happening for the OUTPUT panel so it isn't silently hidden from the
 // user just because it's still visible.
 impl ToRenderFrame for Arc<FloatImage> {
     fn to_render_frame(&self) -> Result<Arc<Frame>, OperationError> {

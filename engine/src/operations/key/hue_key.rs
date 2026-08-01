@@ -12,7 +12,7 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
     Value,
 };
-use crate::graphics::{Color, Frame, Image};
+use crate::graphics::{Color, FloatImage};
 
 /// What an unconnected SOURCE shows - same convention as CHROMA KEY: a
 /// flat, obviously-fake placeholder rather than the usual missing()
@@ -55,24 +55,25 @@ impl HueKey {
         shortest / 180.0
     }
 
-    /// `reference` supplies the hue to compare (its own red channel, as
-    /// packed by RGB TO HSV); `source` supplies the RGB and alpha that
-    /// actually get keyed and returned. Same length required.
-    pub fn key_pixels(source: &[u8], reference: &[u8], target_hue: f64, threshold: f64) -> Vec<u8> {
-        let mut output = vec![0u8; source.len()];
+    /// `reference` supplies the hue to compare (its own red channel,
+    /// normalized 0.0..1.0, as packed by RGB TO HSV); `source` supplies
+    /// the RGB and alpha that actually get keyed and returned. Same
+    /// length required.
+    pub fn key_pixels(source: &[f32], reference: &[f32], target_hue: f64, threshold: f64) -> Vec<f32> {
+        let mut output = vec![0f32; source.len()];
 
         for ((src, reference_px), target) in source
             .chunks_exact(4)
             .zip(reference.chunks_exact(4))
             .zip(output.chunks_exact_mut(4))
         {
-            let reference_hue = (reference_px[0] as f64 / 255.0) * 360.0;
+            let reference_hue = reference_px[0] as f64 * 360.0;
             let distance = Self::hue_distance(reference_hue, target_hue);
 
             target[0] = src[0];
             target[1] = src[1];
             target[2] = src[2];
-            target[3] = if distance <= threshold { 0 } else { src[3] };
+            target[3] = if distance <= threshold { 0.0 } else { src[3] };
         }
 
         output
@@ -111,7 +112,7 @@ impl Operation for HueKey {
             display_name: "Hue Key",
             category: OperationCategory::Mask,
             inputs: vec![Input::Source, Input::Reference, Input::Mask],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -160,7 +161,7 @@ impl Operation for HueKey {
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(source) = find_input(inputs, Input::Source) else {
-            return Ok(vec![Value::Image(Image::solid(PLACEHOLDER_COLOR, ctx.meta.width, ctx.meta.height))]);
+            return Ok(vec![Value::Image(crate::graphics::U8Image::solid(PLACEHOLDER_COLOR, ctx.meta.width, ctx.meta.height))]);
         };
 
         // No REFERENCE wired yet: nothing to key against, so SOURCE passes
@@ -169,7 +170,15 @@ impl Operation for HueKey {
         let Some(reference) = find_input(inputs, Input::Reference) else {
             return Ok(vec![source.clone()]);
         };
-        let (reference_pixels, ref_width, ref_height) = crate::graphics::resolve_pixels(reference, ctx)?;
+        let reference_image = FloatImage::from_value(reference, ctx)?;
+
+        let source_image = FloatImage::from_value(source, ctx)?;
+        if source_image.width != reference_image.width || source_image.height != reference_image.height {
+            return Err(OperationError::InvalidInputType(format!(
+                "HUE KEY's REFERENCE is {}x{}, but SOURCE is {}x{}",
+                reference_image.width, reference_image.height, source_image.width, source_image.height
+            )));
+        }
 
         let (target_hue, _, _) = self.hue_color.to_hsv();
 
@@ -177,59 +186,14 @@ impl Operation for HueKey {
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
-        let check_dimensions = |width: u32, height: u32| -> Result<(), OperationError> {
-            if width != ref_width || height != ref_height {
-                return Err(OperationError::InvalidInputType(format!(
-                    "HUE KEY's REFERENCE is {}x{}, but SOURCE is {}x{}",
-                    ref_width, ref_height, width, height
-                )));
-            }
-            Ok(())
-        };
+        let keyed = Self::key_pixels(&source_image.pixels, &reference_image.pixels, target_hue, self.threshold);
+        let keyed = crate::graphics::apply_mask(&source_image.pixels, keyed, mask.as_ref(), source_image.width, source_image.height)?;
 
-        match source {
-            Value::Frame(frame) => {
-                check_dimensions(frame.width, frame.height)?;
-                let keyed = Self::key_pixels(&frame.pixels, &reference_pixels, target_hue, self.threshold);
-                let keyed = crate::graphics::apply_mask(&frame.pixels, keyed, mask.as_ref(), frame.width, frame.height)?;
-                Ok(vec![Value::Frame(Arc::new(Frame {
-                    pixels: keyed,
-                    width: frame.width,
-                    height: frame.height,
-                    timestamp: frame.timestamp,
-                }))])
-            }
-
-            Value::Image(image) => {
-                check_dimensions(image.width, image.height)?;
-                let keyed = Self::key_pixels(&image.pixels, &reference_pixels, target_hue, self.threshold);
-                let keyed = crate::graphics::apply_mask(&image.pixels, keyed, mask.as_ref(), image.width, image.height)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: keyed,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            Value::Video(video) => {
-                let image = video.frame_at(ctx.meta.time)?;
-                check_dimensions(image.width, image.height)?;
-                let keyed = Self::key_pixels(&image.pixels, &reference_pixels, target_hue, self.threshold);
-                let keyed = crate::graphics::apply_mask(&image.pixels, keyed, mask.as_ref(), image.width, image.height)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: keyed,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            other => Err(OperationError::InvalidInputType(format!(
-                "HueKey cannot process {:?}",
-                other
-            ))),
-        }
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
+            pixels: keyed,
+            width: source_image.width,
+            height: source_image.height,
+        }))])
     }
 }
 
@@ -242,7 +206,7 @@ inventory::submit! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphics::ImageFormat;
+    use crate::graphics::{ImageFormat, U8Image};
 
     fn context(width: u32, height: u32) -> Context {
         Context {
@@ -251,8 +215,19 @@ mod tests {
         }
     }
 
-    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
-        Arc::new(Image { pixels, width, height, format: ImageFormat::Rgba8 })
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<U8Image> {
+        Arc::new(U8Image { pixels, width, height, format: ImageFormat::Rgba8 })
+    }
+
+    fn float_pixels(pixels: Vec<u8>) -> Vec<f32> {
+        FloatImage::from_image(&image(pixels, 1, 1)).pixels
+    }
+
+    fn as_u8_pixels(value: &Value) -> Vec<u8> {
+        match value {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels,
+            other => panic!("expected a float image, got {:?}", other),
+        }
     }
 
     #[test]
@@ -261,29 +236,29 @@ mod tests {
 
         // Two very differently-lit patches of "green screen": bright green
         // and a dim, shadowed green. Both must key out.
-        let bright_source = image(vec![0, 255, 0, 255], 1, 1);
-        let bright_reference = image(RgbToHsvHue::pack(120.0, 255, 255), 1, 1);
+        let bright_source = float_pixels(vec![0, 255, 0, 255]);
+        let bright_reference = RgbToHsvHue::pack(120.0, 1.0, 1.0);
 
-        let dim_source = image(vec![0, 60, 0, 255], 1, 1);
-        let dim_reference = image(RgbToHsvHue::pack(120.0, 255, 60), 1, 1);
+        let dim_source = float_pixels(vec![0, 60, 0, 255]);
+        let dim_reference = RgbToHsvHue::pack(120.0, 1.0, 60.0 / 255.0);
 
-        let bright_out = HueKey::key_pixels(&bright_source.pixels, &bright_reference.pixels, 120.0, hue_key.threshold);
-        let dim_out = HueKey::key_pixels(&dim_source.pixels, &dim_reference.pixels, 120.0, hue_key.threshold);
+        let bright_out = HueKey::key_pixels(&bright_source, &bright_reference, 120.0, hue_key.threshold);
+        let dim_out = HueKey::key_pixels(&dim_source, &dim_reference, 120.0, hue_key.threshold);
 
-        assert_eq!(bright_out[3], 0, "bright green must key out");
-        assert_eq!(dim_out[3], 0, "dim, shadowed green (same hue) must key out too");
+        assert_eq!(bright_out[3], 0.0, "bright green must key out");
+        assert_eq!(dim_out[3], 0.0, "dim, shadowed green (same hue) must key out too");
     }
 
     #[test]
     fn a_dark_but_different_hue_is_not_keyed_out() {
         // A dark, desaturated shirt - very different hue from green, even
         // though it's dim like the shadowed screen above.
-        let source = image(vec![20, 20, 25, 255], 1, 1);
-        let reference = image(RgbToHsvHue::pack(240.0, 20, 25), 1, 1); // bluish hue
+        let source = float_pixels(vec![20, 20, 25, 255]);
+        let reference = RgbToHsvHue::pack(240.0, 20.0 / 255.0, 25.0 / 255.0); // bluish hue
 
-        let out = HueKey::key_pixels(&source.pixels, &reference.pixels, 120.0, 0.1);
+        let out = HueKey::key_pixels(&source, &reference, 120.0, 0.1);
 
-        assert_eq!(out[3], 255, "a differently-hued dark pixel must not be keyed out just for being dark");
+        assert_eq!(out[3], 1.0, "a differently-hued dark pixel must not be keyed out just for being dark");
     }
 
     #[test]
@@ -352,10 +327,7 @@ mod tests {
             .execute(&graph, key_id, &context(1, 1))
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, vec![0, 255, 0, 0], "pure green must key out via RGB TO HSV -> HUE KEY"),
-            other => panic!("expected an image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), vec![0, 255, 0, 0], "pure green must key out via RGB TO HSV -> HUE KEY");
     }
 
     /// Test-only helper for building a synthetic "RGB TO HSV output"
@@ -364,8 +336,8 @@ mod tests {
     /// hue-distance tests above focused on HueKey's own math.
     struct RgbToHsvHue;
     impl RgbToHsvHue {
-        fn pack(hue_degrees: f64, saturation: u8, value: u8) -> Vec<u8> {
-            vec![((hue_degrees / 360.0) * 255.0).round() as u8, saturation, value, 255]
+        fn pack(hue_degrees: f64, saturation: f64, value: f64) -> Vec<f32> {
+            vec![(hue_degrees / 360.0) as f32, saturation as f32, value as f32, 1.0]
         }
     }
 }

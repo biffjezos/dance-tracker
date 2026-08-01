@@ -12,7 +12,7 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
     Value,
 };
-use crate::graphics::{Color, Frame, Image};
+use crate::graphics::{Color, FloatImage};
 
 /// What an unconnected SOURCE shows: a flat, obviously-fake magenta - a
 /// mask-producing node has nothing to key "removal" against, so the usual
@@ -38,19 +38,20 @@ impl ChromaKey {
     }
 
     /// Cut alpha to 0 for every pixel within `threshold` of `key_color`
-    /// (both in normalized 0..1 RGB), leaving RGB and any already-lower
-    /// alpha untouched otherwise.
-    pub fn key_pixels(pixels: &[u8], key_color: Color, threshold: f64) -> Vec<u8> {
+    /// (both in normalized 0..1 RGB - unbounded input is measured as-is,
+    /// no clamp), leaving RGB and any already-lower alpha untouched
+    /// otherwise.
+    pub fn key_pixels(pixels: &[f32], key_color: Color, threshold: f64) -> Vec<f32> {
         let key_r = key_color.r as f64;
         let key_g = key_color.g as f64;
         let key_b = key_color.b as f64;
 
-        let mut output = vec![0u8; pixels.len()];
+        let mut output = vec![0f32; pixels.len()];
 
         for (source, target) in pixels.chunks_exact(4).zip(output.chunks_exact_mut(4)) {
-            let r = source[0] as f64 / 255.0;
-            let g = source[1] as f64 / 255.0;
-            let b = source[2] as f64 / 255.0;
+            let r = source[0] as f64;
+            let g = source[1] as f64;
+            let b = source[2] as f64;
 
             let distance = ((r - key_r).powi(2) + (g - key_g).powi(2) + (b - key_b).powi(2)).sqrt()
                 / 3f64.sqrt();
@@ -58,7 +59,7 @@ impl ChromaKey {
             target[0] = source[0];
             target[1] = source[1];
             target[2] = source[2];
-            target[3] = if distance <= threshold { 0 } else { source[3] };
+            target[3] = if distance <= threshold { 0.0 } else { source[3] };
         }
 
         output
@@ -97,7 +98,7 @@ impl Operation for ChromaKey {
             display_name: "Chroma Key",
             category: OperationCategory::Mask,
             inputs: vec![Input::Source, Input::Mask],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -146,53 +147,23 @@ impl Operation for ChromaKey {
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
-            return Ok(vec![Value::Image(Image::solid(PLACEHOLDER_COLOR, ctx.meta.width, ctx.meta.height))]);
+            return Ok(vec![Value::Image(crate::graphics::U8Image::solid(PLACEHOLDER_COLOR, ctx.meta.width, ctx.meta.height))]);
         };
+
+        let source = FloatImage::from_value(value, ctx)?;
 
         let mask = find_input(inputs, Input::Mask)
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
-        match value {
-            Value::Frame(frame) => {
-                let keyed = Self::key_pixels(&frame.pixels, self.key_color, self.threshold);
-                let keyed = crate::graphics::apply_mask(&frame.pixels, keyed, mask.as_ref(), frame.width, frame.height)?;
-                Ok(vec![Value::Frame(Arc::new(Frame {
-                    pixels: keyed,
-                    width: frame.width,
-                    height: frame.height,
-                    timestamp: frame.timestamp,
-                }))])
-            }
+        let keyed = Self::key_pixels(&source.pixels, self.key_color, self.threshold);
+        let keyed = crate::graphics::apply_mask(&source.pixels, keyed, mask.as_ref(), source.width, source.height)?;
 
-            Value::Image(image) => {
-                let keyed = Self::key_pixels(&image.pixels, self.key_color, self.threshold);
-                let keyed = crate::graphics::apply_mask(&image.pixels, keyed, mask.as_ref(), image.width, image.height)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: keyed,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            Value::Video(video) => {
-                let image = video.frame_at(ctx.meta.time)?;
-                let keyed = Self::key_pixels(&image.pixels, self.key_color, self.threshold);
-                let keyed = crate::graphics::apply_mask(&image.pixels, keyed, mask.as_ref(), image.width, image.height)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: keyed,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            other => Err(OperationError::InvalidInputType(format!(
-                "ChromaKey cannot process {:?}",
-                other
-            ))),
-        }
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
+            pixels: keyed,
+            width: source.width,
+            height: source.height,
+        }))])
     }
 }
 
@@ -205,10 +176,17 @@ inventory::submit! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphics::ImageFormat;
+    use crate::graphics::{ImageFormat, U8Image};
 
-    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
-        Arc::new(Image { pixels, width, height, format: ImageFormat::Rgba8 })
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<U8Image> {
+        Arc::new(U8Image { pixels, width, height, format: ImageFormat::Rgba8 })
+    }
+
+    fn as_u8_pixels(value: &Value) -> Vec<u8> {
+        match value {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels,
+            other => panic!("expected a float image, got {:?}", other),
+        }
     }
 
     #[test]
@@ -234,10 +212,7 @@ mod tests {
 
         let executor = PreviewExecutor::default();
         let values = executor.execute(&graph, chroma_id, &ctx).unwrap();
-        match &values[0] {
-            Value::Image(out) => assert_eq!(&out.pixels[0..4], &[255, 0, 0, 255], "expected red from src_a"),
-            other => panic!("expected an image, got {:?}", other),
-        }
+        assert_eq!(&as_u8_pixels(&values[0])[0..4], &[255, 0, 0, 255], "expected red from src_a");
 
         graph.disconnect(chroma_id, Input::Source).unwrap();
         let mut src_b = ImageSource::new();
@@ -246,50 +221,47 @@ mod tests {
         graph.connect(chroma_id, Input::Source, src_b_id).unwrap();
 
         let values = executor.execute(&graph, chroma_id, &ctx).unwrap();
-        match &values[0] {
-            Value::Image(out) => assert_eq!(&out.pixels[0..4], &[0, 255, 0, 0], "expected keyed-out green from src_b"),
-            other => panic!("expected an image, got {:?}", other),
-        }
+        assert_eq!(&as_u8_pixels(&values[0])[0..4], &[0, 255, 0, 0], "expected keyed-out green from src_b");
     }
 
     #[test]
     fn pure_green_is_keyed_out_at_default_settings() {
         let chromakey = ChromaKey::new();
-        let green = image(vec![0, 255, 0, 255], 1, 1);
+        let green = FloatImage::from_image(&image(vec![0, 255, 0, 255], 1, 1));
 
         let out = ChromaKey::key_pixels(&green.pixels, chromakey.key_color, chromakey.threshold);
 
-        assert_eq!(out, vec![0, 255, 0, 0]);
+        assert_eq!(out, vec![0.0, 1.0, 0.0, 0.0]);
     }
 
     #[test]
     fn a_far_colour_is_left_alone() {
         let chromakey = ChromaKey::new();
-        let red = image(vec![255, 0, 0, 255], 1, 1);
+        let red = FloatImage::from_image(&image(vec![255, 0, 0, 255], 1, 1));
 
         let out = ChromaKey::key_pixels(&red.pixels, chromakey.key_color, chromakey.threshold);
 
-        assert_eq!(out, vec![255, 0, 0, 255]);
+        assert_eq!(out, vec![1.0, 0.0, 0.0, 1.0]);
     }
 
     #[test]
     fn already_transparent_pixels_outside_the_key_stay_untouched() {
         let chromakey = ChromaKey::new();
-        let translucent_red = image(vec![255, 0, 0, 100], 1, 1);
+        let translucent_red = FloatImage::from_image(&image(vec![255, 0, 0, 100], 1, 1));
 
         let out = ChromaKey::key_pixels(&translucent_red.pixels, chromakey.key_color, chromakey.threshold);
 
-        assert_eq!(out, vec![255, 0, 0, 100]);
+        assert_eq!(out[3], translucent_red.pixels[3]);
     }
 
     #[test]
     fn threshold_zero_only_keys_the_exact_colour() {
         let key_color = Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 };
-        let exact = image(vec![0, 255, 0, 255], 1, 1);
-        let close = image(vec![10, 245, 10, 255], 1, 1);
+        let exact = FloatImage::from_image(&image(vec![0, 255, 0, 255], 1, 1));
+        let close = FloatImage::from_image(&image(vec![10, 245, 10, 255], 1, 1));
 
-        assert_eq!(ChromaKey::key_pixels(&exact.pixels, key_color, 0.0), vec![0, 255, 0, 0]);
-        assert_eq!(ChromaKey::key_pixels(&close.pixels, key_color, 0.0), vec![10, 245, 10, 255]);
+        assert_eq!(ChromaKey::key_pixels(&exact.pixels, key_color, 0.0), vec![0.0, 1.0, 0.0, 0.0]);
+        assert_eq!(ChromaKey::key_pixels(&close.pixels, key_color, 0.0), close.pixels);
     }
 
     #[test]
@@ -344,10 +316,7 @@ mod tests {
             ])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, green.pixels, "MASK=0 must leave the source unkeyed"),
-            other => panic!("expected an image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), green.pixels, "MASK=0 must leave the source unkeyed");
     }
 
     #[test]
@@ -363,9 +332,6 @@ mod tests {
             ])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, vec![0, 255, 0, 0]),
-            other => panic!("expected an image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), vec![0, 255, 0, 0]);
     }
 }

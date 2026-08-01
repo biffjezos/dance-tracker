@@ -11,7 +11,7 @@ use crate::compositor::{
     metadata::{ OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind },
     Value
 };
-use crate::graphics::{Frame, Image};
+use crate::graphics::FloatImage;
 use std::sync::Arc;
 
 /// Channel selection for Shuffle operation.
@@ -82,21 +82,24 @@ impl Shuffle {
         }
     }
     
-    /// Get the value for one output channel out of a single RGBA pixel
-    fn channel_value(pixel: &[u8], channel: ShuffleChannel) -> u8 {
+    /// Get the value for one output channel out of a single RGBA pixel.
+    /// Generic (u8 or f32) - shuffling is pure reordering/zeroing, no
+    /// arithmetic on channel values, so there's nothing here that could
+    /// ever produce or need to guard against an out-of-gamut result.
+    fn channel_value<T: Copy + Default>(pixel: &[T], channel: ShuffleChannel) -> T {
         match channel {
             ShuffleChannel::R => pixel[0],
             ShuffleChannel::G => pixel[1],
             ShuffleChannel::B => pixel[2],
             ShuffleChannel::A => pixel[3],
-            ShuffleChannel::Off => 0,
+            ShuffleChannel::Off => T::default(),
         }
     }
 
     /// Remap the channels of a packed RGBA buffer.
     /// Works on raw pixels so it applies to every pixel-bearing Value alike.
-    pub fn shuffle_pixels(&self, pixels: &[u8]) -> Vec<u8> {
-        let mut output = vec![0u8; pixels.len()];
+    pub fn shuffle_pixels<T: Copy + Default>(&self, pixels: &[T]) -> Vec<T> {
+        let mut output = vec![T::default(); pixels.len()];
 
         for (source, target) in pixels
             .chunks_exact(4)
@@ -139,7 +142,7 @@ impl Operation for Shuffle {
             display_name: "Shuffle",
             category: OperationCategory::Color,
             inputs: vec![Input::Source, Input::Mask],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -212,58 +215,24 @@ impl Operation for Shuffle {
         */
         let Some(value) = find_input(inputs, Input::Source) else {
             return Ok(vec![
-                Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))
+                Value::Image(crate::graphics::U8Image::missing(ctx.meta.width, ctx.meta.height))
             ]);
         };
+
+        let source = FloatImage::from_value(value, ctx)?;
 
         let mask = find_input(inputs, Input::Mask)
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
-        /*
-        Any pixel-bearing input is shuffled the same way; the output keeps the
-        kind it came in as, so a live Frame stays a Frame down the chain.
-        */
-        match value {
-            Value::Frame(frame) => {
-                let shuffled = self.shuffle_pixels(&frame.pixels);
-                let shuffled = crate::graphics::apply_mask(&frame.pixels, shuffled, mask.as_ref(), frame.width, frame.height)?;
-                Ok(vec![Value::Frame(Arc::new(Frame {
-                    pixels: shuffled,
-                    width: frame.width,
-                    height: frame.height,
-                    timestamp: frame.timestamp,
-                }))])
-            }
+        let shuffled = self.shuffle_pixels(&source.pixels);
+        let shuffled = crate::graphics::apply_mask(&source.pixels, shuffled, mask.as_ref(), source.width, source.height)?;
 
-            Value::Image(image) => {
-                let shuffled = self.shuffle_pixels(&image.pixels);
-                let shuffled = crate::graphics::apply_mask(&image.pixels, shuffled, mask.as_ref(), image.width, image.height)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: shuffled,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            Value::Video(video) => {
-                let image = video.frame_at(ctx.meta.time)?;
-                let shuffled = self.shuffle_pixels(&image.pixels);
-                let shuffled = crate::graphics::apply_mask(&image.pixels, shuffled, mask.as_ref(), image.width, image.height)?;
-
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: shuffled,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            other => Err(OperationError::InvalidInputType(
-                format!("Shuffle cannot read channels from {:?}", other)
-            )),
-        }
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
+            pixels: shuffled,
+            width: source.width,
+            height: source.height,
+        }))])
     }
 }
 
@@ -279,7 +248,7 @@ mod tests {
     use super::*;
     use crate::compositor::graph::Graph;
     use crate::compositor::executors::{Execute, RenderExecutor};
-    use crate::graphics::ImageFormat;
+    use crate::graphics::{ImageFormat, U8Image};
     use crate::operations::sources::ImageSource;
 
     fn context(width: u32, height: u32) -> Context {
@@ -293,13 +262,20 @@ mod tests {
         }
     }
 
-    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
-        Arc::new(Image {
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<U8Image> {
+        Arc::new(U8Image {
             pixels,
             width,
             height,
             format: ImageFormat::Rgba8,
         })
+    }
+
+    fn as_u8_pixels(value: &Value) -> Vec<u8> {
+        match value {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels,
+            other => panic!("expected a float image, got {:?}", other),
+        }
     }
 
     #[test]
@@ -337,10 +313,7 @@ mod tests {
             .execute(&context(1, 1), &[(Input::Source, input)])
             .expect("shuffle should accept an image");
 
-        match &values[0] {
-            Value::Image(output) => assert_eq!(output.pixels, vec![20, 30, 10, 0]),
-            other => panic!("expected an image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), vec![20, 30, 10, 0]);
     }
 
     #[test]
@@ -354,33 +327,21 @@ mod tests {
             .execute(&context(1, 1), &[(Input::Source, input)])
             .expect("shuffle should accept an image");
 
-        match &values[0] {
-            Value::Image(output) => assert_eq!(output.pixels, vec![1, 0, 3, 4]),
-            other => panic!("expected an image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), vec![1, 0, 3, 4]);
     }
 
     #[test]
-    fn a_live_frame_input_stays_a_frame() {
+    fn shuffle_accepts_an_out_of_gamut_float_image_and_preserves_the_values() {
         let shuffle = Shuffle::new();
-
-        let input = Value::Frame(Arc::new(Frame {
-            pixels: vec![1, 2, 3, 4],
-            width: 1,
-            height: 1,
-            timestamp: 12.5,
-        }));
+        let input = Value::FloatImage(Arc::new(FloatImage { pixels: vec![1.5, -0.2, 0.5, 1.0], width: 1, height: 1 }));
 
         let values = shuffle
             .execute(&context(1, 1), &[(Input::Source, input)])
-            .expect("shuffle should accept a live frame");
+            .expect("shuffle should accept a float image");
 
         match &values[0] {
-            Value::Frame(output) => {
-                assert_eq!(output.pixels, vec![1, 2, 3, 4]);
-                assert_eq!(output.timestamp, 12.5);
-            }
-            other => panic!("expected a frame, got {:?}", other),
+            Value::FloatImage(out) => assert_eq!(out.pixels, vec![1.5, -0.2, 0.5, 1.0]),
+            other => panic!("expected a float image, got {:?}", other),
         }
     }
 
@@ -420,10 +381,7 @@ mod tests {
             .execute(&graph, shuffle_id, &context(1, 1))
             .expect("the wired graph should render");
 
-        match &values[0] {
-            Value::Image(output) => assert_eq!(output.pixels, vec![30, 20, 30, 40]),
-            other => panic!("expected an image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), vec![30, 20, 30, 40]);
     }
 
     #[test]
@@ -441,9 +399,6 @@ mod tests {
             ])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(output) => assert_eq!(output.pixels, input.pixels),
-            other => panic!("expected an image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), input.pixels);
     }
 }

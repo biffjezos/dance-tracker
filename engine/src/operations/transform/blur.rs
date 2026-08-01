@@ -12,7 +12,7 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
     Value,
 };
-use crate::graphics::{Frame, Image};
+use crate::graphics::FloatImage;
 
 /// A simple separable box blur.
 ///
@@ -27,13 +27,17 @@ impl Blur {
         Self { radius_px: 0 }
     }
 
-    /// Apply a separable box blur to an RGBA buffer.
+    /// Apply a separable box blur to an RGBA buffer, in float - so
+    /// blurring an already out-of-gamut FloatImage (e.g. an ADD result)
+    /// averages its real values rather than whatever they'd have been
+    /// clamped to first. A weighted average of in-range values can never
+    /// itself go out of range, but it can (correctly) stay out of range
+    /// if the input already was.
     ///
     /// This is a very basic implementation:
     /// - Horizontal pass, then vertical pass.
     /// - Clamps at edges (no special border modes).
-    /// - Operates in u8, no gamma/linear handling.
-    pub fn blur_pixels(&self, pixels: &[u8], width: u32, height: u32) -> Vec<u8> {
+    pub fn blur_pixels(&self, pixels: &[f32], width: u32, height: u32) -> Vec<f32> {
         if self.radius_px == 0 {
             return pixels.to_vec();
         }
@@ -42,61 +46,61 @@ impl Blur {
         let h = height as usize;
         let r = self.radius_px as usize;
 
-        let mut tmp = vec![0u8; pixels.len()];
-        let mut out = vec![0u8; pixels.len()];
+        let mut tmp = vec![0f32; pixels.len()];
+        let mut out = vec![0f32; pixels.len()];
 
         // Horizontal pass
         for y in 0..h {
             let row_start = y * w * 4;
             for x in 0..w {
-                let mut sum = [0u32; 4];
+                let mut sum = [0f32; 4];
                 let mut count = 0u32;
 
                 let x_start = x.saturating_sub(r);
                 let x_end = (x + r).min(w - 1);
 
                 for xi in x_start..=x_end {
-                    let idx = (row_start + xi * 4) as usize;
-                    sum[0] += pixels[idx] as u32;
-                    sum[1] += pixels[idx + 1] as u32;
-                    sum[2] += pixels[idx + 2] as u32;
-                    sum[3] += pixels[idx + 3] as u32;
+                    let idx = row_start + xi * 4;
+                    sum[0] += pixels[idx];
+                    sum[1] += pixels[idx + 1];
+                    sum[2] += pixels[idx + 2];
+                    sum[3] += pixels[idx + 3];
                     count += 1;
                 }
 
                 let inv = 1.0 / count as f32;
                 let out_idx = row_start + x * 4;
-                tmp[out_idx] = (sum[0] as f32 * inv) as u8;
-                tmp[out_idx + 1] = (sum[1] as f32 * inv) as u8;
-                tmp[out_idx + 2] = (sum[2] as f32 * inv) as u8;
-                tmp[out_idx + 3] = (sum[3] as f32 * inv) as u8;
+                tmp[out_idx] = sum[0] * inv;
+                tmp[out_idx + 1] = sum[1] * inv;
+                tmp[out_idx + 2] = sum[2] * inv;
+                tmp[out_idx + 3] = sum[3] * inv;
             }
         }
 
         // Vertical pass
         for y in 0..h {
             for x in 0..w {
-                let mut sum = [0u32; 4];
+                let mut sum = [0f32; 4];
                 let mut count = 0u32;
 
                 let y_start = y.saturating_sub(r);
                 let y_end = (y + r).min(h - 1);
 
                 for yi in y_start..=y_end {
-                    let idx = (yi * w * 4 + x * 4) as usize;
-                    sum[0] += tmp[idx] as u32;
-                    sum[1] += tmp[idx + 1] as u32;
-                    sum[2] += tmp[idx + 2] as u32;
-                    sum[3] += tmp[idx + 3] as u32;
+                    let idx = yi * w * 4 + x * 4;
+                    sum[0] += tmp[idx];
+                    sum[1] += tmp[idx + 1];
+                    sum[2] += tmp[idx + 2];
+                    sum[3] += tmp[idx + 3];
                     count += 1;
                 }
 
                 let inv = 1.0 / count as f32;
                 let out_idx = y * w * 4 + x * 4;
-                out[out_idx] = (sum[0] as f32 * inv) as u8;
-                out[out_idx + 1] = (sum[1] as f32 * inv) as u8;
-                out[out_idx + 2] = (sum[2] as f32 * inv) as u8;
-                out[out_idx + 3] = (sum[3] as f32 * inv) as u8;
+                out[out_idx] = sum[0] * inv;
+                out[out_idx + 1] = sum[1] * inv;
+                out[out_idx + 2] = sum[2] * inv;
+                out[out_idx + 3] = sum[3] * inv;
             }
         }
 
@@ -136,7 +140,7 @@ impl Operation for Blur {
             display_name: "Blur",
             category: OperationCategory::Color,
             inputs: vec![Input::Source, Input::Mask],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -175,55 +179,25 @@ impl Operation for Blur {
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
-            return Ok(vec![Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))]);
+            return Ok(vec![Value::Image(crate::graphics::U8Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
 
+        let source = FloatImage::from_value(value, ctx)?;
+
         // Resolved once up front - MASK is independent of which concrete
-        // Value variant SOURCE turns out to be below.
+        // Value variant SOURCE turns out to be.
         let mask = find_input(inputs, Input::Mask)
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
-        match value {
-            Value::Frame(frame) => {
-                let blurred = self.blur_pixels(&frame.pixels, frame.width, frame.height);
-                let blurred = crate::graphics::apply_mask(&frame.pixels, blurred, mask.as_ref(), frame.width, frame.height)?;
-                Ok(vec![Value::Frame(Arc::new(Frame {
-                    pixels: blurred,
-                    width: frame.width,
-                    height: frame.height,
-                    timestamp: frame.timestamp,
-                }))])
-            }
+        let blurred = self.blur_pixels(&source.pixels, source.width, source.height);
+        let blurred = crate::graphics::apply_mask(&source.pixels, blurred, mask.as_ref(), source.width, source.height)?;
 
-            Value::Image(image) => {
-                let blurred = self.blur_pixels(&image.pixels, image.width, image.height);
-                let blurred = crate::graphics::apply_mask(&image.pixels, blurred, mask.as_ref(), image.width, image.height)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: blurred,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            Value::Video(video) => {
-                let image = video.frame_at(ctx.meta.time)?;
-                let blurred = self.blur_pixels(&image.pixels, image.width, image.height);
-                let blurred = crate::graphics::apply_mask(&image.pixels, blurred, mask.as_ref(), image.width, image.height)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: blurred,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            other => Err(OperationError::InvalidInputType(format!(
-                "Blur cannot process {:?}",
-                other
-            ))),
-        }
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
+            pixels: blurred,
+            width: source.width,
+            height: source.height,
+        }))])
     }
 }
 
@@ -238,7 +212,7 @@ mod tests {
     use super::*;
     use crate::compositor::graph::Graph;
     use crate::compositor::executors::{Execute, RenderExecutor};
-    use crate::graphics::ImageFormat;
+    use crate::graphics::{ImageFormat, U8Image};
 
     fn context(width: u32, height: u32) -> Context {
         Context {
@@ -251,13 +225,20 @@ mod tests {
         }
     }
 
-    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
-        Arc::new(Image {
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<U8Image> {
+        Arc::new(U8Image {
             pixels,
             width,
             height,
             format: ImageFormat::Rgba8,
         })
+    }
+
+    fn as_u8_pixels(value: &Value) -> Vec<u8> {
+        match value {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels,
+            other => panic!("expected a float image, got {:?}", other),
+        }
     }
 
     #[test]
@@ -269,10 +250,7 @@ mod tests {
             .execute(&context(2, 1), &[(Input::Source, Value::Image(input.clone()))])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, input.pixels),
-            other => panic!("expected image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), input.pixels);
     }
 
     #[test]
@@ -327,9 +305,24 @@ mod tests {
             .execute(&context(2, 1), &[(Input::Source, Value::Image(input.clone()))])
             .unwrap();
 
+        assert_ne!(as_u8_pixels(&values[0]), input.pixels);
+    }
+
+    #[test]
+    fn blurring_an_out_of_gamut_float_image_stays_out_of_gamut() {
+        // A weighted average of already out-of-range values can correctly
+        // still be out of range - blur must not silently clamp mid-average.
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(1.0)).unwrap();
+
+        let input = Arc::new(FloatImage { pixels: vec![1.5, 1.5, 1.5, 1.0, 1.5, 1.5, 1.5, 1.0], width: 2, height: 1 });
+        let values = blur
+            .execute(&context(2, 1), &[(Input::Source, Value::FloatImage(input))])
+            .unwrap();
+
         match &values[0] {
-            Value::Image(out) => assert_ne!(out.pixels, input.pixels),
-            other => panic!("expected image, got {:?}", other),
+            Value::FloatImage(out) => assert!(out.is_out_of_gamut()),
+            other => panic!("expected a float image, got {:?}", other),
         }
     }
 
@@ -348,10 +341,7 @@ mod tests {
             ])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, input.pixels, "MASK=0 must reproduce the unblurred source exactly"),
-            other => panic!("expected image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), input.pixels, "MASK=0 must reproduce the unblurred source exactly");
     }
 
     #[test]
@@ -372,10 +362,7 @@ mod tests {
             ])
             .unwrap();
 
-        match (&unmasked[0], &masked[0]) {
-            (Value::Image(a), Value::Image(b)) => assert_eq!(a.pixels, b.pixels),
-            other => panic!("expected two images, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&unmasked[0]), as_u8_pixels(&masked[0]));
     }
 
     #[test]

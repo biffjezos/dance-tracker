@@ -6,7 +6,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlVideoElement, ImageData};
 
 use crate::compositor::OperationError;
-use crate::graphics::Image;
+use crate::graphics::U8Image;
 use crate::operations::sources::PixelSource;
 use crate::operations::Frame;
 
@@ -85,7 +85,7 @@ pub fn write_frame_to_canvas(
     // it doesn't composite against whatever's already there, so any part
     // of the frame that's actually transparent has to be blended over the
     // transparency grid here, in Rust, before it ever reaches the canvas.
-    let mut pixels = Image::composite_over_checker(&frame.pixels, frame.width, frame.height);
+    let mut pixels = U8Image::composite_over_checker(&frame.pixels, frame.width, frame.height);
 
     let image_data = ImageData::new_with_u8_clamped_array_and_sh(
         wasm_bindgen::Clamped(&mut pixels),

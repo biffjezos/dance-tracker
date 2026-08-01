@@ -11,6 +11,39 @@ session that hasn't seen this file before can tell, at a glance, whether
 an item is genuinely blocked or just unstarted, and whether any code
 already in the tree belongs to it before touching that code).
 
+## Stale DFS state causes false-positive cycle flags in graph validation
+
+**Work:** 1.5h · **Complexity:** 3/6
+**Depends on:** Nothing - unimplemented fix, not blocked. Found while
+adding regression tests for a related (and fixed) validation bug; not
+fixed itself because it needs its own careful test coverage and this
+session was already deep in an unrelated change.
+**Existing non-functional code:** None - this is a live bug in
+already-shipped code, not a stub.
+
+`compositor/graph/validate.rs`'s `run_validation` declares `state: Vec<VisitState>`
+and `path: Vec<NodeId>` once, then reuses both across every top-level DFS
+root in its cycle-detection loop. `visit_cycle_detection` only pops `path`
+and sets `state[index] = Visited` on its *normal* exit - the early
+`return Err(cycle)` taken when a real cycle is found skips both, leaving
+every node on that aborted path stuck at `VisitState::Visiting` and still
+sitting in `path` for good. The next top-level root processed in the same
+`run_validation` call can then walk into one of those stale `Visiting`
+entries and misread it as a fresh cycle - even though the node it's
+looking at isn't actually part of any cycle - because `state[..]` says
+"currently being visited" and `path` (still holding leftover entries from
+the earlier, already-aborted traversal) happens to contain that index too.
+
+Net effect: in a graph with a real cycle somewhere, some unrelated node
+elsewhere in the graph can be incorrectly flagged `NodeValidation::Cycle`
+too, depending on node creation/traversal order - a red "Part of a wiring
+cycle" badge on a node that was never wired anywhere near the actual
+cycle. Likely fix: reset `state`/`path` per top-level root (or scope them
+to `visit_cycle_detection`'s own call), and pop/reset on the early-return
+path too, not just the normal one. Needs a regression test exercising
+exactly this multi-root scenario (a cycle plus an unrelated node visited
+afterward) before landing.
+
 ## MOVE operation
 
 **Work:** 6h · **Complexity:** 5/6
