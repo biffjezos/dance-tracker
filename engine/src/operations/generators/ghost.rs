@@ -29,10 +29,11 @@ use crate::graphics::FloatImage;
 /// source from the same DELAY frames ago, same as OPACITY_MULTIPLIER is
 /// one shared value for every ghost, not indexed by n. SHOW_SOURCE
 /// toggles whether the live (unmoved, undelayed) source itself is
-/// composited on top at all, or only the ghost trail shows. Both SOURCE
-/// and MASK are required - there is no sensible "no mask wired"
-/// behaviour for an operation whose entire job is repeating the masked
-/// region.
+/// composited on top at all, or only the ghost trail shows. Only SOURCE
+/// is required - MASK is optional: when it's not wired, SOURCE's own
+/// alpha channel is used as the cutout boundary directly (equivalent to
+/// a mask that's fully opaque everywhere), for a SOURCE that already
+/// carries a meaningful alpha channel of its own.
 pub struct Ghost {
     pub ghost_count: usize,
     pub distance: f64,
@@ -170,7 +171,19 @@ impl Ghost {
     /// this operation happened to be re-evaluated on") must keep this
     /// operation live (see `is_live()` below) so the render loop never
     /// skips a tick's call here.
-    pub fn render(&self, source: &[f32], mask: &[f32], width: u32, height: u32) -> Vec<f32> {
+    ///
+    /// `mask` is optional: pass `None` to use `source`'s own alpha channel
+    /// as-is (a fully-opaque stand-in mask), for a SOURCE that already
+    /// carries a meaningful alpha of its own with no separate MASK wired.
+    pub fn render(&self, source: &[f32], mask: Option<&[f32]>, width: u32, height: u32) -> Vec<f32> {
+        let opaque_mask;
+        let mask = match mask {
+            Some(mask) => mask,
+            None => {
+                opaque_mask = vec![1.0f32; source.len()];
+                &opaque_mask
+            }
+        };
         let cutout = Self::cutout_pixels(source, mask);
         self.record_history(&cutout);
 
@@ -373,20 +386,22 @@ impl Operation for Ghost {
             return Err(OperationError::MissingInput("GHOST requires SOURCE".into()));
         };
 
-        let Some(mask) = find_input(inputs, Input::Mask) else {
-            return Err(OperationError::MissingInput("GHOST requires MASK".into()));
+        let source_image = FloatImage::from_value(source, ctx)?;
+
+        let mask_pixels = match find_input(inputs, Input::Mask) {
+            Some(mask) => {
+                let mask_image = FloatImage::from_value(mask, ctx)?;
+                if source_image.width != mask_image.width || source_image.height != mask_image.height {
+                    return Err(OperationError::InvalidInputType(
+                        "GHOST's SOURCE and MASK must have matching dimensions".into()
+                    ));
+                }
+                Some(mask_image.pixels)
+            }
+            None => None,
         };
 
-        let source_image = FloatImage::from_value(source, ctx)?;
-        let mask_image = FloatImage::from_value(mask, ctx)?;
-
-        if source_image.width != mask_image.width || source_image.height != mask_image.height {
-            return Err(OperationError::InvalidInputType(
-                "GHOST's SOURCE and MASK must have matching dimensions".into()
-            ));
-        }
-
-        let pixels = self.render(&source_image.pixels, &mask_image.pixels, source_image.width, source_image.height);
+        let pixels = self.render(&source_image.pixels, mask_pixels.as_deref(), source_image.width, source_image.height);
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels,
@@ -467,7 +482,7 @@ mod tests {
         let ghost = Ghost { ghost_count: 0, ..Ghost::new() };
         let source = solid(2, 2, 1.0, 0.0, 0.0, 1.0);
         let mask = solid(2, 2, 0.0, 0.0, 0.0, 1.0);
-        let out = ghost.render(&source, &mask, 2, 2);
+        let out = ghost.render(&source, Some(&mask), 2, 2);
         assert_eq!(out, Ghost::cutout_pixels(&source, &mask));
     }
 
@@ -486,7 +501,7 @@ mod tests {
             0.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0, 0.0,
         ];
-        let out = ghost.render(&source, &mask, 3, 1);
+        let out = ghost.render(&source, Some(&mask), 3, 1);
 
         // Source itself still shows unmoved at x=0.
         assert!((out[3] - 1.0).abs() < 1e-6, "source must render at its own native opacity");
@@ -499,7 +514,7 @@ mod tests {
         let ghost = Ghost { ghost_count: 2, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 0.5, ..Ghost::new() };
         let source = vec![1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         let mask = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-        let out = ghost.render(&source, &mask, 4, 1);
+        let out = ghost.render(&source, Some(&mask), 4, 1);
 
         // Ghost 1 (nearest, x=1) and ghost 2 (farthest, x=2) must carry the
         // exact same opacity multiplier - not a progressively fading value.
@@ -516,11 +531,30 @@ mod tests {
     }
 
     #[test]
-    fn execute_errors_without_a_wired_mask() {
-        let ghost = Ghost::new();
+    fn execute_succeeds_without_a_wired_mask_using_sources_own_alpha() {
+        let ghost = Ghost { ghost_count: 0, ..Ghost::new() };
         let source = Value::Image(crate::graphics::U8Image::black(2, 2));
-        let err = ghost.execute(&context(2, 2), &[(Input::Source, source)]).unwrap_err();
-        assert!(matches!(err, OperationError::MissingInput(_)));
+        let values = ghost.execute(&context(2, 2), &[(Input::Source, source)]).unwrap();
+
+        match &values[0] {
+            Value::FloatImage(out) => {
+                assert!((out.pixels[3] - 1.0).abs() < 1e-6, "expected SOURCE's own opaque alpha to pass through unchanged with no MASK wired");
+            }
+            other => panic!("expected a float image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn render_without_a_mask_matches_rendering_with_a_fully_opaque_one() {
+        let ghost = Ghost { ghost_count: 1, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 1.0, ..Ghost::new() };
+        let source = vec![1.0, 0.0, 0.0, 0.6, 0.0, 1.0, 0.0, 0.3];
+        let opaque_mask = solid(2, 1, 0.0, 0.0, 0.0, 1.0);
+
+        let without_mask = ghost.render(&source, None, 2, 1);
+        let matching_ghost = Ghost { ghost_count: 1, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 1.0, ..Ghost::new() };
+        let with_opaque_mask = matching_ghost.render(&source, Some(&opaque_mask), 2, 1);
+
+        assert_eq!(without_mask, with_opaque_mask, "no MASK wired should behave exactly like a fully-opaque one");
     }
 
     #[test]
@@ -552,9 +586,9 @@ mod tests {
         let red = solid(1, 1, 1.0, 0.0, 0.0, 1.0);
         let opaque_mask = solid(1, 1, 0.0, 0.0, 0.0, 1.0);
 
-        ghost.render(&red, &opaque_mask, 1, 1);
+        ghost.render(&red, Some(&opaque_mask), 1, 1);
         let green = solid(1, 1, 0.0, 1.0, 0.0, 1.0);
-        let out = ghost.render(&green, &opaque_mask, 1, 1);
+        let out = ghost.render(&green, Some(&opaque_mask), 1, 1);
 
         // With DELAY=0 the ghost tracks the current frame - green, not
         // the earlier red frame.
@@ -570,9 +604,9 @@ mod tests {
         // offset, so the ghost lands exactly on the same pixel as the
         // live source), the 3rd tick's ghost should show frame 1 (red),
         // 2 frames behind the current (blue) frame.
-        ghost.render(&solid(1, 1, 1.0, 0.0, 0.0, 1.0), &opaque_mask, 1, 1); // frame 0: red
-        ghost.render(&solid(1, 1, 0.0, 1.0, 0.0, 1.0), &opaque_mask, 1, 1); // frame 1: green
-        let out = ghost.render(&solid(1, 1, 0.0, 0.0, 1.0, 1.0), &opaque_mask, 1, 1); // frame 2: blue
+        ghost.render(&solid(1, 1, 1.0, 0.0, 0.0, 1.0), Some(&opaque_mask), 1, 1); // frame 0: red
+        ghost.render(&solid(1, 1, 0.0, 1.0, 0.0, 1.0), Some(&opaque_mask), 1, 1); // frame 1: green
+        let out = ghost.render(&solid(1, 1, 0.0, 0.0, 1.0, 1.0), Some(&opaque_mask), 1, 1); // frame 2: blue
 
         // show_source defaults true, so the top layer is the live (blue)
         // source - the ghost is fully covered here since both land on
@@ -581,7 +615,7 @@ mod tests {
         let _ = out;
 
         let hidden_source_ghost = Ghost { show_source: false, ..ghost };
-        let out = hidden_source_ghost.render(&solid(1, 1, 0.0, 0.0, 1.0, 1.0), &opaque_mask, 1, 1);
+        let out = hidden_source_ghost.render(&solid(1, 1, 0.0, 0.0, 1.0, 1.0), Some(&opaque_mask), 1, 1);
         // history already has [red, green, blue, blue] at this point;
         // delay=2 back from the just-pushed 4th entry (blue) lands on
         // green (index 1) - proves DELAY pulls an older frame rather
@@ -596,8 +630,8 @@ mod tests {
         let ghost = Ghost { ghost_count: 2, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 1.0, delay: 1, show_source: false, ..Ghost::new() };
         let opaque_mask = solid(3, 1, 0.0, 0.0, 0.0, 1.0);
 
-        ghost.render(&solid(3, 1, 1.0, 0.0, 0.0, 1.0), &opaque_mask, 3, 1); // frame 0: red
-        let out = ghost.render(&solid(3, 1, 0.0, 1.0, 0.0, 1.0), &opaque_mask, 3, 1); // frame 1: green
+        ghost.render(&solid(3, 1, 1.0, 0.0, 0.0, 1.0), Some(&opaque_mask), 3, 1); // frame 0: red
+        let out = ghost.render(&solid(3, 1, 0.0, 1.0, 0.0, 1.0), Some(&opaque_mask), 3, 1); // frame 1: green
 
         // Both ghost 1 (x=1) and ghost 2 (x=2) must show the same
         // (delayed, red) frame - not ghost 2 reaching back twice as far.
@@ -612,7 +646,7 @@ mod tests {
 
         // Only one frame of history exists (this call itself) - DELAY=10
         // must clamp to it rather than panic or show nothing.
-        let out = ghost.render(&solid(1, 1, 1.0, 0.0, 0.0, 1.0), &opaque_mask, 1, 1);
+        let out = ghost.render(&solid(1, 1, 1.0, 0.0, 0.0, 1.0), Some(&opaque_mask), 1, 1);
         assert!((out[0] - 1.0).abs() < 1e-6, "expected the only available (red) frame, got {:?}", &out[0..4]);
     }
 
@@ -622,7 +656,7 @@ mod tests {
         let source = vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
         let mask = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
 
-        let out = ghost.render(&source, &mask, 2, 1);
+        let out = ghost.render(&source, Some(&mask), 2, 1);
 
         // x=0 (where only the live source had content) must now be
         // transparent - the source layer is hidden.

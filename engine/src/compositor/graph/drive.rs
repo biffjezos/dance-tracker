@@ -1,6 +1,6 @@
 // src/compositor/graph/drive.rs
 
-use crate::compositor::{input::Input, Context, Value};
+use crate::compositor::{input::Input, metadata::ParameterKind, Context, Value};
 use super::Graph;
 
 impl Graph {
@@ -71,9 +71,33 @@ impl Graph {
     /// Returns false (and touches nothing) if the target doesn't accept
     /// a parameter by that name - the caller's cue to fall back to
     /// PATCH's own raw-channel state instead.
+    ///
+    /// A Number value is clamped to that parameter's own declared min/max
+    /// first, same as a manual stepper edit already is (nodeEditContexts.js's
+    /// renderNumberParameter) - an animation source's raw range rarely lines
+    /// up with a target's own (Lissajous's X/Y swing -AMPLITUDE..AMPLITUDE,
+    /// but e.g. RADIUS only ever accepts >=0). Without clamping here, every
+    /// tick the animation value spends outside the target's range would
+    /// silently fail set_parameter and leave the property stuck at its last
+    /// in-range value instead of tracking the animation, rather than
+    /// pinning to the nearest value the target actually accepts.
     fn try_set_target_parameter(&mut self, target: super::NodeId, name: &str, value: &Value) -> bool {
+        let Some(target_node) = self.resolve(target) else { return false };
+        let value = match value {
+            Value::Number(n) => {
+                let bounds = target_node.operation.parameters().into_iter().find(|p| p.name == name).map(|p| p.kind);
+                let mut n = *n;
+                if let Some(ParameterKind::Number { min, max, .. }) = bounds {
+                    if let Some(min) = min { n = n.max(min); }
+                    if let Some(max) = max { n = n.min(max); }
+                }
+                Value::Number(n)
+            }
+            other => other.clone(),
+        };
+
         let Some(target_node) = self.resolve_mut(target) else { return false };
-        target_node.operation.set_parameter(name, value.clone()).is_ok()
+        target_node.operation.set_parameter(name, value).is_ok()
     }
 
     /// Read `base`'s current Color parameter off `target`, overwrite one
@@ -227,6 +251,33 @@ mod tests {
         match target_op.get_parameter("DISTANCE") {
             Some(Value::Number(n)) => assert_eq!(n, 42.0),
             other => panic!("expected DISTANCE to be pushed to 42.0, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn an_out_of_range_number_clamps_to_the_targets_own_bounds_instead_of_freezing() {
+        // Regression: FakeParameterizedTarget's DISTANCE only accepts >=0
+        // (min: Some(0.0)), same shape as RADIUS/DISTANCE/GHOST_COUNT on
+        // real operations. An animation source's raw range (Lissajous's
+        // X/Y swing -AMPLITUDE..AMPLITUDE by default) routinely dips
+        // negative - before this fix, set_parameter would reject the
+        // out-of-range value outright and DISTANCE would just stay stuck
+        // at its previous value instead of tracking the animation at all
+        // whenever it went negative.
+        let mut graph = Graph::new(4, 4);
+        let target = graph.add_node(Box::new(FakeParameterizedTarget { distance: Cell::new(3.0), key_color: Cell::new(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }) }));
+        let animation = graph.add_node(Box::new(FakeAnimationSource { x: -5.0, y: 0.0 }));
+        let patch = graph.add_node(patch_node());
+        graph.connect(patch, Input::Source, target).unwrap();
+        graph.connect(patch, Input::Reference, animation).unwrap();
+        graph.set_patch_mapping(patch, "DISTANCE", 0).unwrap();
+
+        graph.apply_patch_nodes(&Context::default());
+
+        let target_op = graph.get_node(&target).unwrap();
+        match target_op.get_parameter("DISTANCE") {
+            Some(Value::Number(n)) => assert_eq!(n, 0.0, "expected -5.0 to clamp to the min bound (0.0), not be silently dropped leaving DISTANCE at 3.0"),
+            other => panic!("expected DISTANCE to still be a Number, got {:?}", other),
         }
     }
 

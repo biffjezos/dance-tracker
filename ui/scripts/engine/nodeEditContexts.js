@@ -171,20 +171,62 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
     });
 
     // PATCH has no real parameters() of its own (see operations::compose::patch) -
-    // its entire interface is this mapping table, rendered once both of
-    // its wires (SOURCE via renderInputSteppers above, REFERENCE) exist.
+    // its entire interface is this mapping table. Dumping every property
+    // row inline (the old behaviour) buried SOURCE/REFERENCE's own
+    // steppers above under however many properties the wired SOURCE
+    // happened to expose - a single drill-in button instead, same shape
+    // as a parameter group's "<NAME> >" button.
     if (nodeEntry.kind === "patch") {
-        renderPatchMappingRows(menuManager, nodeId);
+        renderPatchPropertiesButton(menuManager, nodeId);
     }
 }
 
 /**
- * PATCH's own property<->output mapping table - one "<PROPERTY> <-- ___"
- * stepper per property its wired SOURCE (target) actually offers (real
- * Number/Color parameters, or a raw R/G/B/A fallback - see
- * patch_available_properties()), cycling through NONE + whichever
- * outputs its wired REFERENCE (animation source) declares. Renders
- * nothing until both wires exist - there's nothing real to map yet.
+ * The "PATCH PROPERTIES >" button on PATCH's main edit screen - appears
+ * only once both of its wires (SOURCE and REFERENCE) are actually set,
+ * since there's nothing real to map before then. Drills into its own
+ * sub-pane (renderPatchPropertiesPane) rather than rendering the mapping
+ * rows here directly.
+ */
+function renderPatchPropertiesButton(menuManager, nodeId) {
+    const wasmApp = getWasmApp();
+    if (!wasmApp) return;
+
+    const inputs = wasmApp.node_inputs(nodeId);
+    const sourceWired = inputs.find(input => input.name === "SOURCE")?.source != null;
+    const referenceWired = inputs.find(input => input.name === "REFERENCE")?.source != null;
+    if (!sourceWired || !referenceWired) return;
+
+    const properties = wasmApp.patch_available_properties(nodeId);
+    if (properties.length === 0) return;
+
+    const row = startParamRow(menuManager);
+    const button = document.createElement("button");
+    button.innerText = "PATCH PROPERTIES >";
+    button.onclick = () => menuManager.enterPatchProperties();
+    row.appendChild(button);
+}
+
+/**
+ * PATCH's own property<->output mapping sub-pane, pushed by the
+ * "PATCH PROPERTIES >" button above (UP returns to PATCH's main edit
+ * screen). One "<PROPERTY> <-- ___" stepper per property its wired
+ * SOURCE (target) actually offers (real Number/Color parameters, or a
+ * raw R/G/B/A fallback - see patch_available_properties()), cycling
+ * through NONE + whichever outputs its wired REFERENCE (animation
+ * source) declares.
+ */
+export function renderPatchPropertiesPane(menuManager, nodeEntry) {
+    const nodeId = nodeEntry.layer.nodeId;
+    renderParameterLabel(startParamRow(menuManager), "PATCH PROPERTIES");
+    renderPatchMappingRows(menuManager, nodeId);
+}
+
+/**
+ * Renders nothing until both wires exist - a defensive re-check in case
+ * REFERENCE got disconnected while this sub-pane was already open (the
+ * button above already gates entry, but that check ran on the previous
+ * screen).
  */
 function renderPatchMappingRows(menuManager, nodeId) {
     const wasmApp = getWasmApp();

@@ -8,7 +8,7 @@ AMIGA TWO ROW MENU SYSTEM
 */
 
 import { nodeSelectionState } from "./nodeSelection.js";
-import { nodeEditContextRegistry, renderGroupContext } from "./nodeEditContexts.js";
+import { nodeEditContextRegistry, renderGroupContext, renderPatchPropertiesPane } from "./nodeEditContexts.js";
 import { getAllRealEntries, addNodeLayer, removeLayer } from "../state/registry.js";
 import { createNode } from "../core/operations.js";
 import { getWasmApp } from "../core/wasm.js";
@@ -60,6 +60,7 @@ const CONTEXT_HANDLERS = {
     nodes: "renderNodesTopContext",
     node_edit: "renderNodeEditContext",
     param_group: "renderParamGroupContext",
+    patch_properties: "renderPatchPropertiesContext",
     create_node: "renderCreateNodeContext"
 };
 
@@ -513,6 +514,18 @@ export class MenuManager {
         }
     }
 
+    // PATCH's property-mapping sub-pane, pushed by its own "PATCH
+    // PROPERTIES >" button - same push/pop shape as renderParamGroupContext
+    // above, just PATCH-specific content instead of a named parameter group.
+    renderPatchPropertiesContext() {
+        this.renderNodesFamilyHeader(false);
+
+        const selectedNode = nodeSelectionState.getSelectedNode();
+        if (selectedNode) {
+            renderPatchPropertiesPane(this, selectedNode);
+        }
+    }
+
     renderCreateNodeContext() {
         if (this.currentContext.parent !== null) {
             this.renderUpButton();
@@ -692,6 +705,14 @@ export class MenuManager {
         const groupContext = new MenuContext("param_group", this.currentContext);
         groupContext.group = groupName;
         this.currentContext = groupContext;
+        this.render();
+        this.updateStatusBar();
+    }
+
+    // Descend into PATCH's own property-mapping sub-pane (UP returns here).
+    enterPatchProperties() {
+        const context = new MenuContext("patch_properties", this.currentContext);
+        this.currentContext = context;
         this.render();
         this.updateStatusBar();
     }
