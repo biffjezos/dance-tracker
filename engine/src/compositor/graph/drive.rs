@@ -1,7 +1,7 @@
 // src/compositor/graph/drive.rs
 
 use crate::compositor::{input::Input, metadata::ParameterKind, Context, Value};
-use super::Graph;
+use super::{Graph, node::PatchMode};
 
 impl Graph {
     /// Evaluate every PATCH node's mappings and push the results in -
@@ -48,22 +48,40 @@ impl Graph {
             let Some(animation_node) = self.resolve(animation_id) else { continue };
             let Ok(outputs) = animation_node.operation.execute(ctx, &[]) else { continue };
 
-            for (property, output_index) in &mappings {
-                let Some(value) = outputs.get(*output_index) else { continue };
+            for mapping in &mappings {
+                let Some(raw_value) = outputs.get(mapping.output_index) else { continue };
+                let value = Self::combine_patch_value(mapping.mode, mapping.base, raw_value);
 
-                if let Some((base, channel)) = property.split_once('.') {
-                    self.apply_colour_channel(target_id, base, channel, value);
-                } else if !self.try_set_target_parameter(target_id, property, value) {
+                if let Some((base, channel)) = mapping.property.split_once('.') {
+                    self.apply_colour_channel(target_id, base, channel, &value);
+                } else if !self.try_set_target_parameter(target_id, &mapping.property, &value) {
                     // Target has no real parameter by this name - it's
                     // one of the raw pixel-channel fallbacks
                     // (available_patch_properties only ever offers those
                     // when the target has no real parameters at all), so
                     // it belongs on PATCH's own internal state instead.
                     if let Some(patch_node) = self.resolve_mut(patch_id) {
-                        let _ = patch_node.operation.set_parameter(property, value.clone());
+                        let _ = patch_node.operation.set_parameter(&mapping.property, value.clone());
                     }
                 }
             }
+        }
+    }
+
+    /// Combine a mapping's mode with its captured `base` and the
+    /// animation source's raw output value for this tick. Replace passes
+    /// the raw value straight through (today's original, only-ever
+    /// behaviour); Add/Subtract offset from `base` instead of the raw
+    /// value replacing the property outright - see `PatchMapping::base`.
+    /// Non-Number values (nothing produces these today - every animation
+    /// source's outputs are Number - but nothing here assumes otherwise)
+    /// pass through unchanged regardless of mode, since Add/Subtract only
+    /// mean something for a scalar.
+    fn combine_patch_value(mode: PatchMode, base: f64, value: &Value) -> Value {
+        match (mode, value) {
+            (PatchMode::Add, Value::Number(n)) => Value::Number(base + n),
+            (PatchMode::Subtract, Value::Number(n)) => Value::Number(base - n),
+            (_, v) => v.clone(),
         }
     }
 
@@ -243,7 +261,7 @@ mod tests {
         let patch = graph.add_node(patch_node());
         graph.connect(patch, Input::Source, target).unwrap();
         graph.connect(patch, Input::Reference, animation).unwrap();
-        graph.set_patch_mapping(patch, "DISTANCE", 0).unwrap();
+        graph.set_patch_mapping(patch, "DISTANCE", 0, PatchMode::Replace).unwrap();
 
         graph.apply_patch_nodes(&Context::default());
 
@@ -270,13 +288,86 @@ mod tests {
         let patch = graph.add_node(patch_node());
         graph.connect(patch, Input::Source, target).unwrap();
         graph.connect(patch, Input::Reference, animation).unwrap();
-        graph.set_patch_mapping(patch, "DISTANCE", 0).unwrap();
+        graph.set_patch_mapping(patch, "DISTANCE", 0, PatchMode::Replace).unwrap();
 
         graph.apply_patch_nodes(&Context::default());
 
         let target_op = graph.get_node(&target).unwrap();
         match target_op.get_parameter("DISTANCE") {
             Some(Value::Number(n)) => assert_eq!(n, 0.0, "expected -5.0 to clamp to the min bound (0.0), not be silently dropped leaving DISTANCE at 3.0"),
+            other => panic!("expected DISTANCE to still be a Number, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn add_mode_offsets_from_the_targets_value_at_mapping_time_not_from_zero() {
+        // The exact reported scenario: RADIUS (here, DISTANCE) manually
+        // set to a real value (64-ish) before mapping, then driven by an
+        // animation whose own range is small (-5..5) - Replace mode would
+        // make it snap down to near that tiny range; Add should offset
+        // from the pre-existing 64, not replace it outright.
+        let mut graph = Graph::new(4, 4);
+        let target = graph.add_node(Box::new(FakeParameterizedTarget { distance: Cell::new(64.0), key_color: Cell::new(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }) }));
+        let animation = graph.add_node(Box::new(FakeAnimationSource { x: 5.0, y: 0.0 }));
+        let patch = graph.add_node(patch_node());
+        graph.connect(patch, Input::Source, target).unwrap();
+        graph.connect(patch, Input::Reference, animation).unwrap();
+        graph.set_patch_mapping(patch, "DISTANCE", 0, PatchMode::Add).unwrap();
+
+        graph.apply_patch_nodes(&Context::default());
+
+        let target_op = graph.get_node(&target).unwrap();
+        match target_op.get_parameter("DISTANCE") {
+            Some(Value::Number(n)) => assert_eq!(n, 69.0, "expected the captured base (64) plus the animation value (5), not just the animation value"),
+            other => panic!("expected DISTANCE to still be a Number, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn subtract_mode_offsets_the_other_direction() {
+        let mut graph = Graph::new(4, 4);
+        let target = graph.add_node(Box::new(FakeParameterizedTarget { distance: Cell::new(64.0), key_color: Cell::new(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }) }));
+        let animation = graph.add_node(Box::new(FakeAnimationSource { x: 5.0, y: 0.0 }));
+        let patch = graph.add_node(patch_node());
+        graph.connect(patch, Input::Source, target).unwrap();
+        graph.connect(patch, Input::Reference, animation).unwrap();
+        graph.set_patch_mapping(patch, "DISTANCE", 0, PatchMode::Subtract).unwrap();
+
+        graph.apply_patch_nodes(&Context::default());
+
+        let target_op = graph.get_node(&target).unwrap();
+        match target_op.get_parameter("DISTANCE") {
+            Some(Value::Number(n)) => assert_eq!(n, 59.0, "expected the captured base (64) minus the animation value (5)"),
+            other => panic!("expected DISTANCE to still be a Number, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn switching_mode_on_an_already_mapped_property_keeps_the_original_captured_base() {
+        // DISTANCE starts at 64, gets mapped in Replace mode (driving it
+        // down to whatever the animation outputs), then the mapping is
+        // switched to Add without ever clearing it - Add must still
+        // offset from the *original* 64, not from Replace's already-
+        // overwritten live value.
+        let mut graph = Graph::new(4, 4);
+        let target = graph.add_node(Box::new(FakeParameterizedTarget { distance: Cell::new(64.0), key_color: Cell::new(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }) }));
+        let animation = graph.add_node(Box::new(FakeAnimationSource { x: 5.0, y: 0.0 }));
+        let patch = graph.add_node(patch_node());
+        graph.connect(patch, Input::Source, target).unwrap();
+        graph.connect(patch, Input::Reference, animation).unwrap();
+        graph.set_patch_mapping(patch, "DISTANCE", 0, PatchMode::Replace).unwrap();
+        graph.apply_patch_nodes(&Context::default());
+        // Live value is now 5.0 (Replace), not 64 - confirms the setup.
+        match graph.get_node(&target).unwrap().get_parameter("DISTANCE") {
+            Some(Value::Number(n)) => assert_eq!(n, 5.0, "setup check: Replace should have driven DISTANCE down to the raw animation value"),
+            other => panic!("expected DISTANCE to still be a Number, got {:?}", other),
+        }
+
+        graph.set_patch_mapping(patch, "DISTANCE", 0, PatchMode::Add).unwrap();
+        graph.apply_patch_nodes(&Context::default());
+
+        match graph.get_node(&target).unwrap().get_parameter("DISTANCE") {
+            Some(Value::Number(n)) => assert_eq!(n, 69.0, "expected Add to still offset from the original captured base (64), not from Replace's already-overwritten 5.0"),
             other => panic!("expected DISTANCE to still be a Number, got {:?}", other),
         }
     }
@@ -289,7 +380,7 @@ mod tests {
         let patch = graph.add_node(patch_node());
         graph.connect(patch, Input::Source, target).unwrap();
         graph.connect(patch, Input::Reference, animation).unwrap();
-        graph.set_patch_mapping(patch, "KEY_COLOR.R", 0).unwrap();
+        graph.set_patch_mapping(patch, "KEY_COLOR.R", 0, PatchMode::Replace).unwrap();
 
         graph.apply_patch_nodes(&Context::default());
 
@@ -311,8 +402,8 @@ mod tests {
         let patch = graph.add_node(patch_node());
         graph.connect(patch, Input::Source, target).unwrap();
         graph.connect(patch, Input::Reference, animation).unwrap();
-        graph.set_patch_mapping(patch, "R", 0).unwrap();
-        graph.set_patch_mapping(patch, "A", 1).unwrap();
+        graph.set_patch_mapping(patch, "R", 0, PatchMode::Replace).unwrap();
+        graph.set_patch_mapping(patch, "A", 1, PatchMode::Replace).unwrap();
 
         graph.apply_patch_nodes(&Context::default());
 
@@ -336,7 +427,7 @@ mod tests {
         let patch = graph.add_node(patch_node());
         graph.connect(patch, Input::Source, target).unwrap();
         graph.connect(patch, Input::Reference, animation).unwrap();
-        graph.set_patch_mapping(patch, "DISTANCE", 0).unwrap();
+        graph.set_patch_mapping(patch, "DISTANCE", 0, PatchMode::Replace).unwrap();
 
         graph.connect(patch, Input::Source, other_target).unwrap();
 

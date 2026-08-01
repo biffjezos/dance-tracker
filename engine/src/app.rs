@@ -12,7 +12,7 @@ use crate::compositor::{
         PreviewExecutor,
         RenderExecutor
     },
-    graph::{ Graph, NodeId, NodeValidation },
+    graph::{ Graph, NodeId, NodeValidation, PatchMode },
     Input,
     Meta,
     metadata::ParameterKind,
@@ -111,6 +111,34 @@ What the UI is told about one declared output of a node: its index (what
 struct OutputView {
     index: u32,
     name: String,
+}
+
+/*
+What the UI is told about one PATCH property's current mapping - which
+REFERENCE output drives it, and how (REPLACE/ADD/SUBTRACT). `patch_mapping`
+returns this (or nothing at all) per property.
+*/
+#[derive(Serialize)]
+struct PatchMappingView {
+    output_index: u32,
+    mode: &'static str,
+}
+
+fn patch_mode_name(mode: PatchMode) -> &'static str {
+    match mode {
+        PatchMode::Replace => "REPLACE",
+        PatchMode::Add => "ADD",
+        PatchMode::Subtract => "SUBTRACT",
+    }
+}
+
+fn parse_patch_mode(mode: &str) -> Result<PatchMode, JsValue> {
+    match mode {
+        "REPLACE" => Ok(PatchMode::Replace),
+        "ADD" => Ok(PatchMode::Add),
+        "SUBTRACT" => Ok(PatchMode::Subtract),
+        other => Err(JsValue::from_str(&format!("Unknown PATCH mode: {}", other))),
+    }
 }
 
 /*
@@ -395,7 +423,7 @@ impl App {
     }
 
     /// Which output index (if any) a PATCH node currently maps to the
-    /// given property.
+    /// given property, and its combine mode (REPLACE/ADD/SUBTRACT).
     pub fn patch_mapping(&self, node_id: u32, property: String) -> Result<JsValue, JsValue> {
         let node_id = resolve_id(&self.graph, node_id)?;
 
@@ -410,20 +438,25 @@ impl App {
         let mapping = node
             .animation_mappings
             .iter()
-            .find(|(name, _)| *name == property)
-            .map(|(_, index)| *index as u32);
+            .find(|mapping| mapping.property == property)
+            .map(|mapping| PatchMappingView {
+                output_index: mapping.output_index as u32,
+                mode: patch_mode_name(mapping.mode),
+            });
 
         serde_wasm_bindgen::to_value(&mapping)
             .map_err(|err| JsValue::from_str(&err.to_string()))
     }
 
     /// Map one of a PATCH node's wired REFERENCE (animation source)'s
-    /// outputs to one of its wired SOURCE (target)'s properties.
-    pub fn set_patch_mapping(&mut self, node_id: u32, property: String, output_index: u32) -> Result<(), JsValue> {
+    /// outputs to one of its wired SOURCE (target)'s properties, combined
+    /// via `mode` ("REPLACE", "ADD", or "SUBTRACT").
+    pub fn set_patch_mapping(&mut self, node_id: u32, property: String, output_index: u32, mode: String) -> Result<(), JsValue> {
         let node_id = resolve_id(&self.graph, node_id)?;
+        let mode = parse_patch_mode(&mode)?;
 
         self.graph
-            .set_patch_mapping(node_id, &property, output_index as usize)
+            .set_patch_mapping(node_id, &property, output_index as usize, mode)
             .map_err(js_err)
     }
 

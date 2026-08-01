@@ -6,11 +6,12 @@ use crate::compositor::{
     input::Input,
     metadata::ParameterKind,
     operations::Operation,
+    value::Value,
 };
 
 use super::{
     Graph,
-    node::NodeId,
+    node::{NodeId, PatchMapping, PatchMode},
     validate::{ValidationState, NodeValidation},
 };
 
@@ -233,10 +234,17 @@ impl Graph {
     /// Map one of a PATCH node's wired REFERENCE (animation source)'s
     /// outputs to one of its wired SOURCE (target)'s properties (or one
     /// of the four raw pixel channels, if the target has no real
-    /// parameters - see `available_patch_properties`). Validates
-    /// `property` against the live property list and `output_index`
-    /// against the animation source's own declared output count.
-    pub fn set_patch_mapping(&mut self, patch: NodeId, property: &str, output_index: usize) -> Result<(), OperationError> {
+    /// parameters - see `available_patch_properties`), combined via
+    /// `mode`. Validates `property` against the live property list and
+    /// `output_index` against the animation source's own declared output
+    /// count.
+    ///
+    /// If `property` isn't already mapped, this captures its *current*
+    /// value on the target as the new mapping's `base` (see
+    /// `PatchMapping::base`'s own doc comment for why). If it's already
+    /// mapped - this call is just changing the output or the mode of an
+    /// existing mapping - the previously captured base is kept as-is.
+    pub fn set_patch_mapping(&mut self, patch: NodeId, property: &str, output_index: usize, mode: PatchMode) -> Result<(), OperationError> {
         let available = self.available_patch_properties(patch);
         if !available.iter().any(|p| p == property) {
             return Err(OperationError::UnknownParameter(property.to_string()));
@@ -258,20 +266,55 @@ impl Graph {
             )));
         }
 
+        let node = self.resolve(patch).ok_or(OperationError::UnknownNode)?;
+        let base = match node.animation_mappings.iter().find(|m| m.property == property) {
+            Some(existing) => existing.base,
+            None => self.current_patch_property_value(patch, property),
+        };
+
         let node = self.resolve_mut(patch).ok_or(OperationError::UnknownNode)?;
-        node.animation_mappings.retain(|(name, _)| name != property);
-        node.animation_mappings.push((property.to_string(), output_index));
+        node.animation_mappings.retain(|m| m.property != property);
+        node.animation_mappings.push(PatchMapping { property: property.to_string(), output_index, mode, base });
 
         self.validation = ValidationState::Dirty;
 
         Ok(())
     }
 
+    /// A PATCH property's current value on its wired SOURCE (target), as
+    /// the scalar `set_patch_mapping` captures into a fresh mapping's
+    /// `base`. 0.0 for the raw R/G/B/A pixel-substitution fallback (no
+    /// real target parameter to read - see `available_patch_properties`)
+    /// or if anything about the lookup fails; Add/Subtract simply reduce
+    /// to Replace in that case, which is a reasonable degenerate result
+    /// rather than an error worth surfacing here.
+    fn current_patch_property_value(&self, patch: NodeId, property: &str) -> f64 {
+        let Some(node) = self.resolve(patch) else { return 0.0 };
+        let Some((_, target_id)) = node.inputs.iter().find(|(key, _)| *key == Input::Source) else { return 0.0 };
+        let Some(target_node) = self.resolve(*target_id) else { return 0.0 };
+
+        if let Some((base, channel)) = property.split_once('.') {
+            let Some(Value::Color(color)) = target_node.operation.get_parameter(base) else { return 0.0 };
+            return match channel {
+                "R" => color.r as f64,
+                "G" => color.g as f64,
+                "B" => color.b as f64,
+                "A" => color.a as f64,
+                _ => 0.0,
+            };
+        }
+
+        match target_node.operation.get_parameter(property) {
+            Some(Value::Number(n)) => n,
+            _ => 0.0,
+        }
+    }
+
     /// Remove one property's mapping, leaving the rest of a PATCH node's
     /// mappings and its SOURCE/REFERENCE wiring untouched.
     pub fn clear_patch_mapping(&mut self, patch: NodeId, property: &str) -> Result<(), OperationError> {
         let node = self.resolve_mut(patch).ok_or(OperationError::UnknownNode)?;
-        node.animation_mappings.retain(|(name, _)| name != property);
+        node.animation_mappings.retain(|m| m.property != property);
 
         self.validation = ValidationState::Dirty;
 

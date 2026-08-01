@@ -241,10 +241,12 @@ function renderPatchMappingRows(menuManager, nodeId) {
 
     const outputs = wasmApp.node_outputs(referenceInput.source);
     const outputOptions = ["NONE", ...outputs.map(output => output.name)];
+    const MODES = ["REPLACE", "ADD", "SUBTRACT"];
 
     properties.forEach(property => {
-        const currentIndex = wasmApp.patch_mapping(nodeId, property);
-        const optionIndex = (currentIndex !== null && currentIndex !== undefined) ? currentIndex + 1 : 0;
+        const mapping = wasmApp.patch_mapping(nodeId, property);
+        const optionIndex = mapping ? mapping.output_index + 1 : 0;
+        const currentMode = mapping ? mapping.mode : MODES[0];
 
         const row = startParamRow(menuManager);
         renderParameterLabel(row, property);
@@ -253,10 +255,22 @@ function renderPatchMappingRows(menuManager, nodeId) {
             if (nextIndex === 0) {
                 wasmApp.clear_patch_mapping(nodeId, property);
             } else {
-                wasmApp.set_patch_mapping(nodeId, property, nextIndex - 1);
+                wasmApp.set_patch_mapping(nodeId, property, nextIndex - 1, currentMode);
             }
             menuManager.render();
         });
+
+        // The combine mode (REPLACE/ADD/SUBTRACT - see PatchMapping::base's
+        // doc comment) only means anything once a mapping actually exists;
+        // "NONE" mapped to nothing has nothing to combine.
+        if (mapping) {
+            const modeIndex = MODES.indexOf(mapping.mode);
+            renderStepperButtons(row, mapping.mode, direction => {
+                const nextMode = MODES[(modeIndex + direction + MODES.length) % MODES.length];
+                wasmApp.set_patch_mapping(nodeId, property, mapping.output_index, nextMode);
+                menuManager.render();
+            });
+        }
     });
 }
 

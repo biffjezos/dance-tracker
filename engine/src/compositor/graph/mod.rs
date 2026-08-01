@@ -7,7 +7,7 @@ pub mod node;
 mod resolve;
 mod validate;
 
-pub use node::{Node, NodeId};
+pub use node::{Node, NodeId, PatchMode};
 pub use validate::{NodeValidation, ValidationState};
 
 pub struct Graph {
