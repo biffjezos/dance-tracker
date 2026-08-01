@@ -103,6 +103,17 @@ struct InputView {
 }
 
 /*
+What the UI is told about one declared output of a node: its index (what
+`connect_animation_target`'s output-mapping calls address it by) and its
+human-readable label (see `Operation::output_names`).
+*/
+#[derive(Serialize)]
+struct OutputView {
+    index: u32,
+    name: String,
+}
+
+/*
 Whether a node is safe to evaluate, translated from the engine's internal
 NodeValidation (which carries NodeId, not JS-safe on its own) into a tag the
 UI can match on plus a human-readable detail string - e.g. so the NODES
@@ -343,6 +354,76 @@ impl App {
             .map_err(|err| JsValue::from_str(&err.to_string()))
     }
 
+    /// The outputs a node declares, labelled (see `Operation::output_names`)
+    /// - what an animation-category node's own edit screen offers as
+    /// "X CONTROLS ___" / "Y CONTROLS ___" rows.
+    pub fn node_outputs(&self, node_id: u32) -> Result<JsValue, JsValue> {
+        let node_id = resolve_id(&self.graph, node_id)?;
+
+        let operation = self.graph
+            .get_node(&node_id)
+            .ok_or_else(|| {
+                JsValue::from_str(
+                    &format!("Node {:?} not found", node_id)
+                )
+            })?;
+
+        let names = operation.output_names();
+        let views: Vec<OutputView> = operation
+            .metadata()
+            .outputs
+            .iter()
+            .enumerate()
+            .map(|(index, _kind)| OutputView {
+                index: index as u32,
+                name: names.get(index).copied().unwrap_or("OUTPUT").to_string(),
+            })
+            .collect();
+
+        serde_wasm_bindgen::to_value(&views)
+            .map_err(|err| JsValue::from_str(&err.to_string()))
+    }
+
+    /// Which node (if any) an animation-category node currently drives.
+    pub fn animation_target(&self, node_id: u32) -> Result<JsValue, JsValue> {
+        let node_id = resolve_id(&self.graph, node_id)?;
+
+        let node = self.graph
+            .resolve(node_id)
+            .ok_or_else(|| {
+                JsValue::from_str(
+                    &format!("Node {:?} not found", node_id)
+                )
+            })?;
+
+        let target = node.animation_target.map(|id| id.index());
+        serde_wasm_bindgen::to_value(&target)
+            .map_err(|err| JsValue::from_str(&err.to_string()))
+    }
+
+    /// Which target parameter (if any) a given output index currently
+    /// maps to.
+    pub fn animation_mapping(&self, node_id: u32, output_index: u32) -> Result<JsValue, JsValue> {
+        let node_id = resolve_id(&self.graph, node_id)?;
+
+        let node = self.graph
+            .resolve(node_id)
+            .ok_or_else(|| {
+                JsValue::from_str(
+                    &format!("Node {:?} not found", node_id)
+                )
+            })?;
+
+        let mapping = node
+            .animation_mappings
+            .iter()
+            .find(|(index, _)| *index == output_index as usize)
+            .map(|(_, name)| *name);
+
+        serde_wasm_bindgen::to_value(&mapping)
+            .map_err(|err| JsValue::from_str(&err.to_string()))
+    }
+
     /// Wire one node's output into a named input of another node.
     pub fn connect_node_input(
         &mut self,
@@ -386,6 +467,48 @@ impl App {
 
         self.graph
             .disconnect(node_id, key)
+            .map_err(js_err)
+    }
+
+    /// Point an animation-category node at the node it drives - authored
+    /// from the driver's own edit screen (see
+    /// ANIMATION_IMPLEMENTATION_PLAN.md's Phase C), not from the target.
+    pub fn connect_animation_target(&mut self, driver_id: u32, target_id: u32) -> Result<(), JsValue> {
+        let driver_id = resolve_id(&self.graph, driver_id)?;
+        let target_id = resolve_id(&self.graph, target_id)?;
+
+        self.graph
+            .connect_animation_target(driver_id, target_id)
+            .map_err(js_err)
+    }
+
+    /// Clear a driver's target (and every output mapping that depended
+    /// on it).
+    pub fn disconnect_animation_target(&mut self, driver_id: u32) -> Result<(), JsValue> {
+        let driver_id = resolve_id(&self.graph, driver_id)?;
+
+        self.graph
+            .disconnect_animation_target(driver_id)
+            .map_err(js_err)
+    }
+
+    /// Map one of a driver's outputs to a Number parameter on its
+    /// current target.
+    pub fn set_animation_mapping(&mut self, driver_id: u32, output_index: u32, target_parameter: String) -> Result<(), JsValue> {
+        let driver_id = resolve_id(&self.graph, driver_id)?;
+
+        self.graph
+            .set_animation_mapping(driver_id, output_index as usize, &target_parameter)
+            .map_err(js_err)
+    }
+
+    /// Remove one output's mapping, leaving the driver's target and any
+    /// other output's mapping untouched.
+    pub fn clear_animation_mapping(&mut self, driver_id: u32, output_index: u32) -> Result<(), JsValue> {
+        let driver_id = resolve_id(&self.graph, driver_id)?;
+
+        self.graph
+            .clear_animation_mapping(driver_id, output_index as usize)
             .map_err(js_err)
     }
 
@@ -544,6 +667,12 @@ impl App {
 
         let ctx = self.context(false);
 
+        // Push every wired animation driver's current output into its
+        // target's parameters before the normal DAG walk - see
+        // Graph::apply_animation_drivers's own doc comment for why this
+        // is a flat pre-pass rather than folded into the executor itself.
+        self.graph.apply_animation_drivers(&ctx);
+
         let values = self.render_executor
             .execute(
                 &self.graph,
@@ -589,6 +718,10 @@ impl App {
         let node = resolve_id(&self.graph, node as u32)?;
 
         let ctx = self.context(true);
+
+        // Same pre-pass as render_tick - PREVIEW should show animated
+        // parameters too, not just LIVE OUTPUT.
+        self.graph.apply_animation_drivers(&ctx);
 
         let executor = PreviewExecutor::default();
 

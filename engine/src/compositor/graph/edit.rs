@@ -4,6 +4,7 @@
 use crate::compositor::{
     error::OperationError,
     input::Input,
+    metadata::{OperationCategory, ParameterKind},
     operations::Operation,
 };
 
@@ -22,6 +23,8 @@ impl Graph {
         let node = super::node::Node {
             operation,
             inputs: Vec::new(),
+            animation_target: None,
+            animation_mappings: Vec::new(),
         };
 
         let id = if let Some(index) = self.free.pop() {
@@ -110,6 +113,15 @@ impl Graph {
 
         for node in self.nodes.iter_mut().flatten() {
             node.inputs.retain(|(_, other)| *other != id);
+
+            // A driver whose target was just removed loses that target -
+            // its mappings named parameters on a node that no longer
+            // exists, so they go with it (same reasoning connect_animation_target
+            // already applies when the target changes deliberately).
+            if node.animation_target == Some(id) {
+                node.animation_target = None;
+                node.animation_mappings.clear();
+            }
         }
 
         // Ensure node_validation vector is large enough
@@ -162,6 +174,118 @@ impl Graph {
             .ok_or(OperationError::UnknownNode)?;
 
         target.inputs.retain(|(key, _)| *key != input);
+
+        self.validation = ValidationState::Dirty;
+
+        Ok(())
+    }
+
+    /// Point an animation-category node at the node it drives - authored
+    /// from the driver's own edit screen (see
+    /// ANIMATION_IMPLEMENTATION_PLAN.md's Phase C), not from the target.
+    /// Rejects targeting another animation node outright: allowing that
+    /// would mean chained/cyclic driving, which needs its own ordering
+    /// and cycle-detection design this pass deliberately doesn't build -
+    /// out of scope for now, not silently allowed and hoped-for-the-best.
+    /// Changing the target clears any existing output mappings, since
+    /// they named parameters that belonged to the old target.
+    pub fn connect_animation_target(
+        &mut self,
+        driver: NodeId,
+        target: NodeId,
+    ) -> Result<(), OperationError> {
+        if driver == target {
+            return Err(OperationError::InvalidInputType("A node cannot target itself".into()));
+        }
+
+        let driver_node = self.resolve(driver).ok_or(OperationError::UnknownNode)?;
+        if driver_node.operation.metadata().category != OperationCategory::Animation {
+            return Err(OperationError::InvalidInputType(
+                "Only an animation-category node can have an animation target".into()
+            ));
+        }
+
+        let target_node = self.resolve(target).ok_or(OperationError::UnknownNode)?;
+        if target_node.operation.metadata().category == OperationCategory::Animation {
+            return Err(OperationError::InvalidInputType(
+                "An animation node cannot target another animation node".into()
+            ));
+        }
+
+        let driver_mut = self.resolve_mut(driver).ok_or(OperationError::UnknownNode)?;
+        driver_mut.animation_target = Some(target);
+        driver_mut.animation_mappings.clear();
+
+        self.validation = ValidationState::Dirty;
+
+        Ok(())
+    }
+
+    /// Clear a driver's target (and every output mapping that depended
+    /// on it).
+    pub fn disconnect_animation_target(&mut self, driver: NodeId) -> Result<(), OperationError> {
+        let driver_mut = self.resolve_mut(driver).ok_or(OperationError::UnknownNode)?;
+        driver_mut.animation_target = None;
+        driver_mut.animation_mappings.clear();
+
+        self.validation = ValidationState::Dirty;
+
+        Ok(())
+    }
+
+    /// Map one of a driver's outputs to a Number parameter on its
+    /// current target. Validates `output_index` against the driver's own
+    /// declared output count, and `target_parameter` against the
+    /// target's *current, real* Number-kind parameters (never a stale or
+    /// invented name) - stores the matched `&'static str` from the
+    /// target's own `ParameterDescriptor`, not the caller's borrowed
+    /// `&str`, mirroring how `Input` wiring is validated against a fixed
+    /// enum today.
+    pub fn set_animation_mapping(
+        &mut self,
+        driver: NodeId,
+        output_index: usize,
+        target_parameter: &str,
+    ) -> Result<(), OperationError> {
+        let driver_node = self.resolve(driver).ok_or(OperationError::UnknownNode)?;
+
+        let output_count = driver_node.operation.metadata().outputs.len();
+        if output_index >= output_count {
+            return Err(OperationError::InvalidInputType(format!(
+                "Output index {} is out of range (this operation has {} outputs)",
+                output_index, output_count
+            )));
+        }
+
+        let Some(target) = driver_node.animation_target else {
+            return Err(OperationError::InvalidInputType(
+                "Set an animation target before mapping an output to one of its parameters".into()
+            ));
+        };
+
+        let target_node = self.resolve(target).ok_or(OperationError::UnknownNode)?;
+        let matched = target_node
+            .operation
+            .parameters()
+            .into_iter()
+            .find(|p| p.name == target_parameter && matches!(p.kind, ParameterKind::Number { .. }))
+            .ok_or_else(|| OperationError::UnknownParameter(target_parameter.to_string()))?;
+        let matched_name: &'static str = matched.name;
+
+        let driver_mut = self.resolve_mut(driver).ok_or(OperationError::UnknownNode)?;
+        driver_mut.animation_mappings.retain(|(index, _)| *index != output_index);
+        driver_mut.animation_mappings.push((output_index, matched_name));
+
+        self.validation = ValidationState::Dirty;
+
+        Ok(())
+    }
+
+    /// Remove one output's mapping, leaving the driver's target and any
+    /// other output's mapping untouched.
+    pub fn clear_animation_mapping(&mut self, driver: NodeId, output_index: usize) -> Result<(), OperationError> {
+        let driver_mut = self.resolve_mut(driver).ok_or(OperationError::UnknownNode)?;
+        driver_mut.animation_mappings.retain(|(index, _)| *index != output_index);
 
         self.validation = ValidationState::Dirty;
 

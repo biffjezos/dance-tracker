@@ -8,7 +8,7 @@ AMIGA TWO ROW MENU SYSTEM
 */
 
 import { nodeSelectionState } from "./nodeSelection.js";
-import { nodeEditContextRegistry, renderGroupContext } from "./nodeEditContexts.js";
+import { nodeEditContextRegistry, renderGroupContext, renderAnimationTargetContext as renderAnimationTargetPane } from "./nodeEditContexts.js";
 import { getAllRealEntries, addNodeLayer, removeLayer } from "../state/registry.js";
 import { createNode } from "../core/operations.js";
 import { getWasmApp } from "../core/wasm.js";
@@ -60,6 +60,7 @@ const CONTEXT_HANDLERS = {
     nodes: "renderNodesTopContext",
     node_edit: "renderNodeEditContext",
     param_group: "renderParamGroupContext",
+    animation_target: "renderAnimationTargetContext",
     create_node: "renderCreateNodeContext"
 };
 
@@ -513,6 +514,20 @@ export class MenuManager {
         }
     }
 
+    // The "INPUT" deep-menu sub-pane pushed from an animation-category
+    // node's own edit screen (see enterAnimationTarget() below) - same
+    // push/pop shape as a parameter group, just a different fixed layout
+    // (target-node picker + per-output CONTROLS rows) instead of a
+    // node_parameters() group.
+    renderAnimationTargetContext() {
+        this.renderNodesFamilyHeader(false);
+
+        const selectedNode = nodeSelectionState.getSelectedNode();
+        if (selectedNode) {
+            renderAnimationTargetPane(this, selectedNode);
+        }
+    }
+
     renderCreateNodeContext() {
         if (this.currentContext.parent !== null) {
             this.renderUpButton();
@@ -692,6 +707,16 @@ export class MenuManager {
         const groupContext = new MenuContext("param_group", this.currentContext);
         groupContext.group = groupName;
         this.currentContext = groupContext;
+        this.render();
+        this.updateStatusBar();
+    }
+
+    // Descend into an animation-category node's own "INPUT" sub-pane
+    // (UP returns here) - same push/pop shape as enterParameterGroup(),
+    // just no group name to carry since there's only ever one.
+    enterAnimationTarget() {
+        const targetContext = new MenuContext("animation_target", this.currentContext);
+        this.currentContext = targetContext;
         this.render();
         this.updateStatusBar();
     }

@@ -80,6 +80,10 @@ impl Operation for Square {
         }
     }
 
+    fn output_names(&self) -> Vec<&'static str> {
+        vec!["OUTPUT"]
+    }
+
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![
             ParameterDescriptor {
