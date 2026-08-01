@@ -31,6 +31,17 @@ pub trait Operation: Any {
         Vec::new()
     }
 
+    /// Human-readable label for each entry in `metadata().outputs`, in
+    /// the same order - e.g. Lissajous's two Number outputs are "X" and
+    /// "Y", not indistinguishable by position. Empty by default (most
+    /// operations have exactly one output and don't need one labelled);
+    /// only operations meant to be picked as a PATCH node's animation
+    /// source need to override this. Purely cosmetic - nothing in the
+    /// engine depends on these strings, they only reach the UI.
+    fn output_names(&self) -> Vec<&'static str> {
+        Vec::new()
+    }
+
     fn get_parameter(&self, _name: &str) -> Option<Value> {
         None
     }

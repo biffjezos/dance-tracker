@@ -103,6 +103,17 @@ struct InputView {
 }
 
 /*
+What the UI is told about one declared output of a node: its index (what
+`set_patch_mapping` addresses it by) and its human-readable label (see
+`Operation::output_names`).
+*/
+#[derive(Serialize)]
+struct OutputView {
+    index: u32,
+    name: String,
+}
+
+/*
 Whether a node is safe to evaluate, translated from the engine's internal
 NodeValidation (which carries NodeId, not JS-safe on its own) into a tag the
 UI can match on plus a human-readable detail string - e.g. so the NODES
@@ -343,6 +354,88 @@ impl App {
             .map_err(|err| JsValue::from_str(&err.to_string()))
     }
 
+    /// The outputs a node declares, labelled (see `Operation::output_names`)
+    /// - what a PATCH node's own edit screen offers as candidate outputs
+    /// to map, once REFERENCE is wired.
+    pub fn node_outputs(&self, node_id: u32) -> Result<JsValue, JsValue> {
+        let node_id = resolve_id(&self.graph, node_id)?;
+
+        let operation = self.graph
+            .get_node(&node_id)
+            .ok_or_else(|| {
+                JsValue::from_str(
+                    &format!("Node {:?} not found", node_id)
+                )
+            })?;
+
+        let names = operation.output_names();
+        let views: Vec<OutputView> = operation
+            .metadata()
+            .outputs
+            .iter()
+            .enumerate()
+            .map(|(index, _kind)| OutputView {
+                index: index as u32,
+                name: names.get(index).copied().unwrap_or("OUTPUT").to_string(),
+            })
+            .collect();
+
+        serde_wasm_bindgen::to_value(&views)
+            .map_err(|err| JsValue::from_str(&err.to_string()))
+    }
+
+    /// Which properties a PATCH node's currently-wired SOURCE (target)
+    /// can have driven - see `Graph::available_patch_properties`.
+    pub fn patch_available_properties(&self, node_id: u32) -> Result<JsValue, JsValue> {
+        let node_id = resolve_id(&self.graph, node_id)?;
+        let properties = self.graph.available_patch_properties(node_id);
+
+        serde_wasm_bindgen::to_value(&properties)
+            .map_err(|err| JsValue::from_str(&err.to_string()))
+    }
+
+    /// Which output index (if any) a PATCH node currently maps to the
+    /// given property.
+    pub fn patch_mapping(&self, node_id: u32, property: String) -> Result<JsValue, JsValue> {
+        let node_id = resolve_id(&self.graph, node_id)?;
+
+        let node = self.graph
+            .resolve(node_id)
+            .ok_or_else(|| {
+                JsValue::from_str(
+                    &format!("Node {:?} not found", node_id)
+                )
+            })?;
+
+        let mapping = node
+            .animation_mappings
+            .iter()
+            .find(|(name, _)| *name == property)
+            .map(|(_, index)| *index as u32);
+
+        serde_wasm_bindgen::to_value(&mapping)
+            .map_err(|err| JsValue::from_str(&err.to_string()))
+    }
+
+    /// Map one of a PATCH node's wired REFERENCE (animation source)'s
+    /// outputs to one of its wired SOURCE (target)'s properties.
+    pub fn set_patch_mapping(&mut self, node_id: u32, property: String, output_index: u32) -> Result<(), JsValue> {
+        let node_id = resolve_id(&self.graph, node_id)?;
+
+        self.graph
+            .set_patch_mapping(node_id, &property, output_index as usize)
+            .map_err(js_err)
+    }
+
+    /// Remove one property's mapping, leaving the rest untouched.
+    pub fn clear_patch_mapping(&mut self, node_id: u32, property: String) -> Result<(), JsValue> {
+        let node_id = resolve_id(&self.graph, node_id)?;
+
+        self.graph
+            .clear_patch_mapping(node_id, &property)
+            .map_err(js_err)
+    }
+
     /// Wire one node's output into a named input of another node.
     pub fn connect_node_input(
         &mut self,
@@ -544,6 +637,13 @@ impl App {
 
         let ctx = self.context(false);
 
+        // Push every PATCH node's current mapped values in - into a real
+        // target parameter, or PATCH's own raw-channel state - before
+        // the normal DAG walk. See Graph::apply_patch_nodes's own doc
+        // comment for why this is a flat pre-pass rather than folded
+        // into the executor itself.
+        self.graph.apply_patch_nodes(&ctx);
+
         let values = self.render_executor
             .execute(
                 &self.graph,
@@ -589,6 +689,10 @@ impl App {
         let node = resolve_id(&self.graph, node as u32)?;
 
         let ctx = self.context(true);
+
+        // Same pre-pass as render_tick - PREVIEW should show mapped
+        // properties too, not just LIVE OUTPUT.
+        self.graph.apply_patch_nodes(&ctx);
 
         let executor = PreviewExecutor::default();
 

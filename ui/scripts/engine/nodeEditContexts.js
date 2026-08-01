@@ -169,6 +169,53 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
         groupButton.onclick = () => menuManager.enterParameterGroup(groupName);
         row.appendChild(groupButton);
     });
+
+    // PATCH has no real parameters() of its own (see operations::compose::patch) -
+    // its entire interface is this mapping table, rendered once both of
+    // its wires (SOURCE via renderInputSteppers above, REFERENCE) exist.
+    if (nodeEntry.kind === "patch") {
+        renderPatchMappingRows(menuManager, nodeId);
+    }
+}
+
+/**
+ * PATCH's own property<->output mapping table - one "<PROPERTY> <-- ___"
+ * stepper per property its wired SOURCE (target) actually offers (real
+ * Number/Color parameters, or a raw R/G/B/A fallback - see
+ * patch_available_properties()), cycling through NONE + whichever
+ * outputs its wired REFERENCE (animation source) declares. Renders
+ * nothing until both wires exist - there's nothing real to map yet.
+ */
+function renderPatchMappingRows(menuManager, nodeId) {
+    const wasmApp = getWasmApp();
+    if (!wasmApp) return;
+
+    const inputs = wasmApp.node_inputs(nodeId);
+    const referenceInput = inputs.find(input => input.name === "REFERENCE");
+    if (!referenceInput || referenceInput.source == null) return;
+
+    const properties = wasmApp.patch_available_properties(nodeId);
+    if (properties.length === 0) return;
+
+    const outputs = wasmApp.node_outputs(referenceInput.source);
+    const outputOptions = ["NONE", ...outputs.map(output => output.name)];
+
+    properties.forEach(property => {
+        const currentIndex = wasmApp.patch_mapping(nodeId, property);
+        const optionIndex = (currentIndex !== null && currentIndex !== undefined) ? currentIndex + 1 : 0;
+
+        const row = startParamRow(menuManager);
+        renderParameterLabel(row, property);
+        renderStepperButtons(row, outputOptions[optionIndex], direction => {
+            const nextIndex = (optionIndex + direction + outputOptions.length) % outputOptions.length;
+            if (nextIndex === 0) {
+                wasmApp.clear_patch_mapping(nodeId, property);
+            } else {
+                wasmApp.set_patch_mapping(nodeId, property, nextIndex - 1);
+            }
+            menuManager.render();
+        });
+    });
 }
 
 /**

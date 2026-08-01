@@ -20,4 +20,12 @@ impl NodeId {
 pub struct Node {
     pub operation: Box<dyn Operation>,
     pub inputs: Vec<(Input, NodeId)>,
+    /// PATCH-only: (property_name, output_index) pairs authored on the
+    /// PATCH node's own edit screen, mapping one of its wired REFERENCE
+    /// (animation source)'s outputs to one of its wired SOURCE (target)'s
+    /// properties. Owned `String`, not `&'static str`, since a Color
+    /// parameter's decomposed channel name ("KEY_COLOR.R") is built at
+    /// runtime, not one of the parameter's own fixed descriptor names.
+    /// Empty and unused for every non-PATCH operation.
+    pub animation_mappings: Vec<(String, usize)>,
 }

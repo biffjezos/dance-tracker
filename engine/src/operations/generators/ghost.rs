@@ -1,5 +1,7 @@
 // src/operations/generators/ghost.rs
 use std::any::Any;
+use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use crate::compositor::{
@@ -21,20 +23,34 @@ use crate::compositor::{
 
 use crate::graphics::FloatImage;
 
-/// Spatial repeat of a masked object: GHOST_COUNT copies, each `n`
-/// (1-based) offset by `n * DISTANCE * (SPATIAL_X, SPATIAL_Y)` from the
-/// source's own (unmoved) position, all sharing one OPACITY_MULTIPLIER -
-/// not a temporal echo/trail despite the name, a spatial one (see
-/// ANIMATION_IMPLEMENTATION_PLAN.md's GHOST section for the worked
-/// example this came from). Both SOURCE and MASK are required - there is
-/// no sensible "no mask wired" behaviour for an operation whose entire
-/// job is repeating the masked region.
+/// Repeat of a masked object, both spatially and in time: ghost `n`
+/// (1-based) is offset by `n * DISTANCE * (SPATIAL_X, SPATIAL_Y)` - that
+/// part scales by ghost index. DELAY does not: every ghost shows the
+/// source from the same DELAY frames ago, same as OPACITY_MULTIPLIER is
+/// one shared value for every ghost, not indexed by n. SHOW_SOURCE
+/// toggles whether the live (unmoved, undelayed) source itself is
+/// composited on top at all, or only the ghost trail shows. Both SOURCE
+/// and MASK are required - there is no sensible "no mask wired"
+/// behaviour for an operation whose entire job is repeating the masked
+/// region.
 pub struct Ghost {
     pub ghost_count: usize,
     pub distance: f64,
     pub spatial_x: f64,
     pub spatial_y: f64,
     pub opacity_multiplier: f64,
+    pub delay: u64,
+    pub show_source: bool,
+    // Interior mutability: `Operation::execute()` only ever gets `&self`
+    // (see ANIMATION_CONVENTIONS.md - operations stay pure functions of
+    // their own params + resolved inputs from the outside), but DELAY
+    // inherently needs to remember past frames. Same pattern this
+    // codebase's own test doubles already use (`Cell<f64>` in
+    // executors/render.rs's tests) for &self-compatible mutation, just
+    // in a real operation instead of a stub. Holds cutouts (post-mask,
+    // pre-translate) in oldest-first order; capacity trimmed to exactly
+    // what the deepest ghost currently needs.
+    history: RefCell<VecDeque<Vec<f32>>>,
 }
 
 impl Ghost {
@@ -45,6 +61,9 @@ impl Ghost {
             spatial_x: -1.0,
             spatial_y: 0.0,
             opacity_multiplier: 1.0,
+            delay: 0,
+            show_source: true,
+            history: RefCell::new(VecDeque::new()),
         }
     }
 
@@ -137,23 +156,32 @@ impl Ghost {
         output
     }
 
-    /// The full GHOST composite: the source's own cutout at native
-    /// opacity, plus `ghost_count` spatially-offset copies at
-    /// `opacity_multiplier`, stacked nearest-to-source-on-top (painted
-    /// far-to-near - the farthest ghost goes down first, the source
-    /// itself goes on top of everything). Stacking order is a judgment
-    /// call the user hasn't specified either way - see
-    /// ANIMATION_IMPLEMENTATION_PLAN.md's GHOST section.
+    /// The full GHOST composite: `ghost_count` copies, each spatially
+    /// offset by `n * DISTANCE`, all pulled from the same `delay` frames
+    /// ago and all at the same `opacity_multiplier`, stacked nearest-to-
+    /// source-on-top (painted far-to-near - the spatially-farthest ghost
+    /// goes down first). Stacking order is a judgment call the user
+    /// hasn't specified either way - see ANIMATION_IMPLEMENTATION_PLAN.md's
+    /// GHOST section. The live source itself is composited on top last,
+    /// at its own native opacity, only when `show_source` is true.
+    ///
+    /// Records the current frame's cutout into `history` on every call -
+    /// callers that need DELAY to mean real elapsed frames (not "frames
+    /// this operation happened to be re-evaluated on") must keep this
+    /// operation live (see `is_live()` below) so the render loop never
+    /// skips a tick's call here.
     pub fn render(&self, source: &[f32], mask: &[f32], width: u32, height: u32) -> Vec<f32> {
         let cutout = Self::cutout_pixels(source, mask);
+        self.record_history(&cutout);
 
         let mut result = vec![0f32; cutout.len()];
 
         for n in (1..=self.ghost_count).rev() {
+            let delayed = self.delayed_cutout(self.delay);
             let offset_x = n as f64 * self.distance * self.spatial_x;
             let offset_y = n as f64 * self.distance * self.spatial_y;
 
-            let mut ghost = Self::translate_pixels(&cutout, width, height, offset_x, offset_y);
+            let mut ghost = Self::translate_pixels(&delayed, width, height, offset_x, offset_y);
             for px in ghost.chunks_exact_mut(4) {
                 px[3] *= self.opacity_multiplier as f32;
             }
@@ -161,7 +189,38 @@ impl Ghost {
             result = Self::composite_over(&ghost, &result);
         }
 
-        Self::composite_over(&cutout, &result)
+        if self.show_source {
+            Self::composite_over(&cutout, &result)
+        } else {
+            result
+        }
+    }
+
+    /// Push this tick's cutout onto the history buffer, then trim it
+    /// down to exactly what the deepest ghost currently needs
+    /// (`ghost_count * delay` frames back, plus the current one) - never
+    /// more, so DELAY/GHOST_COUNT can't grow memory use unboundedly.
+    fn record_history(&self, cutout: &[f32]) {
+        let mut history = self.history.borrow_mut();
+        history.push_back(cutout.to_vec());
+
+        let capacity = self.delay as usize + 1;
+        while history.len() > capacity {
+            history.pop_front();
+        }
+    }
+
+    /// The cutout from `frames_back` frames ago, clamped to the oldest
+    /// frame actually available - e.g. DELAY=5 on the graph's 2nd tick
+    /// shows the 1st (oldest available) frame rather than nothing, since
+    /// there's no real "before the graph started" content to show.
+    /// `record_history` always runs first in `render()`, so `history` is
+    /// never empty here.
+    fn delayed_cutout(&self, frames_back: u64) -> Vec<f32> {
+        let history = self.history.borrow();
+        let last = history.len() - 1;
+        let index = last.saturating_sub(frames_back as usize);
+        history[index].clone()
     }
 }
 
@@ -228,6 +287,16 @@ impl Operation for Ghost {
                 kind: ParameterKind::Number { step: 0.05, min: Some(0.0), max: Some(1.0) },
                 group: None,
             },
+            ParameterDescriptor {
+                name: "DELAY",
+                kind: ParameterKind::Number { step: 1.0, min: Some(0.0), max: None },
+                group: None,
+            },
+            ParameterDescriptor {
+                name: "SHOW_SOURCE",
+                kind: ParameterKind::Boolean,
+                group: None,
+            },
         ]
     }
 
@@ -238,6 +307,8 @@ impl Operation for Ghost {
             "SPATIAL_X" => Some(Value::Number(self.spatial_x)),
             "SPATIAL_Y" => Some(Value::Number(self.spatial_y)),
             "OPACITY_MULTIPLIER" => Some(Value::Number(self.opacity_multiplier)),
+            "DELAY" => Some(Value::Number(self.delay as f64)),
+            "SHOW_SOURCE" => Some(Value::Boolean(self.show_source)),
             _ => None,
         }
     }
@@ -273,8 +344,28 @@ impl Operation for Ghost {
                 self.opacity_multiplier = v;
                 Ok(())
             }
+            ("DELAY", Value::Number(v)) => {
+                if v < 0.0 {
+                    return Err(OperationError::InvalidParameterValue(name.to_string(), v.to_string()));
+                }
+                self.delay = v.round() as u64;
+                Ok(())
+            }
+            ("SHOW_SOURCE", Value::Boolean(v)) => {
+                self.show_source = v;
+                Ok(())
+            }
             (name, _) => Err(OperationError::InvalidParameterType(name.to_string())),
         }
+    }
+
+    // DELAY needs to see every real render tick to mean "N frames ago" -
+    // if the cross-tick cache (RenderExecutor) ever skipped calling
+    // execute() here, the history buffer would fall out of sync with
+    // actual elapsed frames. Always re-executing costs little (GHOST's
+    // own math is cheap, and its SOURCE is typically already live).
+    fn is_live(&self) -> bool {
+        true
     }
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
@@ -384,7 +475,7 @@ mod tests {
     fn a_ghost_offsets_by_n_times_distance_along_the_spatial_direction() {
         // One ghost, moving purely in +X, distance 1 - on a 3x1 image, the
         // ghost of pixel 0's content should land on pixel 1.
-        let ghost = Ghost { ghost_count: 1, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 1.0 };
+        let ghost = Ghost { ghost_count: 1, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 1.0, ..Ghost::new() };
         let source = vec![
             1.0, 0.0, 0.0, 1.0, // x=0: opaque red
             0.0, 0.0, 0.0, 0.0, // x=1: transparent
@@ -405,7 +496,7 @@ mod tests {
 
     #[test]
     fn opacity_multiplier_applies_identically_to_every_ghost_not_per_index() {
-        let ghost = Ghost { ghost_count: 2, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 0.5 };
+        let ghost = Ghost { ghost_count: 2, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 0.5, ..Ghost::new() };
         let source = vec![1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         let mask = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         let out = ghost.render(&source, &mask, 4, 1);
@@ -448,5 +539,95 @@ mod tests {
         let mut ghost = Ghost::new();
         let err = ghost.set_parameter("OPACITY_MULTIPLIER", Value::Number(1.5)).unwrap_err();
         assert!(matches!(err, OperationError::InvalidParameterValue(_, _)));
+    }
+
+    #[test]
+    fn is_live_returns_true() {
+        assert!(Ghost::new().is_live(), "DELAY must see every real tick or it falls out of sync with elapsed frames");
+    }
+
+    #[test]
+    fn zero_delay_uses_the_current_frame_same_as_before_delay_existed() {
+        let ghost = Ghost { ghost_count: 1, distance: 0.0, spatial_x: 0.0, spatial_y: 0.0, opacity_multiplier: 1.0, delay: 0, ..Ghost::new() };
+        let red = solid(1, 1, 1.0, 0.0, 0.0, 1.0);
+        let opaque_mask = solid(1, 1, 0.0, 0.0, 0.0, 1.0);
+
+        ghost.render(&red, &opaque_mask, 1, 1);
+        let green = solid(1, 1, 0.0, 1.0, 0.0, 1.0);
+        let out = ghost.render(&green, &opaque_mask, 1, 1);
+
+        // With DELAY=0 the ghost tracks the current frame - green, not
+        // the earlier red frame.
+        assert!((out[1] - 1.0).abs() < 1e-6, "expected the ghost to show the current (green) frame, got {:?}", &out[0..4]);
+    }
+
+    #[test]
+    fn delay_shows_an_older_frame_from_history() {
+        let ghost = Ghost { ghost_count: 1, distance: 0.0, spatial_x: 0.0, spatial_y: 0.0, opacity_multiplier: 1.0, delay: 2, ..Ghost::new() };
+        let opaque_mask = solid(1, 1, 0.0, 0.0, 0.0, 1.0);
+
+        // Three ticks: red, green, blue. With DELAY=2 (and zero spatial
+        // offset, so the ghost lands exactly on the same pixel as the
+        // live source), the 3rd tick's ghost should show frame 1 (red),
+        // 2 frames behind the current (blue) frame.
+        ghost.render(&solid(1, 1, 1.0, 0.0, 0.0, 1.0), &opaque_mask, 1, 1); // frame 0: red
+        ghost.render(&solid(1, 1, 0.0, 1.0, 0.0, 1.0), &opaque_mask, 1, 1); // frame 1: green
+        let out = ghost.render(&solid(1, 1, 0.0, 0.0, 1.0, 1.0), &opaque_mask, 1, 1); // frame 2: blue
+
+        // show_source defaults true, so the top layer is the live (blue)
+        // source - the ghost is fully covered here since both land on
+        // the same pixel with a fully opaque source on top. Turn source
+        // off to actually see the delayed ghost's own colour.
+        let _ = out;
+
+        let hidden_source_ghost = Ghost { show_source: false, ..ghost };
+        let out = hidden_source_ghost.render(&solid(1, 1, 0.0, 0.0, 1.0, 1.0), &opaque_mask, 1, 1);
+        // history already has [red, green, blue, blue] at this point;
+        // delay=2 back from the just-pushed 4th entry (blue) lands on
+        // green (index 1) - proves DELAY pulls an older frame rather
+        // than the current one.
+        assert!((out[1] - 1.0).abs() < 1e-6, "expected an older (green) frame, got {:?}", &out[0..4]);
+    }
+
+    #[test]
+    fn every_ghost_uses_the_same_delay_not_scaled_by_ghost_index() {
+        // Regression: DELAY must behave like OPACITY_MULTIPLIER (one
+        // shared value for every ghost), not like DISTANCE (scaled by n).
+        let ghost = Ghost { ghost_count: 2, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 1.0, delay: 1, show_source: false, ..Ghost::new() };
+        let opaque_mask = solid(3, 1, 0.0, 0.0, 0.0, 1.0);
+
+        ghost.render(&solid(3, 1, 1.0, 0.0, 0.0, 1.0), &opaque_mask, 3, 1); // frame 0: red
+        let out = ghost.render(&solid(3, 1, 0.0, 1.0, 0.0, 1.0), &opaque_mask, 3, 1); // frame 1: green
+
+        // Both ghost 1 (x=1) and ghost 2 (x=2) must show the same
+        // (delayed, red) frame - not ghost 2 reaching back twice as far.
+        assert!((out[4] - 1.0).abs() < 1e-6, "ghost 1 should show red (delay=1 back)");
+        assert!((out[8] - 1.0).abs() < 1e-6, "ghost 2 should also show red, the same delay as ghost 1 - not a further-back frame");
+    }
+
+    #[test]
+    fn delay_clamps_to_the_oldest_available_frame_before_enough_history_exists() {
+        let ghost = Ghost { ghost_count: 1, distance: 0.0, spatial_x: 0.0, spatial_y: 0.0, opacity_multiplier: 1.0, delay: 10, show_source: false, ..Ghost::new() };
+        let opaque_mask = solid(1, 1, 0.0, 0.0, 0.0, 1.0);
+
+        // Only one frame of history exists (this call itself) - DELAY=10
+        // must clamp to it rather than panic or show nothing.
+        let out = ghost.render(&solid(1, 1, 1.0, 0.0, 0.0, 1.0), &opaque_mask, 1, 1);
+        assert!((out[0] - 1.0).abs() < 1e-6, "expected the only available (red) frame, got {:?}", &out[0..4]);
+    }
+
+    #[test]
+    fn show_source_false_hides_the_live_source_leaving_only_ghosts() {
+        let ghost = Ghost { ghost_count: 1, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 1.0, show_source: false, ..Ghost::new() };
+        let source = vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
+        let mask = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
+
+        let out = ghost.render(&source, &mask, 2, 1);
+
+        // x=0 (where only the live source had content) must now be
+        // transparent - the source layer is hidden.
+        assert_eq!(&out[0..4], &[0.0, 0.0, 0.0, 0.0]);
+        // x=1 (where the ghost landed) still shows the ghost's red.
+        assert!((out[4] - 1.0).abs() < 1e-6);
     }
 }
