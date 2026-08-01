@@ -89,6 +89,9 @@ pub enum OperationCategory {
     Composite,
     Reference,
     Color,
+    // Produces a Number (or several), never pixels - distinct from
+    // Generator, which always means "produces an Image".
+    Animation,
 }
 
 impl OperationCategory {
@@ -102,6 +105,7 @@ impl OperationCategory {
             OperationCategory::Composite => "composite",
             OperationCategory::Reference => "reference",
             OperationCategory::Color => "color",
+            OperationCategory::Animation => "animation",
         }
     }
 }

@@ -1,4 +1,5 @@
 // src/operations/mod.rs
+pub mod animate;
 pub mod compose;
 pub mod generators;
 pub mod inventory;
