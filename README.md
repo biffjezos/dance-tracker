@@ -19,30 +19,6 @@ The result is a tool that feels like it escaped from an Amiga 500 demo disk and 
 - Transform and effect pipelines
 - Retro-inspired creative workflow
 
-## Visual Language
-
-Instead of overwhelming users with hundreds of technical controls, DANCE TRACKER 5000 organizes visual operations into creative categories:
-
-### ASTRA
-Generate motion, space, and procedural worlds.
-
-Stars, particles, rings, plasma, tunnels, and other demo-inspired effects.
-
-### SPECTRA
-Manipulate light and visual energy.
-
-Colour, brightness, contrast, glow, distortion, and signal effects.
-
-### CHROMA
-Create and control visual materials.
-
-Mattes, masks, clouds, gradients, noise, and compositing elements.
-
-### KINETIC
-Control movement and transformation.
-
-Position, rotation, scaling, warping, animation, and time-based effects.
-
 ## Built for the Demo Scene Generation
 
 DANCE TRACKER 5000 takes inspiration from an era when programmers pushed limited hardware to impossible places. The goal is not to recreate the past, but to continue the same philosophy:

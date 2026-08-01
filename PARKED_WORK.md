@@ -131,6 +131,38 @@ hold-to-scrub, ideally via a sigmoid ramp on hold duration - discussed but
 not designed in detail) - once the ProRes decode path above lands and
 frames can be addressed by index instead of only by continuous seconds.
 
+## Deeper menu navigation via OperationCategory
+
+**Work:** 4h · **Complexity:** 3/6
+**Depends on:** A taxonomy decision, not a technical blocker.
+`OperationCategory` (`compositor/metadata.rs`) currently has 6 broad
+buckets - Source, Generator, Mask, Composite, Reference, Color - and
+every TRANSFORM-menu operation (blur, invert, resize, rgb_to_hsv,
+shuffle) is tagged `Color` today, with no distinction between "colour
+manipulation" (invert, shuffle), "colorspace conversion feeding a keying
+op" (rgb_to_hsv - wired as hue_key's Reference input), and "pixel/
+spatial manipulation" (blur, resize). `Reference` is defined but not
+used by any operation yet. Someone needs to decide the actual category
+split - and whether it's even the right axis (vs. e.g. splitting
+TRANSFORM into more top-level menus instead) - before there's anything
+meaningful for a submenu to group by. This will matter more once
+Constellation/Rings/Ghost/Text land and GENERATE stops being small.
+**Existing non-functional code:** None dead, but under-used, not a
+stub: `OperationMetadata.category` is already correctly populated per
+operation, and both `OperationRegistry::describe_all()`
+(`compositor/registry.rs`) and `App::get_operations()` (`app.rs`)
+already serialize it to JS as `category` on every operation view - this
+part is real, working, already-shipped plumbing, not scaffolding. It's
+simply never read on the JS side yet: `menu.js`'s `renderOperationList()`
+only ever filters by the flat `menu` string, so `category` arrives in
+every `get_operations()` response today and is currently ignored.
+
+Once the taxonomy above is settled, the JS-side work itself is small:
+group `renderOperationList()`'s filtered operations by `category` within
+a menu and push a second-level submenu context (the node-selector/
+param-group push/pop pattern already in `menu.js`/`nodeEditContexts.js`
+is directly reusable) instead of one flat button list per menu.
+
 ## Constellation generator effect
 
 **Work:** 3h · **Complexity:** 2/6
