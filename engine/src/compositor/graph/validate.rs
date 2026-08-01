@@ -324,8 +324,16 @@ fn visit_cycle_detection(
 }
 
 
-/// Propagate invalidity through the dependency graph
-/// If a node is invalid, all nodes that depend on it (directly or indirectly) become invalid
+/// Propagate invalidity through the dependency graph.
+/// If a node is invalid, all nodes that depend on it (directly or indirectly) become invalid -
+/// but only for *structural* invalidity (Cycle, UnknownInput, and InvalidDependency itself).
+/// MissingInput never seeds this - an input the user simply hasn't wired yet (very often an
+/// entirely optional one, like MASK, which every masking-capable operation declares whether or
+/// not anyone ever wires it) is normal mid-edit state, not something that should paint every
+/// node downstream of it red. describeNodeValidation on the UI side already treats a node's own
+/// MissingInput as no badge at all; without this exclusion, that leniency didn't survive one hop
+/// downstream - literally any two-node chain through an operation with an unwired optional MASK
+/// input (which is most operations, in most graphs) got its dependent flagged InvalidDependency.
 fn propagate_invalidity(
     graph: &Graph,
     result: &mut ValidationResult,
@@ -346,10 +354,14 @@ fn propagate_invalidity(
         }
     }
 
-    // Find all initially invalid nodes
+    // Find all initially invalid nodes - structural breakage only, see this
+    // function's own doc comment for why MissingInput is excluded.
     let mut invalid_queue: Vec<usize> = Vec::new();
     for index in 0..num_nodes {
-        if !matches!(result.node_states[index], NodeValidation::Valid) {
+        if matches!(
+            result.node_states[index],
+            NodeValidation::Cycle | NodeValidation::UnknownInput(_)
+        ) {
             invalid_queue.push(index);
         }
     }
@@ -393,6 +405,107 @@ pub fn get_node_validation(
     if index >= graph.node_validation.len() {
         return None;
     }
-    
+
     Some(graph.node_validation[index])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::any::Any;
+    use crate::compositor::{
+        metadata::{OperationCategory, OperationMetadata, OutputKind},
+        operations::Operation,
+        operation_descriptor::OperationDescriptor,
+        Context,
+        Value,
+    };
+
+    /// A stub operation that declares whatever inputs the test needs -
+    /// only its declared `inputs` list and wiring matter here, never its
+    /// (never-called) execute() output.
+    struct Stub {
+        inputs: Vec<Input>,
+    }
+
+    impl Operation for Stub {
+        fn descriptor(&self) -> OperationDescriptor {
+            OperationDescriptor {
+                id: "stub", menu: "TEST", label: "STUB",
+                action: None, ui_action: None, create_node: None, submenu: None,
+            }
+        }
+        fn as_any(&self) -> &dyn Any { self }
+        fn as_any_mut(&mut self) -> &mut dyn Any { self }
+        fn metadata(&self) -> OperationMetadata {
+            OperationMetadata {
+                display_name: "Stub",
+                category: OperationCategory::Color,
+                inputs: self.inputs.clone(),
+                outputs: vec![OutputKind::Image],
+            }
+        }
+        fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
+            Ok(vec![])
+        }
+    }
+
+    fn stub(inputs: Vec<Input>) -> Box<dyn Operation> {
+        Box::new(Stub { inputs })
+    }
+
+    #[test]
+    fn an_unwired_optional_input_does_not_cascade_to_a_dependent_node() {
+        // Regression: a node with a declared-but-unwired input (MASK is
+        // the real-world case - every masking-capable operation declares
+        // it, and it's almost always left unwired) used to poison every
+        // node downstream of it with a red InvalidDependency badge, even
+        // though the node's own MissingInput state is normal, expected
+        // mid-edit state, not an error.
+        let mut graph = Graph::new(4, 4);
+
+        let a = graph.add_node(stub(vec![])); // no inputs - Valid
+
+        // b declares Source + Mask, but only Source gets wired - Mask
+        // stays a normal unwired optional input.
+        let b = graph.add_node(stub(vec![Input::Source, Input::Mask]));
+        graph.connect(b, Input::Source, a).unwrap();
+
+        // c depends on b - before the fix, this became InvalidDependency(b)
+        // purely because b had an unwired (optional) Mask input.
+        let c = graph.add_node(stub(vec![Input::Source]));
+        graph.connect(c, Input::Source, b).unwrap();
+
+        graph.validate().expect("MissingInput must not fail graph validation");
+
+        assert_eq!(graph.node_validation(b), Some(NodeValidation::MissingInput(Input::Mask)));
+        assert_eq!(graph.node_validation(c), Some(NodeValidation::Valid));
+    }
+
+    #[test]
+    fn a_genuine_cycle_is_still_flagged_and_still_fails_validation() {
+        // propagate_invalidity's own exclusion of MissingInput must not
+        // touch real structural breakage - a cycle must still fail
+        // validate() and mark both participants Cycle.
+        //
+        // Deliberately not extended with a third node depending on this
+        // cycle (e.g. C -> B): run_validation's DFS state (`path`/`state`
+        // in visit_cycle_detection) is never reset between separate
+        // top-level traversal roots, so a node visited after a real cycle
+        // elsewhere in the graph can itself be misflagged Cycle via a
+        // stale leftover `path` - a separate, pre-existing bug, not
+        // something this test (about MissingInput exclusion) should
+        // depend on either way.
+        let mut graph = Graph::new(4, 4);
+
+        let a = graph.add_node(stub(vec![Input::Source]));
+        let b = graph.add_node(stub(vec![Input::Source]));
+        graph.connect(a, Input::Source, b).unwrap();
+        graph.connect(b, Input::Source, a).unwrap();
+
+        graph.validate().unwrap_err();
+
+        assert_eq!(graph.node_validation(a), Some(NodeValidation::Cycle));
+        assert_eq!(graph.node_validation(b), Some(NodeValidation::Cycle));
+    }
 }

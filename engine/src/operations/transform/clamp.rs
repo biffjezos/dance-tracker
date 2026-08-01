@@ -12,17 +12,18 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
     Value,
 };
-use crate::graphics::{FloatImage, Image, ImageFormat};
+use crate::graphics::FloatImage;
 
-/// Explicit, deliberate step from an unclamped FloatImage (ADD/SUBTRACT's
-/// output) back down to a normal bounded Image - the one place an
-/// out-of-gamut value actually gets thrown away. MIN/MAX default to
-/// 0.0/1.0 (the standard "bring back into gamut" case) but are adjustable
-/// for a creative clip (crush blacks, clip highlights early).
-///
-/// A regular already-bounded Image/Frame/Video passes through unchanged -
-/// there's nothing to clamp - so CLAMP is always safe to insert, whether
-/// or not its input actually is out of range.
+/// Explicit, deliberate step from an unbounded FloatImage back down to a
+/// normal bounded Image - the one place an out-of-gamut value actually
+/// gets thrown away. MIN/MAX default to 0.0/1.0 (the standard "bring back
+/// into gamut" case) but are adjustable for a creative clip (crush
+/// blacks, clip highlights early) - applied uniformly regardless of
+/// whether the input happens to already be bounded, so a narrowed range
+/// still does something to a normal Image/Frame/Video, not just a
+/// FloatImage. With the default 0.0/1.0 range, clamping an
+/// already-bounded input is a true no-op, which is what makes CLAMP
+/// always safe to insert everywhere.
 pub struct Clamp {
     pub min: f64,
     pub max: f64,
@@ -115,33 +116,11 @@ impl Operation for Clamp {
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
-            return Ok(vec![Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))]);
+            return Ok(vec![Value::Image(crate::graphics::U8Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
 
-        let min = self.min as f32;
-        let max = self.max as f32;
-
-        let image = match value {
-            Value::FloatImage(float_image) => float_image.to_image_clamped(min, max),
-
-            // Already bounded - nothing to clamp, pass through unchanged
-            // so CLAMP is always safe to insert regardless of what's
-            // actually wired into it.
-            Value::Image(image) => (**image).clone(),
-
-            Value::Frame(frame) => Image {
-                pixels: frame.pixels.clone(),
-                width: frame.width,
-                height: frame.height,
-                format: ImageFormat::Rgba8,
-            },
-
-            Value::Video(video) => (*video.frame_at(ctx.meta.time)?).clone(),
-
-            other => return Err(OperationError::InvalidInputType(
-                format!("Clamp cannot read {:?}", other)
-            )),
-        };
+        let source = FloatImage::from_value(value, ctx)?;
+        let image = source.to_image_clamped(self.min as f32, self.max as f32);
 
         Ok(vec![Value::Image(Arc::new(image))])
     }
@@ -201,9 +180,11 @@ mod tests {
     }
 
     #[test]
-    fn an_already_bounded_image_passes_through_unchanged() {
+    fn an_already_bounded_image_is_unchanged_by_the_default_range() {
         let clamp = Clamp::new();
-        let image = Arc::new(Image { pixels: vec![10, 20, 30, 255], width: 1, height: 1, format: ImageFormat::Rgba8 });
+        let image = Arc::new(crate::graphics::U8Image {
+            pixels: vec![10, 20, 30, 255], width: 1, height: 1, format: crate::graphics::ImageFormat::Rgba8,
+        });
 
         let values = clamp
             .execute(&context(1, 1), &[(Input::Source, Value::Image(image.clone()))])
@@ -211,6 +192,28 @@ mod tests {
 
         match &values[0] {
             Value::Image(out) => assert_eq!(out.pixels, image.pixels),
+            other => panic!("expected an image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_custom_range_crushes_an_already_bounded_image_too() {
+        // Regression: CLAMP used to special-case an already-bounded Image
+        // as a free pass-through, which meant a narrowed MIN/MAX silently
+        // did nothing to it - only FloatImage input was ever actually
+        // clamped. CLAMP must apply MIN/MAX uniformly regardless of input.
+        let mut clamp = Clamp::new();
+        clamp.set_parameter("MIN", Value::Number(0.5)).unwrap();
+        let image = Arc::new(crate::graphics::U8Image {
+            pixels: vec![0, 255, 0, 255], width: 1, height: 1, format: crate::graphics::ImageFormat::Rgba8,
+        });
+
+        let values = clamp
+            .execute(&context(1, 1), &[(Input::Source, Value::Image(image))])
+            .unwrap();
+
+        match &values[0] {
+            Value::Image(out) => assert_eq!(out.pixels[0], 128), // 0 crushed up to MIN (0.5 * 255, rounded)
             other => panic!("expected an image, got {:?}", other),
         }
     }

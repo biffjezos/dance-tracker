@@ -12,7 +12,7 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
     Value,
 };
-use crate::graphics::{Frame, Image};
+use crate::graphics::FloatImage;
 
 /// Resampling algorithm for RESIZE. Only NEAREST_NEIGHBOR exists today - the
 /// enum and the single-entry options list both exist already so adding
@@ -69,9 +69,14 @@ impl Resize {
     /// Nearest-neighbor resample of an RGBA buffer, scaled `scale_x`/`scale_y`
     /// percent around the frame's own center. Pixels whose inverse-mapped
     /// source coordinate falls outside the original frame come out as
-    /// transparent black (all-zero), not clamped to the edge.
-    pub fn resize_pixels(pixels: &[u8], width: u32, height: u32, scale_x: f64, scale_y: f64) -> Vec<u8> {
-        let mut output = vec![0u8; pixels.len()];
+    /// transparent black (all-zero/all-default), not clamped to the edge.
+    ///
+    /// Generic over the pixel element type (u8 or f32) - resampling is pure
+    /// copying, no arithmetic on channel values, so there's nothing here
+    /// that could ever produce an out-of-gamut result or need clamping
+    /// either way; converting to float first would just be wasted work.
+    pub fn resize_pixels<T: Copy + Default>(pixels: &[T], width: u32, height: u32, scale_x: f64, scale_y: f64) -> Vec<T> {
+        let mut output = vec![T::default(); pixels.len()];
 
         let cx = width as f64 / 2.0;
         let cy = height as f64 / 2.0;
@@ -138,7 +143,7 @@ impl Operation for Resize {
             // at any scale != 100% - there's no single pixel-for-pixel
             // identity to blend a mask against here.
             inputs: vec![Input::Source],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -198,39 +203,16 @@ impl Operation for Resize {
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
-            return Ok(vec![Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))]);
+            return Ok(vec![Value::Image(crate::graphics::U8Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
 
-        match value {
-            Value::Frame(frame) => Ok(vec![Value::Frame(Arc::new(Frame {
-                pixels: Self::resize_pixels(&frame.pixels, frame.width, frame.height, self.scale_x, self.scale_y),
-                width: frame.width,
-                height: frame.height,
-                timestamp: frame.timestamp,
-            }))]),
+        let source = FloatImage::from_value(value, ctx)?;
 
-            Value::Image(image) => Ok(vec![Value::Image(Arc::new(Image {
-                pixels: Self::resize_pixels(&image.pixels, image.width, image.height, self.scale_x, self.scale_y),
-                width: image.width,
-                height: image.height,
-                format: image.format,
-            }))]),
-
-            Value::Video(video) => {
-                let image = video.frame_at(ctx.meta.time)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: Self::resize_pixels(&image.pixels, image.width, image.height, self.scale_x, self.scale_y),
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            other => Err(OperationError::InvalidInputType(format!(
-                "Resize cannot process {:?}",
-                other
-            ))),
-        }
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
+            pixels: Self::resize_pixels(&source.pixels, source.width, source.height, self.scale_x, self.scale_y),
+            width: source.width,
+            height: source.height,
+        }))])
     }
 }
 

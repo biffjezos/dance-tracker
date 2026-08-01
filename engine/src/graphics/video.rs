@@ -1,23 +1,23 @@
 use std::sync::Arc;
 
 use crate::compositor::OperationError;
-use crate::graphics::Image;
+use crate::graphics::U8Image;
 
 #[derive(Clone, Debug)]
 pub struct Video {
-    pub frames: Vec<Arc<Image>>,
+    pub frames: Vec<Arc<U8Image>>,
     pub fps: f32,
 }
 
 impl Video {
-    pub fn new(frames: Vec<Arc<Image>>, fps: f32) -> Self {
+    pub fn new(frames: Vec<Arc<U8Image>>, fps: f32) -> Self {
         Self {
             frames,
             fps,
         }
     }
 
-    pub fn frame_at(&self, time: f64) -> Result<Arc<Image>, OperationError> {
+    pub fn frame_at(&self, time: f64) -> Result<Arc<U8Image>, OperationError> {
         if self.frames.is_empty() {
             return Err(OperationError::SourceNotFound(
                 "Video contains no frames".to_string()

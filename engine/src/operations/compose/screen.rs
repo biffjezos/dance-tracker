@@ -12,11 +12,13 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind},
     Value,
 };
-use crate::graphics::{Image, ImageFormat};
+use crate::graphics::FloatImage;
 
 /// Screen operation - the inverse of Multiply (Screen(A,B) =
 /// Invert(Multiply(Invert(A), Invert(B)))), computed directly rather than
-/// through three passes.
+/// through three passes. Unclamped, same as Multiply/Add/Subtract - see
+/// their own doc comments for why. Both inputs accept a bounded Image or
+/// an already-unbounded FloatImage alike (via FloatImage::from_value).
 pub struct Screen;
 
 impl Screen {
@@ -24,9 +26,9 @@ impl Screen {
         Self
     }
 
-    /// Screen two RGBA pixel buffers channel by channel.
-    pub fn screen_pixels(a: &[u8], b: &[u8]) -> Vec<u8> {
-        let mut output = vec![0u8; a.len()];
+    /// Screen two RGBA pixel buffers channel by channel - NOT clamped.
+    pub fn screen_pixels(a: &[f32], b: &[f32]) -> Vec<f32> {
+        let mut output = vec![0f32; a.len()];
 
         for ((source_a, source_b), target) in a
             .chunks_exact(4)
@@ -34,32 +36,13 @@ impl Screen {
             .zip(output.chunks_exact_mut(4))
         {
             for channel in 0..4 {
-                let inv_a = 255 - source_a[channel] as u16;
-                let inv_b = 255 - source_b[channel] as u16;
-                target[channel] = 255 - ((inv_a * inv_b) / 255) as u8;
+                let inv_a = 1.0 - source_a[channel];
+                let inv_b = 1.0 - source_b[channel];
+                target[channel] = 1.0 - inv_a * inv_b;
             }
         }
 
         output
-    }
-
-    fn image_from_value(value: &Value, ctx: &Context) -> Result<Arc<Image>, OperationError> {
-        match value {
-            Value::Image(image) => Ok(image.clone()),
-
-            Value::Frame(frame) => Ok(Arc::new(Image {
-                pixels: frame.pixels.clone(),
-                width: frame.width,
-                height: frame.height,
-                format: ImageFormat::Rgba8,
-            })),
-
-            Value::Video(video) => Ok(video.frame_at(ctx.meta.time)?),
-
-            other => Err(OperationError::InvalidInputType(
-                format!("Screen cannot read {:?}", other)
-            )),
-        }
     }
 }
 
@@ -97,7 +80,7 @@ impl Operation for Screen {
             // Identity (MASK=0) is Foreground unmodified - see add.rs's
             // metadata() for why Foreground and not Background.
             inputs: vec![Input::Foreground, Input::Background, Input::Mask],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -122,8 +105,8 @@ impl Operation for Screen {
             return Err(OperationError::InvalidInputType("Screen requires second input".into()));
         };
 
-        let first_image = Self::image_from_value(first, ctx)?;
-        let second_image = Self::image_from_value(second, ctx)?;
+        let first_image = FloatImage::from_value(first, ctx)?;
+        let second_image = FloatImage::from_value(second, ctx)?;
 
         if first_image.width != second_image.width || first_image.height != second_image.height {
             return Err(OperationError::InvalidInputType(
@@ -138,11 +121,10 @@ impl Operation for Screen {
         let screened = Self::screen_pixels(&first_image.pixels, &second_image.pixels);
         let screened = crate::graphics::apply_mask(&first_image.pixels, screened, mask.as_ref(), first_image.width, first_image.height)?;
 
-        Ok(vec![Value::Image(Arc::new(Image {
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels: screened,
             width: first_image.width,
             height: first_image.height,
-            format: first_image.format,
         }))])
     }
 }
@@ -164,8 +146,19 @@ mod tests {
         }
     }
 
-    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
-        Arc::new(Image { pixels, width, height, format: ImageFormat::Rgba8 })
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<crate::graphics::U8Image> {
+        Arc::new(crate::graphics::U8Image { pixels, width, height, format: crate::graphics::ImageFormat::Rgba8 })
+    }
+
+    fn float_pixels(pixels: Vec<u8>) -> Vec<f32> {
+        FloatImage::from_image(&image(pixels, 1, 1)).pixels
+    }
+
+    fn as_u8_pixels(value: &Value) -> Vec<u8> {
+        match value {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels,
+            other => panic!("expected a float image, got {:?}", other),
+        }
     }
 
     #[test]
@@ -174,41 +167,45 @@ mod tests {
         // convention), so "black" here means every channel including
         // alpha is 0 - a channel left at 255 would screen as that
         // channel's own "white" case instead.
-        let black = image(vec![0, 0, 0, 0], 1, 1);
+        let black = float_pixels(vec![0, 0, 0, 0]);
         let color = image(vec![10, 20, 30, 200], 1, 1);
 
-        let out = Screen::screen_pixels(&black.pixels, &color.pixels);
+        let out = Screen::screen_pixels(&black, &FloatImage::from_image(&color).pixels);
+        let out = FloatImage { pixels: out, width: 1, height: 1 }.to_image_clamped(0.0, 1.0);
 
-        assert_eq!(out, color.pixels);
+        assert_eq!(out.pixels, color.pixels);
     }
 
     #[test]
     fn screening_with_white_is_white() {
-        let white = image(vec![255, 255, 255, 255], 1, 1);
+        let white = float_pixels(vec![255, 255, 255, 255]);
         let color = image(vec![10, 20, 30, 200], 1, 1);
 
-        let out = Screen::screen_pixels(&white.pixels, &color.pixels);
+        let out = Screen::screen_pixels(&white, &FloatImage::from_image(&color).pixels);
+        let out = FloatImage { pixels: out, width: 1, height: 1 }.to_image_clamped(0.0, 1.0);
 
-        assert_eq!(out, vec![255, 255, 255, 255]);
+        assert_eq!(out.pixels, vec![255, 255, 255, 255]);
     }
 
     #[test]
     fn screen_is_invert_multiply_invert() {
         use crate::operations::compose::Multiply;
 
-        let a = image(vec![80, 150, 30, 255], 1, 1);
-        let b = image(vec![200, 10, 90, 255], 1, 1);
+        let a = float_pixels(vec![80, 150, 30, 255]);
+        let b = float_pixels(vec![200, 10, 90, 255]);
 
-        let direct = Screen::screen_pixels(&a.pixels, &b.pixels);
+        let direct = Screen::screen_pixels(&a, &b);
 
         use crate::operations::transform::Invert;
 
-        let inv_a = Invert::invert_pixels(&a.pixels);
-        let inv_b = Invert::invert_pixels(&b.pixels);
+        let inv_a = Invert::invert_pixels(&a);
+        let inv_b = Invert::invert_pixels(&b);
         let multiplied = Multiply::multiply_pixels(&inv_a, &inv_b);
         let via_identity = Invert::invert_pixels(&multiplied);
 
-        assert_eq!(direct, via_identity);
+        for (x, y) in direct.iter().zip(via_identity.iter()) {
+            assert!((x - y).abs() < 0.001);
+        }
     }
 
     #[test]
@@ -222,10 +219,7 @@ mod tests {
             .execute(&context(1, 1), &[(Input::Foreground, fg), (Input::Background, bg)])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, vec![10, 20, 30, 255]),
-            other => panic!("expected image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), vec![10, 20, 30, 255]);
     }
 
     #[test]
@@ -243,9 +237,6 @@ mod tests {
             ])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, fg.pixels),
-            other => panic!("expected image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), fg.pixels);
     }
 }

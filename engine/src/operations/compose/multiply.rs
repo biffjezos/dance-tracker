@@ -11,9 +11,16 @@ use crate::compositor::{
     metadata::{ OperationCategory, OperationMetadata, OutputKind },
     Value,
 };
-use crate::graphics::{Image, ImageFormat};
+use crate::graphics::FloatImage;
 
-/// Multiply operation - multiplies RGBA channels from two inputs pixel by pixel.
+/// Multiply operation - multiplies RGBA channels from two inputs pixel by
+/// pixel, unclamped: given two in-gamut (0.0..1.0) inputs the result can
+/// never exceed either one, but multiplying an already out-of-gamut value
+/// (e.g. 1.5 from an ADD result) correctly stays out of gamut (1.5 * 1.5 =
+/// 2.25), not silently reclamped mid-calculation. Both inputs accept a
+/// bounded Image or an already-unbounded FloatImage alike (via
+/// FloatImage::from_value), so chaining another compose op's output
+/// straight into Multiply works without an intervening CLAMP.
 pub struct Multiply;
 
 impl Multiply {
@@ -21,47 +28,23 @@ impl Multiply {
         Self
     }
 
-    /// Multiply two RGBA pixel buffers channel by channel.
-    /// Values are normalized back to 0-255.
-    pub fn multiply_pixels(a: &[u8], b: &[u8]) -> Vec<u8> {
-        let mut output = vec![0u8; a.len()];
+    /// Multiply two RGBA pixel buffers channel by channel - NOT clamped.
+    /// See this module's own doc comment for why.
+    pub fn multiply_pixels(a: &[f32], b: &[f32]) -> Vec<f32> {
+        let mut output = vec![0f32; a.len()];
 
         for ((source_a, source_b), target) in a
             .chunks_exact(4)
             .zip(b.chunks_exact(4))
             .zip(output.chunks_exact_mut(4))
         {
-            target[0] = ((source_a[0] as u16 * source_b[0] as u16) / 255) as u8;
-            target[1] = ((source_a[1] as u16 * source_b[1] as u16) / 255) as u8;
-            target[2] = ((source_a[2] as u16 * source_b[2] as u16) / 255) as u8;
-            target[3] = ((source_a[3] as u16 * source_b[3] as u16) / 255) as u8;
+            target[0] = source_a[0] * source_b[0];
+            target[1] = source_a[1] * source_b[1];
+            target[2] = source_a[2] * source_b[2];
+            target[3] = source_a[3] * source_b[3];
         }
 
         output
-    }
-
-    fn image_from_value(
-        value: &Value,
-        ctx: &Context,
-    ) -> Result<Arc<Image>, OperationError> {
-        match value {
-            Value::Image(image) => Ok(image.clone()),
-
-            Value::Frame(frame) => Ok(Arc::new(Image {
-                pixels: frame.pixels.clone(),
-                width: frame.width,
-                height: frame.height,
-                format: ImageFormat::Rgba8,
-            })),
-
-            Value::Video(video) => {
-                Ok(video.frame_at(ctx.meta.time)?)
-            }
-
-            other => Err(OperationError::InvalidInputType(
-                format!("Multiply cannot read {:?}", other)
-            )),
-        }
     }
 }
 
@@ -98,7 +81,7 @@ impl Operation for Multiply {
                  Input::Background,
                  Input::Mask
             ],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -136,8 +119,8 @@ impl Operation for Multiply {
             ));
         };
 
-        let first_image = Self::image_from_value(first, ctx)?;
-        let second_image = Self::image_from_value(second, ctx)?;
+        let first_image = FloatImage::from_value(first, ctx)?;
+        let second_image = FloatImage::from_value(second, ctx)?;
 
         if first_image.width != second_image.width ||
            first_image.height != second_image.height {
@@ -163,11 +146,10 @@ impl Operation for Multiply {
         )?;
 
         Ok(vec![
-            Value::Image(Arc::new(Image {
+            Value::FloatImage(Arc::new(FloatImage {
                 pixels: multiplied,
                 width: first_image.width,
                 height: first_image.height,
-                format: first_image.format,
             }))
         ])
     }
@@ -195,33 +177,60 @@ mod tests {
         }
     }
 
-    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
-        Arc::new(Image {
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<crate::graphics::U8Image> {
+        Arc::new(crate::graphics::U8Image {
             pixels,
             width,
             height,
-            format: ImageFormat::Rgba8,
+            format: crate::graphics::ImageFormat::Rgba8,
         })
+    }
+
+    fn float_pixels(pixels: Vec<u8>) -> Vec<f32> {
+        FloatImage::from_image(&image(pixels, 1, 1)).pixels
+    }
+
+    fn as_u8_pixels(value: &Value) -> Vec<u8> {
+        match value {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels,
+            other => panic!("expected a float image, got {:?}", other),
+        }
     }
 
     #[test]
     fn multiplying_by_white_is_identity() {
-        let white = image(vec![255, 255, 255, 255], 1, 1);
+        let white = float_pixels(vec![255, 255, 255, 255]);
         let color = image(vec![10, 20, 30, 200], 1, 1);
 
-        let out = Multiply::multiply_pixels(&white.pixels, &color.pixels);
+        let out = Multiply::multiply_pixels(&white, &FloatImage::from_image(&color).pixels);
+        let out = FloatImage { pixels: out, width: 1, height: 1 }.to_image_clamped(0.0, 1.0);
 
-        assert_eq!(out, color.pixels);
+        assert_eq!(out.pixels, color.pixels);
     }
 
     #[test]
     fn multiplying_by_black_is_black() {
-        let black = image(vec![0, 0, 0, 255], 1, 1);
+        let black = float_pixels(vec![0, 0, 0, 255]);
         let color = image(vec![10, 20, 30, 200], 1, 1);
 
-        let out = Multiply::multiply_pixels(&black.pixels, &color.pixels);
+        let out = Multiply::multiply_pixels(&black, &FloatImage::from_image(&color).pixels);
+        let out = FloatImage { pixels: out, width: 1, height: 1 }.to_image_clamped(0.0, 1.0);
 
-        assert_eq!(out, vec![0, 0, 0, 200]);
+        assert_eq!(out.pixels, vec![0, 0, 0, 200]);
+    }
+
+    #[test]
+    fn multiplying_two_out_of_gamut_values_stays_out_of_gamut() {
+        // Regression: MULTIPLY used to only accept a bounded
+        // Image/Frame/Video and clamp inline via u16/255 math - both
+        // of which broke once a compose op's own output (FloatImage)
+        // could be wired straight into it.
+        let a = vec![1.5f32, 1.5, 1.5, 1.0];
+        let b = vec![1.5f32, 1.5, 1.5, 1.0];
+
+        let out = Multiply::multiply_pixels(&a, &b);
+
+        assert!((out[0] - 2.25).abs() < 0.001);
     }
 
     #[test]
@@ -249,10 +258,7 @@ mod tests {
             .execute(&context(1, 1), &[(Input::Foreground, fg), (Input::Background, bg)])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, vec![10, 20, 30, 255]),
-            other => panic!("expected image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), vec![10, 20, 30, 255]);
     }
 
     #[test]
@@ -270,10 +276,7 @@ mod tests {
             ])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, fg.pixels),
-            other => panic!("expected image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), fg.pixels);
     }
 
     #[test]

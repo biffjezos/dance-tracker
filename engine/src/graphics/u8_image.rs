@@ -3,24 +3,24 @@ use std::sync::Arc;
 use super::color::Color;
 
 #[derive(Debug, Clone)]
-pub struct Image {
+pub struct U8Image {
     pub pixels: Vec<u8>,
     pub width: u32,
     pub height: u32,
     pub format: ImageFormat,
 }
 
-impl Image {
+impl U8Image {
     /// An opaque black image, used when an operation has nothing wired
     /// into an input yet and needs a placeholder at the current resolution.
-    pub fn black(width: u32, height: u32) -> Arc<Image> {
+    pub fn black(width: u32, height: u32) -> Arc<U8Image> {
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
 
         for pixel in pixels.chunks_exact_mut(4) {
             pixel[3] = 255;
         }
 
-        Arc::new(Image {
+        Arc::new(U8Image {
             pixels,
             width,
             height,
@@ -34,7 +34,7 @@ impl Image {
     /// a mask-producing node, where there's nothing to key "removal"
     /// against, and a checker pattern is easy to mistake for real content
     /// when eyedropping a colour off the canvas).
-    pub fn solid(color: Color, width: u32, height: u32) -> Arc<Image> {
+    pub fn solid(color: Color, width: u32, height: u32) -> Arc<U8Image> {
         let rgba = color.to_rgba_u8();
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
 
@@ -42,7 +42,7 @@ impl Image {
             pixel.copy_from_slice(&rgba);
         }
 
-        Arc::new(Image {
+        Arc::new(U8Image {
             pixels,
             width,
             height,
@@ -59,7 +59,7 @@ impl Image {
     /// RESIZE's own out-of-bounds behaviour. Returns `self` unchanged
     /// (same Arc-worthy pixels, just re-wrapped) when the size already
     /// matches, so callers that cache by size can skip the no-op case.
-    pub fn contain_fit(&self, width: u32, height: u32) -> Image {
+    pub fn contain_fit(&self, width: u32, height: u32) -> U8Image {
         if self.width == width && self.height == height {
             return self.clone();
         }
@@ -67,7 +67,7 @@ impl Image {
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
 
         if self.width == 0 || self.height == 0 || width == 0 || height == 0 {
-            return Image { pixels, width, height, format: self.format };
+            return U8Image { pixels, width, height, format: self.format };
         }
 
         let scale = (width as f64 / self.width as f64).min(height as f64 / self.height as f64);
@@ -92,14 +92,14 @@ impl Image {
             }
         }
 
-        Image { pixels, width, height, format: self.format }
+        U8Image { pixels, width, height, format: self.format }
     }
 
     /// The classic compositing-app "missing" placeholder - a magenta/black
     /// checker - used instead of black when an operation's input isn't
     /// wired, so a never-connected or since-removed source is visibly
     /// obvious in the actual output, not just discoverable by opening EDIT.
-    pub fn missing(width: u32, height: u32) -> Arc<Image> {
+    pub fn missing(width: u32, height: u32) -> Arc<U8Image> {
         const TILE: u32 = 16;
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
 
@@ -116,7 +116,7 @@ impl Image {
             }
         }
 
-        Arc::new(Image {
+        Arc::new(U8Image {
             pixels,
             width,
             height,
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn contain_fit_returns_the_same_pixels_when_size_already_matches() {
-        let image = Image { pixels: vec![1, 2, 3, 4], width: 1, height: 1, format: ImageFormat::Rgba8 };
+        let image = U8Image { pixels: vec![1, 2, 3, 4], width: 1, height: 1, format: ImageFormat::Rgba8 };
         let fitted = image.contain_fit(1, 1);
         assert_eq!(fitted.pixels, image.pixels);
     }
@@ -180,7 +180,7 @@ mod tests {
     fn contain_fit_pillarboxes_a_narrower_image_into_a_wider_canvas() {
         // 1x1 opaque red into a 3x1 canvas - centered, with transparent
         // pillarbars on either side.
-        let image = Image { pixels: vec![255, 0, 0, 255], width: 1, height: 1, format: ImageFormat::Rgba8 };
+        let image = U8Image { pixels: vec![255, 0, 0, 255], width: 1, height: 1, format: ImageFormat::Rgba8 };
         let fitted = image.contain_fit(3, 1);
 
         assert_eq!(&fitted.pixels[0..4], &[0, 0, 0, 0]);
@@ -191,14 +191,14 @@ mod tests {
     #[test]
     fn solid_fills_every_pixel_with_the_given_opaque_colour() {
         let pink = Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };
-        let image = Image::solid(pink, 2, 1);
+        let image = U8Image::solid(pink, 2, 1);
         assert_eq!(image.pixels, vec![255, 0, 255, 255, 255, 0, 255, 255]);
     }
 
     #[test]
     fn fully_opaque_pixels_pass_through_unchanged() {
         let pixels = vec![10, 20, 30, 255];
-        let out = Image::composite_over_checker(&pixels, 1, 1);
+        let out = U8Image::composite_over_checker(&pixels, 1, 1);
         assert_eq!(out, vec![10, 20, 30, 255]);
     }
 
@@ -206,14 +206,14 @@ mod tests {
     fn fully_transparent_pixel_shows_the_checker_colour_underneath() {
         // (0,0) falls in the magenta tile.
         let pixels = vec![10, 20, 30, 0];
-        let out = Image::composite_over_checker(&pixels, 1, 1);
+        let out = U8Image::composite_over_checker(&pixels, 1, 1);
         assert_eq!(out, vec![255, 0, 255, 255]);
     }
 
     #[test]
     fn half_alpha_blends_toward_the_checker() {
         let pixels = vec![0, 0, 0, 128];
-        let out = Image::composite_over_checker(&pixels, 1, 1);
+        let out = U8Image::composite_over_checker(&pixels, 1, 1);
         // Blended toward magenta's red/blue channels, still fully opaque.
         assert_eq!(out[3], 255);
         assert!(out[0] > 0 && out[0] < 255);

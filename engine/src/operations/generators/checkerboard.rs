@@ -21,7 +21,7 @@ use crate::compositor::{
 
 use crate::graphics::{
     Color,
-    Image,
+    U8Image,
     ImageFormat,
 };
 
@@ -176,7 +176,7 @@ impl Operation for Checkerboard {
         _inputs: &[(Input, Value)],
     ) -> Result<Vec<Value>, OperationError> {
         Ok(vec![
-            Value::Image(Arc::new(Image {
+            Value::Image(Arc::new(U8Image {
                 pixels: self.generate(
                     ctx.meta.width,
                     ctx.meta.height,

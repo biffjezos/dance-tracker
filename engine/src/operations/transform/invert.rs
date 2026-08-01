@@ -12,13 +12,14 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor},
     Value,
 };
-use crate::graphics::{Frame, Image};
+use crate::graphics::FloatImage;
 
 /// Inverts every channel per pixel (1 - value), alpha included - matching
 /// Multiply's convention of treating all 4 channels uniformly, which keeps
 /// the blend-mode algebra exact (Screen(A,B) = Invert(Multiply(Invert(A),
 /// Invert(B)))). Useful on its own, and as a building block for other blend
-/// modes.
+/// modes. Unclamped: inverting an out-of-gamut value (e.g. 1.5, from an
+/// ADD result) correctly produces a negative one (-0.5), not 0.
 pub struct Invert;
 
 impl Invert {
@@ -26,8 +27,8 @@ impl Invert {
         Self
     }
 
-    pub fn invert_pixels(pixels: &[u8]) -> Vec<u8> {
-        pixels.iter().map(|channel| 255 - channel).collect()
+    pub fn invert_pixels(pixels: &[f32]) -> Vec<f32> {
+        pixels.iter().map(|channel| 1.0 - channel).collect()
     }
 }
 
@@ -63,7 +64,7 @@ impl Operation for Invert {
             display_name: "Invert",
             category: OperationCategory::Color,
             inputs: vec![Input::Source, Input::Mask],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -81,53 +82,23 @@ impl Operation for Invert {
 
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
-            return Ok(vec![Value::Image(Image::missing(ctx.meta.width, ctx.meta.height))]);
+            return Ok(vec![Value::Image(crate::graphics::U8Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
+
+        let source = FloatImage::from_value(value, ctx)?;
 
         let mask = find_input(inputs, Input::Mask)
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
-        match value {
-            Value::Frame(frame) => {
-                let inverted = Self::invert_pixels(&frame.pixels);
-                let inverted = crate::graphics::apply_mask(&frame.pixels, inverted, mask.as_ref(), frame.width, frame.height)?;
-                Ok(vec![Value::Frame(Arc::new(Frame {
-                    pixels: inverted,
-                    width: frame.width,
-                    height: frame.height,
-                    timestamp: frame.timestamp,
-                }))])
-            }
+        let inverted = Self::invert_pixels(&source.pixels);
+        let inverted = crate::graphics::apply_mask(&source.pixels, inverted, mask.as_ref(), source.width, source.height)?;
 
-            Value::Image(image) => {
-                let inverted = Self::invert_pixels(&image.pixels);
-                let inverted = crate::graphics::apply_mask(&image.pixels, inverted, mask.as_ref(), image.width, image.height)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: inverted,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            Value::Video(video) => {
-                let image = video.frame_at(ctx.meta.time)?;
-                let inverted = Self::invert_pixels(&image.pixels);
-                let inverted = crate::graphics::apply_mask(&image.pixels, inverted, mask.as_ref(), image.width, image.height)?;
-                Ok(vec![Value::Image(Arc::new(Image {
-                    pixels: inverted,
-                    width: image.width,
-                    height: image.height,
-                    format: image.format,
-                }))])
-            }
-
-            other => Err(OperationError::InvalidInputType(format!(
-                "Invert cannot process {:?}",
-                other
-            ))),
-        }
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
+            pixels: inverted,
+            width: source.width,
+            height: source.height,
+        }))])
     }
 }
 
@@ -140,7 +111,7 @@ inventory::submit! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphics::ImageFormat;
+    use crate::graphics::{ImageFormat, U8Image};
 
     fn context(width: u32, height: u32) -> Context {
         Context {
@@ -153,8 +124,8 @@ mod tests {
         }
     }
 
-    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
-        Arc::new(Image {
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<U8Image> {
+        Arc::new(U8Image {
             pixels,
             width,
             height,
@@ -162,19 +133,37 @@ mod tests {
         })
     }
 
+    fn as_u8_pixels(value: &Value) -> Vec<u8> {
+        match value {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels,
+            other => panic!("expected a float image, got {:?}", other),
+        }
+    }
+
     #[test]
     fn inverting_black_is_white() {
         let black = image(vec![0, 0, 0, 128], 1, 1);
-        let out = Invert::invert_pixels(&black.pixels);
-        assert_eq!(out, vec![255, 255, 255, 127]);
+        let out = Invert::invert_pixels(&FloatImage::from_image(&black).pixels);
+        let out = FloatImage { pixels: out, width: 1, height: 1 }.to_image_clamped(0.0, 1.0);
+        assert_eq!(out.pixels, vec![255, 255, 255, 127]);
     }
 
     #[test]
     fn inverting_twice_is_identity() {
         let color = image(vec![10, 200, 50, 255], 1, 1);
-        let once = Invert::invert_pixels(&color.pixels);
+        let start = FloatImage::from_image(&color).pixels;
+        let once = Invert::invert_pixels(&start);
         let twice = Invert::invert_pixels(&once);
-        assert_eq!(twice, color.pixels);
+        let twice = FloatImage { pixels: twice, width: 1, height: 1 }.to_image_clamped(0.0, 1.0);
+        assert_eq!(twice.pixels, color.pixels);
+    }
+
+    #[test]
+    fn inverting_an_out_of_gamut_value_goes_negative_not_to_zero() {
+        // 1.5 inverted is -0.5, a real negative value - not clamped to 0
+        // the way an 8-bit-only Invert would have to.
+        let out = Invert::invert_pixels(&[1.5]);
+        assert_eq!(out[0], -0.5);
     }
 
     #[test]
@@ -204,10 +193,7 @@ mod tests {
             ])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, input.pixels),
-            other => panic!("expected image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), input.pixels);
     }
 
     #[test]
@@ -223,9 +209,6 @@ mod tests {
             ])
             .unwrap();
 
-        match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, vec![245, 55, 205, 0]),
-            other => panic!("expected image, got {:?}", other),
-        }
+        assert_eq!(as_u8_pixels(&values[0]), vec![245, 55, 205, 0]);
     }
 }
