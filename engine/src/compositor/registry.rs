@@ -35,15 +35,29 @@ impl OperationRegistry {
         registry
     }
 
+    /// Register a constructor whose descriptor/category aren't known yet -
+    /// constructs one throwaway instance to ask.
     pub fn register(
         &mut self,
         constructor: fn() -> Box<dyn Operation>,
     ) {
         let operation = constructor();
+        self.register_with(constructor, operation.descriptor(), operation.metadata().category);
+    }
 
+    /// Register a constructor whose descriptor/category are already known
+    /// (e.g. inventory already constructed one instance of its own to
+    /// build its cached list) - skips constructing a second throwaway
+    /// instance just to ask the same two questions again.
+    pub fn register_with(
+        &mut self,
+        constructor: fn() -> Box<dyn Operation>,
+        descriptor: OperationDescriptor,
+        category: OperationCategory,
+    ) {
         self.operations.push(RegisteredOperation {
-            descriptor: operation.descriptor(),
-            category: operation.metadata().category,
+            descriptor,
+            category,
             constructor,
         });
     }

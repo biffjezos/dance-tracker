@@ -7,14 +7,13 @@ CAMERA ENGINE
 
 import { logger } from "../core/log.js";
 
+// Module-level singleton: app.js constructs exactly one Camera at boot,
+// and getCamera() below is how everyone else (features/video.js) reaches
+// that same instance - there is only ever one call site for `new Camera()`.
 let cameraInstance = null;
 
 export class Camera {
     constructor(settings, video) {
-        if (cameraInstance) {
-            return cameraInstance;
-        }
-
         this.settings = settings;
         this.video = video || document.getElementById("camera");
         this.stream = null;
