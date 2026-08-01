@@ -75,6 +75,7 @@ impl Operation for Add {
             action: None,
             ui_action: None,
             create_node: Some("add"),
+            submenu: None,
         }
     }
 

@@ -75,6 +75,7 @@ impl Operation for Multiply {
             action: None,
             ui_action: None,
             create_node: Some("multiply"),
+            submenu: None,
         }
     }
 

@@ -28,6 +28,7 @@ class MenuContext {
         this.parent = parent;
         this.opId = null; // For create_node context, stores the operation ID
         this.group = null; // For param_group context, stores the group name
+        this.submenu = null; // Within a menu's operation list, the active op.submenu name (if drilled into one)
     }
 }
 
@@ -532,6 +533,13 @@ export class MenuManager {
     // The fallback for any context not in CONTEXT_HANDLERS - a normal
     // operation-category menu (INPUT, KEY, GENERATE, ...), rendered
     // entirely from get_operations() with no per-category code anywhere.
+    //
+    // Within that, an operation may declare a submenu (op.submenu, e.g.
+    // "SPECTRA") for a second level of navigation under its menu - purely
+    // presentational grouping the operation itself opts into, same idea as
+    // a parameter's `group` in nodeEditContexts.js. Operations with no
+    // submenu render as direct buttons regardless, so a menu with none of
+    // its operations opted in renders exactly as before this existed.
     renderOperationList() {
         if (this.currentContext && this.currentContext.parent !== null) {
             this.renderUpButton();
@@ -558,7 +566,47 @@ export class MenuManager {
             return;
         }
 
+        const activeSubmenu = this.currentContext && this.currentContext.submenu;
+
+        // Already drilled into a submenu - show only its operations, no
+        // further nesting.
+        if (activeSubmenu) {
+            this.renderOperationButtons(filteredOps.filter(op => op.submenu === activeSubmenu));
+            return;
+        }
+
+        // Top level: operations with no submenu render directly; each
+        // distinct submenu name among the rest collapses into one
+        // "<NAME> >" button that drills in, exactly the same push/pop
+        // pattern as enterParameterGroup()/param_group below.
+        const submenuNames = [];
         filteredOps.forEach(op => {
+            if (op.submenu && !submenuNames.includes(op.submenu)) {
+                submenuNames.push(op.submenu);
+            }
+        });
+
+        submenuNames.forEach(name => {
+            const button = document.createElement("button");
+            button.innerText = `${name} >`;
+            button.onclick = () => {
+                const submenuContext = new MenuContext(this.category, this.currentContext);
+                submenuContext.submenu = name;
+                this.currentContext = submenuContext;
+                this.render();
+                this.updateStatusBar();
+            };
+            this.subMenu.appendChild(button);
+        });
+
+        this.renderOperationButtons(filteredOps.filter(op => !op.submenu));
+    }
+
+    // One button per operation - triggers its create_node flow or
+    // dispatches its ui_action/action. Shared by the top level of
+    // renderOperationList() and its submenu drill-in.
+    renderOperationButtons(ops) {
+        ops.forEach(op => {
             const button = document.createElement("button");
             button.innerText = op.label || op.name || op;
 

@@ -59,6 +59,7 @@ impl Operation for VideoSource {
             action: None,
             ui_action: Some("open_video_picker"),
             create_node: None,
+            submenu: None,
         }
     }
 

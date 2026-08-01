@@ -94,6 +94,7 @@ impl Operation for HueKey {
             action: None,
             ui_action: None,
             create_node: Some("hue_key"),
+            submenu: None,
         }
     }
 

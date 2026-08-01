@@ -74,6 +74,7 @@ impl Operation for Subtract {
             action: None,
             ui_action: None,
             create_node: Some("subtract"),
+            submenu: None,
         }
     }
 

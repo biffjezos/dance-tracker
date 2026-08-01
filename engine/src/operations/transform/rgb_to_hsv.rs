@@ -101,6 +101,7 @@ impl Operation for RgbToHsv {
             action: None,
             ui_action: None,
             create_node: Some("rgb_to_hsv"),
+            submenu: Some("SPECTRA"),
         }
     }
 
