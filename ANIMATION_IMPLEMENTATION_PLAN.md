@@ -12,12 +12,16 @@ next one's prerequisite work is already done:
 
 1. Phase A - cheap animation-logic operations (Lissajous + 2-3 more), unwired.
 2. Phase B - TEXT/GHOST/RING generators, usable standalone.
-3. Phase C - the parameter-wiring mechanism that connects A's outputs to B's (or any operation's) parameters.
+3. MIX - a new COMPOSE-menu crossfade operation, prerequisite for Phase C
+   (see its own section below for why).
+4. Phase C - the parameter-wiring mechanism that connects A's outputs to
+   MIX's (or any operation's) Number parameters.
 
 Phase A and B have no dependency on each other and can be built in either
 order or in parallel; both must exist before Phase C is useful (nothing to
 wire yet otherwise), though Phase C's own engine work doesn't technically
-require A or B to exist first if you want to build it earlier.
+require A or B to exist first if you want to build it earlier. MIX has no
+dependency on A or B either, but should land before Phase C - see below.
 
 ---
 
@@ -361,6 +365,67 @@ a time lag. There is no frame-feedback/persistence involved at all.
      out-of-gamut value can still be out of gamut" behaviour
      `mask.rs`'s own tests already establish as correct, not a new case
      to special-case here.
+
+---
+
+## MIX - a crossfade operation, prerequisite for Phase C
+
+**Why this exists:** surveying every real operation in the tree (see the
+conversation this plan was drafted from) found that roughly half of
+them - `MULTIPLY`, `ADD`, `SCREEN`, `SUBTRACT`, `INVERT`, `RGB_TO_HSV`,
+`SHUFFLE`, `IMAGE`/`VIDEO`/`CAMERA` sources - have **zero** eligible
+`Number`-kind parameters, i.e. nothing Phase C's wiring mechanism could
+ever attach to. MIX sidesteps that entirely: it doesn't matter whether
+the two things it's blending have any parameters of their own, because
+MIX supplies exactly one, purpose-built for animation to drive.
+
+**Not a revival of the old "no MIX node" decision.** Commit `d472e0e`
+("Add a generic MASK input, no MIX node") solved a different problem -
+modulating *one operation's own effect strength* using another node's
+alpha as a per-pixel weight (already covered by the generic `MASK`
+input). MIX is a different capability: crossfading between **two
+independent pixel sources** by a single uniform amount. Nothing in the
+tree does that today.
+
+**Spec:**
+- `descriptor()`: `menu: "COMPOSE"`. `metadata()`: `category:
+  OperationCategory::Composite`, `inputs: vec![Input::Foreground,
+  Input::Background]` (both required - error like `Screen` does if
+  either is missing), `outputs: vec![OutputKind::FloatImage]`.
+- Exactly one parameter: `AMOUNT` - `ParameterKind::Number { step: 0.01,
+  min: Some(0.0), max: Some(1.0) }`. Clamped in `set_parameter`, same
+  reasoning as `GHOST`'s `OPACITY_MULTIPLIER` and `apply_mask`'s mask
+  weight: this is a blend weight, not a light value, so an out-of-range
+  value has no sensible meaning to preserve the way an out-of-gamut
+  colour does (see the alpha-clamping discussion earlier in this
+  session, and `PIXEL_CONVENTIONS.md`'s alpha section).
+- `execute()`: resolve `Foreground`/`Background` via
+  `FloatImage::from_value`, check matching dimensions (mirror `Screen`'s
+  check, same error), then per pixel, **all four channels uniformly**
+  (matching `Add`/`Multiply`/`Screen`'s existing convention - this is a
+  plain crossfade, not `GHOST`'s alpha-aware Porter-Duff "over", so it
+  does not need a dedicated alpha formula the way `GHOST`'s compositing
+  step did):
+  `output[c] = foreground[c] * (1.0 - amount) + background[c] * amount`
+  for `c` in `0..4`.
+- No extra gamut-safety logic needed, same reasoning as `GHOST`'s
+  alpha-over helper: this is a convex combination weighted by an
+  already-clamped `0.0..1.0` amount, so it cannot introduce an
+  out-of-gamut result on its own - inputs that are already out-of-gamut
+  can still carry through, which is correct, established behaviour, not
+  a new case.
+- Tests: `amount_zero_is_pure_foreground`, `amount_one_is_pure_background`,
+  `amount_half_averages_both_inputs`, `set_parameter_rejects_an_amount_above_one`,
+  `execute_errors_on_mismatched_dimensions`, `mix_in_graph_requires_both_inputs`
+  (mirror `Screen`'s and `Multiply`'s existing test shapes).
+
+**Worked example** (also see the node-flow diagram and pixel-level walk-
+through in the conversation this plan was drafted from): two `RING`
+nodes at different static `RADIUS` values wired into `MIX`'s
+`Foreground`/`Background`, with `MIX.AMOUNT` driven by `SINE` (once
+Phase C exists) - the render smoothly crossfades between "small ring
+visible" and "large ring visible" without either `RING` node's own
+`RADIUS` ever being touched.
 
 ---
 
