@@ -22,30 +22,18 @@ use crate::graphics::{Color, U8Image, ImageFormat};
 
 /// Concentric rings, sized like Saturn's rings: RADIUS is the outer
 /// edge of the whole set, SPACING is the gap between consecutive rings,
-/// THICKNESS is the (uniform) stroke width of every ring. Each ring
-/// gets its own colour via RING_SELECTOR (bounded by the live COUNT) +
-/// RING_COLOR, in a "COLOUR" parameter group - the same deep-menu
-/// mechanism Checkerboard's A/B colours already use, just with an index
-/// selector instead of two fixed named colours.
-///
-/// PULSATE_AMPLITUDE/SPEED/DELAY (own "PULSATE" group) are RING's own
-/// built-in animation, not something PATCH can drive: PATCH can only
-/// ever inject a single shared value into a *whole* parameter (RADIUS,
-/// SPACING, ...), but a travelling wave - each ring peaking in size at
-/// a different moment, one after another - needs a per-ring offset
-/// RING computes internally in `ring_radius`, from its own
-/// `is_live()` clock, not a value PATCH could hand it from the outside.
-/// PULSATE_AMPLITUDE defaults to 0.0 (off, no visual change) - PULSATE_
-/// SPEED/DELAY's own defaults only ever matter once amplitude is turned
-/// up.
+/// THICKNESS is the (uniform) stroke width of every ring. Static - no
+/// time dependency, no `is_live()` - purely a function of its own
+/// parameters, same as Checkerboard. Each ring gets its own colour via
+/// RING_SELECTOR (bounded by the live COUNT) + RING_COLOR, in a
+/// "COLOUR" parameter group - the same deep-menu mechanism
+/// Checkerboard's A/B colours already use, just with an index selector
+/// instead of two fixed named colours.
 pub struct Ring {
     pub count: usize,
     pub radius: f64,
     pub spacing: f64,
     pub thickness: f64,
-    pub pulsate_amplitude: f64,
-    pub pulsate_speed: f64,
-    pub pulsate_delay: f64,
     selected_ring: usize, // 1-based, always in 1..=count
     colors: Vec<Color>,   // always exactly `count` long
 }
@@ -57,9 +45,6 @@ impl Ring {
             radius: 64.0,
             spacing: 16.0,
             thickness: 4.0,
-            pulsate_amplitude: 0.0,
-            pulsate_speed: 1.0,
-            pulsate_delay: 0.15,
             selected_ring: 1,
             colors: vec![Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }],
         }
@@ -84,27 +69,13 @@ impl Ring {
         self.selected_ring = self.selected_ring.min(self.count);
     }
 
-    /// Ring `n`'s (1-based) own radius at a given moment - ring 1 is
-    /// outermost, at `RADIUS`; each subsequent ring sits `SPACING`
-    /// further in. When PULSATE_AMPLITUDE is 0 (the default), this is
-    /// exactly the old static formula regardless of `time`, since the
-    /// oscillation term multiplies out to zero.
-    ///
-    /// The wave travels from the innermost ring (n = COUNT) outward to
-    /// the outermost (n = 1): the innermost ring uses `time` directly
-    /// (leads), and each ring further out samples the sine at an
-    /// increasingly earlier point in time (lags behind), so its own
-    /// peak visibly arrives later in real time than the ring just
-    /// inside it.
-    fn ring_radius(&self, ring_number: usize, time: f64) -> f64 {
-        let base = self.radius - (ring_number as f64 - 1.0) * self.spacing;
-        let steps_from_innermost = self.count as f64 - ring_number as f64;
-        let effective_time = time - steps_from_innermost * self.pulsate_delay;
-        let oscillation = (std::f64::consts::TAU * self.pulsate_speed * effective_time).sin();
-        base + self.pulsate_amplitude * oscillation
+    /// Ring `n`'s (1-based) own radius - ring 1 is outermost, at
+    /// `RADIUS`; each subsequent ring sits `SPACING` further in.
+    fn ring_radius(&self, ring_number: usize) -> f64 {
+        self.radius - (ring_number as f64 - 1.0) * self.spacing
     }
 
-    pub fn generate(&self, width: u32, height: u32, time: f64) -> Vec<u8> {
+    pub fn generate(&self, width: u32, height: u32) -> Vec<u8> {
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
 
         let cx = width as f64 / 2.0;
@@ -120,7 +91,7 @@ impl Ring {
                 let index = ((y * width + x) * 4) as usize;
 
                 for ring_number in 1..=self.count {
-                    let ring_radius = self.ring_radius(ring_number, time);
+                    let ring_radius = self.ring_radius(ring_number);
                     if ring_radius < 0.0 {
                         continue;
                     }
@@ -205,21 +176,6 @@ impl Operation for Ring {
                 kind: ParameterKind::Color,
                 group: Some("COLOUR"),
             },
-            ParameterDescriptor {
-                name: "PULSATE_AMPLITUDE",
-                kind: ParameterKind::Number { step: 1.0, min: Some(0.0), max: None },
-                group: Some("PULSATE"),
-            },
-            ParameterDescriptor {
-                name: "PULSATE_SPEED",
-                kind: ParameterKind::Number { step: 0.1, min: Some(0.0), max: None },
-                group: Some("PULSATE"),
-            },
-            ParameterDescriptor {
-                name: "PULSATE_DELAY",
-                kind: ParameterKind::Number { step: 0.05, min: Some(0.0), max: None },
-                group: Some("PULSATE"),
-            },
         ]
     }
 
@@ -231,9 +187,6 @@ impl Operation for Ring {
             "THICKNESS" => Some(Value::Number(self.thickness)),
             "RING_SELECTOR" => Some(Value::Number(self.selected_ring as f64)),
             "RING_COLOR" => Some(Value::Color(self.colors[self.selected_ring - 1])),
-            "PULSATE_AMPLITUDE" => Some(Value::Number(self.pulsate_amplitude)),
-            "PULSATE_SPEED" => Some(Value::Number(self.pulsate_speed)),
-            "PULSATE_DELAY" => Some(Value::Number(self.pulsate_delay)),
             _ => None,
         }
     }
@@ -281,46 +234,14 @@ impl Operation for Ring {
                 self.colors[index] = color;
                 Ok(())
             }
-            ("PULSATE_AMPLITUDE", Value::Number(v)) => {
-                if v < 0.0 {
-                    return Err(OperationError::InvalidParameterValue(name.to_string(), v.to_string()));
-                }
-                self.pulsate_amplitude = v;
-                Ok(())
-            }
-            ("PULSATE_SPEED", Value::Number(v)) => {
-                if v < 0.0 {
-                    return Err(OperationError::InvalidParameterValue(name.to_string(), v.to_string()));
-                }
-                self.pulsate_speed = v;
-                Ok(())
-            }
-            ("PULSATE_DELAY", Value::Number(v)) => {
-                if v < 0.0 {
-                    return Err(OperationError::InvalidParameterValue(name.to_string(), v.to_string()));
-                }
-                self.pulsate_delay = v;
-                Ok(())
-            }
             (name, _) => Err(OperationError::InvalidParameterType(name.to_string())),
         }
-    }
-
-    // Static (no is_live()) as long as PULSATE_AMPLITUDE is 0 would have
-    // been a nicer default (skip re-rendering an unchanging image every
-    // tick), but is_live() can't see a *parameter's own value* to decide
-    // conditionally - it's a fixed trait method, not something evaluated
-    // per-tick against current state. Always live is the only option
-    // once PULSATE exists at all, same tradeoff GHOST/PATCH already made
-    // for their own always-relevant-only-sometimes state.
-    fn is_live(&self) -> bool {
-        true
     }
 
     fn execute(&self, ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         Ok(vec![
             Value::Image(Arc::new(U8Image {
-                pixels: self.generate(ctx.meta.width, ctx.meta.height, ctx.meta.time),
+                pixels: self.generate(ctx.meta.width, ctx.meta.height),
                 width: ctx.meta.width,
                 height: ctx.meta.height,
                 format: ImageFormat::Rgba8,
@@ -352,7 +273,7 @@ mod tests {
         ring.radius = 2.0;
         ring.thickness = 1.0;
 
-        let pixels = ring.generate(8, 8, 0.0);
+        let pixels = ring.generate(8, 8);
         // Centre pixel is far from radius 2 - must stay transparent.
         let centre_index = ((4 * 8 + 4) * 4) as usize;
         assert_eq!(&pixels[centre_index..centre_index + 4], &[0, 0, 0, 0]);
@@ -414,48 +335,6 @@ mod tests {
     fn set_parameter_rejects_a_negative_radius() {
         let mut ring = Ring::new();
         let err = ring.set_parameter("RADIUS", Value::Number(-1.0)).unwrap_err();
-        assert!(matches!(err, OperationError::InvalidParameterValue(_, _)));
-    }
-
-    #[test]
-    fn zero_pulsate_amplitude_leaves_ring_radius_unchanged_regardless_of_time() {
-        let ring = Ring { radius: 64.0, spacing: 16.0, count: 2, ..Ring::new() };
-        assert_eq!(ring.ring_radius(1, 0.0), ring.ring_radius(1, 123.456));
-        assert_eq!(ring.ring_radius(2, 0.0), ring.ring_radius(2, 123.456));
-    }
-
-    #[test]
-    fn pulsate_amplitude_oscillates_the_rings_own_radius() {
-        let ring = Ring { radius: 64.0, count: 1, pulsate_amplitude: 10.0, pulsate_speed: 1.0, ..Ring::new() };
-        // A quarter into a 1-second period (speed=1.0), sin() peaks at 1.0.
-        let radius = ring.ring_radius(1, 0.25);
-        assert!((radius - 74.0).abs() < 1e-6, "expected the radius to peak at base+amplitude a quarter-period in, got {}", radius);
-    }
-
-    #[test]
-    fn the_innermost_ring_leads_outer_rings_by_pulsate_delay() {
-        // The exact reported effect: the wave starts at the innermost
-        // ring (n = COUNT) and travels outward - each ring further out
-        // should visibly lag behind the one just inside it, not pulse
-        // in lockstep.
-        let ring = Ring { radius: 64.0, spacing: 16.0, count: 2, pulsate_amplitude: 10.0, pulsate_speed: 1.0, pulsate_delay: 0.5, ..Ring::new() };
-
-        let inner_offset = ring.ring_radius(2, 0.25) - (ring.radius - ring.spacing);
-        let outer_offset = ring.ring_radius(1, 0.25) - ring.radius;
-
-        assert!((inner_offset - 10.0).abs() < 1e-6, "expected the innermost (undelayed) ring to already be at its peak, got offset {}", inner_offset);
-        assert!((outer_offset + 10.0).abs() < 1e-6, "expected the outermost ring, delayed by half a period, to still be at its trough, got offset {}", outer_offset);
-    }
-
-    #[test]
-    fn is_live_returns_true() {
-        assert!(Ring::new().is_live(), "PULSATE depends on real elapsed time, so RING must never be served from a stale cache");
-    }
-
-    #[test]
-    fn set_parameter_rejects_a_negative_pulsate_amplitude() {
-        let mut ring = Ring::new();
-        let err = ring.set_parameter("PULSATE_AMPLITUDE", Value::Number(-1.0)).unwrap_err();
         assert!(matches!(err, OperationError::InvalidParameterValue(_, _)));
     }
 
