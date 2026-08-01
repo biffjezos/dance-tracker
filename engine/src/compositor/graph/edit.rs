@@ -324,10 +324,41 @@ impl Graph {
     }
 
     /// Remove one property's mapping, leaving the rest of a PATCH node's
-    /// mappings and its SOURCE/REFERENCE wiring untouched.
+    /// mappings and its SOURCE/REFERENCE wiring untouched. Restores the
+    /// target to the value it had *before* this mapping ever touched it
+    /// (`PatchMapping::base`, captured back when the mapping was first
+    /// created) - without this, setting a mapping back to NONE would
+    /// leave the target frozen at whatever the animation happened to
+    /// leave it at on the tick this was cleared, instead of handing
+    /// control back to the user at the value they'd actually set.
     pub fn clear_patch_mapping(&mut self, patch: NodeId, property: &str) -> Result<(), OperationError> {
+        let node = self.resolve(patch).ok_or(OperationError::UnknownNode)?;
+        let Some(mapping) = node.animation_mappings.iter().find(|m| m.property == property).cloned() else {
+            return Ok(());
+        };
+        let target_id = node.inputs.iter().find(|(key, _)| *key == Input::Source).map(|(_, id)| *id);
+
         let node = self.resolve_mut(patch).ok_or(OperationError::UnknownNode)?;
         node.animation_mappings.retain(|m| m.property != property);
+
+        if let Some(target_id) = target_id {
+            let base = Value::Number(mapping.base);
+            if let Some((base_name, channel)) = property.split_once('.') {
+                self.apply_colour_channel(target_id, base_name, channel, &base);
+            } else if !self.try_set_target_parameter(target_id, property, &base) {
+                // Raw pixel-channel fallback (target has no real
+                // parameter) - base is always 0.0 here (see
+                // current_patch_property_value), so this can't fully
+                // restore "no override at all" (PATCH's own r/g/b/a
+                // state has no way back to None through set_parameter's
+                // Value protocol), but it at least stops the channel
+                // from staying stuck at whatever the animation last left
+                // it at, settling on a defined value instead.
+                if let Some(patch_node) = self.resolve_mut(patch) {
+                    let _ = patch_node.operation.set_parameter(property, base);
+                }
+            }
+        }
 
         self.validation = ValidationState::Dirty;
 

@@ -121,7 +121,7 @@ impl Graph {
     /// silently fail set_parameter and leave the property stuck at its last
     /// in-range value instead of tracking the animation, rather than
     /// pinning to the nearest value the target actually accepts.
-    fn try_set_target_parameter(&mut self, target: super::NodeId, name: &str, value: &Value) -> bool {
+    pub(super) fn try_set_target_parameter(&mut self, target: super::NodeId, name: &str, value: &Value) -> bool {
         let Some(target_node) = self.resolve(target) else { return false };
         let value = match value {
             Value::Number(n) => {
@@ -145,7 +145,7 @@ impl Graph {
     /// `base` isn't actually a Color parameter on `target` (shouldn't
     /// happen: `available_patch_properties` only ever offers a dotted
     /// property name for a parameter it already confirmed is Color-kind).
-    fn apply_colour_channel(&mut self, target: super::NodeId, base: &str, channel: &str, value: &Value) {
+    pub(super) fn apply_colour_channel(&mut self, target: super::NodeId, base: &str, channel: &str, value: &Value) {
         let Value::Number(n) = value else { return };
 
         let Some(target_node) = self.resolve(target) else { return };
@@ -577,6 +577,49 @@ mod tests {
         match patch_op.get_parameter("A") {
             Some(Value::Number(n)) => assert_eq!(n, 0.25),
             other => panic!("expected A to land on PATCH itself, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn clearing_a_mapping_restores_the_targets_pre_mapping_value() {
+        let mut graph = Graph::new(4, 4);
+        let target = graph.add_node(Box::new(FakeParameterizedTarget { distance: Cell::new(64.0), key_color: Cell::new(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }) }));
+        let animation = graph.add_node(Box::new(FakeAnimationSource { x: 5.0, y: 0.0 }));
+        let patch = graph.add_node(patch_node());
+        graph.connect(patch, Input::Source, target).unwrap();
+        graph.connect(patch, Input::Reference, animation).unwrap();
+        graph.set_patch_mapping(patch, "DISTANCE", 0, PatchMode::Replace).unwrap();
+        graph.apply_patch_nodes(&Context::default());
+        // Confirm it's actually been driven away from 64 first.
+        match graph.get_node(&target).unwrap().get_parameter("DISTANCE") {
+            Some(Value::Number(n)) => assert_eq!(n, 5.0),
+            other => panic!("expected DISTANCE to be replaced by 5.0, got {:?}", other),
+        }
+
+        graph.clear_patch_mapping(patch, "DISTANCE").unwrap();
+
+        match graph.get_node(&target).unwrap().get_parameter("DISTANCE") {
+            Some(Value::Number(n)) => assert_eq!(n, 64.0, "expected DISTANCE restored to its pre-mapping value (64), not stuck at the last animated value (5.0)"),
+            other => panic!("expected DISTANCE to still be a Number, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn clearing_a_colour_channel_mapping_restores_just_that_channel() {
+        let mut graph = Graph::new(4, 4);
+        let target = graph.add_node(Box::new(FakeParameterizedTarget { distance: Cell::new(0.0), key_color: Cell::new(Color { r: 0.1, g: 0.2, b: 0.3, a: 0.4 }) }));
+        let animation = graph.add_node(Box::new(FakeAnimationSource { x: 0.9, y: 0.0 }));
+        let patch = graph.add_node(patch_node());
+        graph.connect(patch, Input::Source, target).unwrap();
+        graph.connect(patch, Input::Reference, animation).unwrap();
+        graph.set_patch_mapping(patch, "KEY_COLOR.R", 0, PatchMode::Replace).unwrap();
+        graph.apply_patch_nodes(&Context::default());
+
+        graph.clear_patch_mapping(patch, "KEY_COLOR.R").unwrap();
+
+        match graph.get_node(&target).unwrap().get_parameter("KEY_COLOR") {
+            Some(Value::Color(c)) => assert!((c.r - 0.1).abs() < 1e-6, "expected R restored to its pre-mapping value (0.1), got {}", c.r),
+            other => panic!("expected a Color, got {:?}", other),
         }
     }
 
