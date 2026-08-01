@@ -67,6 +67,15 @@ something to re-derive - or "fix" - per operation. Read
 COMPOSE-menu operation, and before treating the current uniform-channel
 alpha blending in `add`/`multiply`/`screen` as a bug.
 
+## Animation (keyframing) convention
+
+No keyframing exists yet, but the one rule that keeps it retrofit-free
+when it's eventually built is already in force: every operation's
+tunable state must go through `parameters()`/`get_parameter()`/
+`set_parameter()`, with no exceptions. Read `ANIMATION_CONVENTIONS.md`
+before adding a new parameter, or before assuming a future animation
+system would need `Operation`/`ParameterKind` to change shape.
+
 ## Postponed/backlog work
 
 Specific features that have been deliberately postponed (MOVE operation,
