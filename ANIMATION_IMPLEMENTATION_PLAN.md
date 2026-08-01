@@ -266,22 +266,85 @@ this is worth confirming with whoever's driving the work before writing
 code, since it trades off visual quality against staying inside this
 project's existing testing model.
 
-### GHOST - spec doesn't exist yet, don't invent one
+### GHOST - real spec (confirmed with the user, supersedes "don't invent one")
 
-Zero design exists anywhere: not in `PARKED_WORK.md` (mentioned once, in
-passing, as a future GENERATE-menu entry - no entry of its own), not in
-any old UI stub, not in any comment. Unlike RING (which CLAUDE.md itself
-partially specs) and TEXT (which has a real fork to choose between),
-GHOST has no evidence to build from - "a ghost effect" could mean a
-motion-trail/echo (frame feedback/persistence), a translucent duplicate
-offset in position, or something else entirely.
+No prior evidence existed anywhere in the repo for this one (unlike
+RING, nothing to misread) - the spec below came entirely from asking.
+It is a **spatial** repeat/offset effect, not temporal - despite the
+word "delay" in how the user first described it, their own worked
+example (source at `(0,0)`, one ghost, `spatial = (-1, 0)` -> the ghost
+renders left of the source) confirms `DISTANCE` is a spacing amount, not
+a time lag. There is no frame-feedback/persistence involved at all.
 
-**Do not implement this from a guess.** Get an actual one- or two-line
-spec first (what does "ghost" look like, what parameters does it need),
-then either implement it following the same pattern as RING/TEXT above,
-or add it to `PARKED_WORK.md` as its own entry (title, Work/Complexity,
-Depends on: "a spec decision, not a technical blocker", Existing
-non-functional code: None) if it's not being built in this pass.
+- **Inputs:** `Input::Source` and `Input::Mask` - both already exist as
+  `Input` enum variants (`compositor/input.rs`), no new variant needed.
+  The mask picks out "the masked object" that gets repeated; unlike
+  every other operation's *optional* `Input::Mask` (used only to blend
+  toward an identity via `graphics::mask::apply_mask`), GHOST's `Mask`
+  is **required** - there is no sensible "no mask wired" behaviour for
+  an operation whose entire job is repeating *the masked region*.
+  `metadata().inputs` should reflect that it's not optional the same way
+  `Resize` marks `SOURCE` required (an unwired required input already
+  shows as `NodeValidation::MissingInput` via existing graph validation -
+  no new validation mechanism needed, just don't treat `Mask` as
+  optional in this operation's own logic the way `apply_mask`-based ops
+  do).
+- **Parameters**, all `ParameterKind::Number`:
+  - `GHOST_COUNT` - how many ghost copies, in addition to the source's
+    own (unmoved) render (step 1, min 0).
+  - `DISTANCE` - spacing between consecutive ghosts, and from the source
+    to the first ghost - confirmed uniform/linear, not per-ghost.
+  - `SPATIAL_X`, `SPATIAL_Y` - direction, same two-`Number` shape as
+    `Resize`'s `SCALE_X`/`SCALE_Y` rather than inventing a new vector
+    `ParameterKind` for this (no existing `ParameterKind` covers a 2D
+    vector - `graphics::geometry::Point2D`/`Center` are unrelated, unused
+    MOVE scaffolding, not a fit here).
+  - `OPACITY_STEP` - confirmed: signed (can be negative *or* positive),
+    added once per ghost step. Ghost `n`'s opacity multiplier is
+    `(1.0 + n * OPACITY_STEP).clamp(0.0, 1.0)` for `n` in `1..=GHOST_COUNT`
+    (the source itself, `n = 0`, always renders at its own native
+    opacity - it's the reference point, same as it is for `DISTANCE`).
+    Positive fades ghosts *in* with distance, negative fades them *out* -
+    both are real, user-facing choices, not a hardcoded direction.
+- **Position formula** (fully specified by the user's own example):
+  `ghost_n_offset = n * DISTANCE * (SPATIAL_X, SPATIAL_Y)` for
+  `n = 1..=GHOST_COUNT`.
+- **Execute algorithm:**
+  1. Resolve `Source` and `Mask` via `FloatImage::from_value`/
+     `graphics::mask::resolve_pixels`, same as any masking-capable
+     operation.
+  2. Isolate the masked object as its own standalone RGBA buffer (source
+     colour, alpha = source alpha × mask alpha, transparent outside the
+     mask). **This is a new pixel helper, not something `apply_mask`
+     already does** - `apply_mask` blends two already-computed *results*
+     toward each other by mask weight; GHOST needs a cutout/stencil
+     extraction, a different operation. Small and self-contained -
+     doesn't belong in `graphics::mask` as-is, but could be added there
+     as a sibling function if it turns out generally useful.
+  3. For each `n` in `1..=GHOST_COUNT`: translate the cutout buffer by
+     `ghost_n_offset` (nearest-neighbor shift with transparent padding at
+     the vacated edge - same inverse-mapping shape `Resize::resize_pixels`
+     already uses, just a translation instead of a scale), then multiply
+     its alpha channel by that ghost's opacity multiplier.
+  4. Composite the source's own cutout (`n = 0`, full opacity) and all
+     `n = 1..=GHOST_COUNT` ghost layers into one output image. **Stacking
+     order for overlapping ghosts is a real open question the user
+     hasn't specified** - nearest-to-source-on-top (paint far-to-near,
+     i.e. highest `n` first) is the reasonable default and matches how a
+     real motion trail reads, but say so explicitly wherever this is
+     implemented rather than leaving the choice silent.
+  5. Per `PIXEL_CONVENTIONS.md`: there is **no real front-to-back "over"
+     operator in this engine yet** - only uniform-channel `Add`/
+     `Multiply`/`Screen` and the narrow `apply_mask` blend-toward-original
+     helper, neither of which is what stacking N alpha-varying, spatially
+     offset layers needs. GHOST's own compositing step is a legitimate
+     reason to write a real alpha-over helper (standard
+     `result = fg * fg_a + bg * (1 - fg_a)`, applied N times in stacking
+     order) - but per `PIXEL_CONVENTIONS.md`'s own rule, that must be
+     written as its own explicit thing (e.g. a small internal helper
+     function GHOST's `execute()` calls), **not** a retrofit of
+     `Add`/`Multiply`/`Screen`'s existing uniform-channel semantics, which
+     stay exactly as they are.
 
 ---
 
