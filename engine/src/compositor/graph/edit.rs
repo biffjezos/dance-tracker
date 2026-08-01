@@ -205,13 +205,16 @@ impl Graph {
     /// if no SOURCE is wired yet - never a fixed list unrelated to what's
     /// actually wired.
     ///
-    /// A Number parameter that shares a `group` with a Color parameter
-    /// (RING's RING_SELECTOR, grouped "COLOUR" alongside RING_COLOR) is
-    /// excluded: it's a selector picking *which* colour instance a later
-    /// RING_COLOR write lands on, not a value with any rendering effect
-    /// of its own - animating it in isolation can never produce a
-    /// visible result no matter what shape or range the animation source
-    /// has, so offering it here would just be misleading.
+    /// This includes a Number parameter that shares a `group` with a
+    /// Color parameter (RING's RING_SELECTOR, grouped "COLOUR" alongside
+    /// RING_COLOR): on its own it has no rendering effect (it only picks
+    /// which colour slot a later RING_COLOR write lands on), but mapped
+    /// *together with* that Color parameter in the same PATCH, it's how
+    /// you drive "which ring gets recoloured this tick" - a real,
+    /// intentional use (see `apply_patch_nodes`'s own doc comment for how
+    /// the two mappings are ordered so the selector always lands before
+    /// the colour write that depends on it, regardless of which order
+    /// they were mapped in).
     pub fn available_patch_properties(&self, patch: NodeId) -> Vec<String> {
         let Some(node) = self.resolve(patch) else { return Vec::new() };
         let Some((_, target_id)) = node.inputs.iter().find(|(key, _)| *key == Input::Source) else {
@@ -219,19 +222,10 @@ impl Graph {
         };
         let Some(target_node) = self.resolve(*target_id) else { return Vec::new() };
 
-        let all_parameters = target_node.operation.parameters();
-        let colour_groups: Vec<&'static str> = all_parameters.iter()
-            .filter(|p| matches!(p.kind, ParameterKind::Color))
-            .filter_map(|p| p.group)
-            .collect();
-
         let mut properties = Vec::new();
-        for parameter in &all_parameters {
+        for parameter in target_node.operation.parameters() {
             match parameter.kind {
                 ParameterKind::Number { .. } => {
-                    if parameter.group.is_some_and(|g| colour_groups.contains(&g)) {
-                        continue;
-                    }
                     properties.push(parameter.name.to_string());
                 }
                 ParameterKind::Color => {

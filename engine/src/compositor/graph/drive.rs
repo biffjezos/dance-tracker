@@ -23,6 +23,17 @@ impl Graph {
     /// ops), not through the normal Input-value resolution path -
     /// that's what makes a multi-output source's second-and-later output
     /// (Lissajous's Y, not just X) reachable at all.
+    ///
+    /// Plain (non-dotted) property mappings are applied before any
+    /// dotted Color-channel mapping ("RING_SELECTOR" before
+    /// "RING_COLOR.R"), regardless of which order the user created them
+    /// in - a selector-shaped Number parameter (RING_SELECTOR, grouped
+    /// with a Color parameter - see `available_patch_properties`) needs
+    /// to land *this* tick before a same-tick Color-channel write that
+    /// depends on it (`apply_colour_channel` reads whatever the target's
+    /// selector currently points at), or "select ring N, recolour it"
+    /// would always be one tick out of sync with which ring actually
+    /// gets the new colour.
     pub fn apply_patch_nodes(&mut self, ctx: &Context) {
         let patch_ids: Vec<super::NodeId> = self
             .nodes
@@ -43,7 +54,8 @@ impl Graph {
             let Some((_, animation_id)) = patch_node.inputs.iter().find(|(key, _)| *key == Input::Reference) else { continue };
             let target_id = *target_id;
             let animation_id = *animation_id;
-            let mappings = patch_node.animation_mappings.clone();
+            let mut mappings = patch_node.animation_mappings.clone();
+            mappings.sort_by_key(|mapping| mapping.property.contains('.'));
 
             let Some(animation_node) = self.resolve(animation_id) else { continue };
             let Ok(outputs) = animation_node.operation.execute(ctx, &[]) else { continue };
@@ -213,11 +225,20 @@ mod tests {
 
     /// A stand-in for RING specifically: a Number parameter (SELECTOR)
     /// grouped alongside a Color parameter (SLOT_COLOR) - the same shape
-    /// as RING_SELECTOR + RING_COLOR under RING's "COLOUR" group - plus
-    /// one ordinary ungrouped Number (RADIUS), to prove the exclusion is
-    /// scoped to the grouped-with-a-Color case and doesn't over-reach.
+    /// as RING_SELECTOR + RING_COLOR under RING's "COLOUR" group: SELECTOR
+    /// picks which of 3 colour slots SLOT_COLOR reads/writes, mirroring
+    /// RING's own selected_ring/colors relationship closely enough to
+    /// exercise the same-tick selector-before-colour-write ordering.
     struct FakeSelectorTarget {
-        radius: Cell<f64>,
+        selector: Cell<usize>, // 1-based, 1..=3
+        slots: [Cell<Color>; 3],
+    }
+
+    impl FakeSelectorTarget {
+        fn new() -> Self {
+            let white = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+            Self { selector: Cell::new(1), slots: [Cell::new(white), Cell::new(white), Cell::new(white)] }
+        }
     }
 
     impl Operation for FakeSelectorTarget {
@@ -229,20 +250,31 @@ mod tests {
         }
         fn parameters(&self) -> Vec<ParameterDescriptor> {
             vec![
-                ParameterDescriptor { name: "RADIUS", kind: ParameterKind::Number { step: 1.0, min: Some(0.0), max: None }, group: None },
-                ParameterDescriptor { name: "SELECTOR", kind: ParameterKind::Number { step: 1.0, min: Some(1.0), max: Some(1.0) }, group: Some("COLOUR") },
+                ParameterDescriptor { name: "SELECTOR", kind: ParameterKind::Number { step: 1.0, min: Some(1.0), max: Some(3.0) }, group: Some("COLOUR") },
                 ParameterDescriptor { name: "SLOT_COLOR", kind: ParameterKind::Color, group: Some("COLOUR") },
             ]
         }
         fn get_parameter(&self, name: &str) -> Option<Value> {
             match name {
-                "RADIUS" => Some(Value::Number(self.radius.get())),
+                "SELECTOR" => Some(Value::Number(self.selector.get() as f64)),
+                "SLOT_COLOR" => Some(Value::Color(self.slots[self.selector.get() - 1].get())),
                 _ => None,
             }
         }
         fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
             match (name, value) {
-                ("RADIUS", Value::Number(v)) => { self.radius.set(v); Ok(()) }
+                ("SELECTOR", Value::Number(v)) => {
+                    let index = v.round() as i64;
+                    if !(1..=3).contains(&index) {
+                        return Err(OperationError::InvalidParameterValue(name.to_string(), v.to_string()));
+                    }
+                    self.selector.set(index as usize);
+                    Ok(())
+                }
+                ("SLOT_COLOR", Value::Color(c)) => {
+                    self.slots[self.selector.get() - 1].set(c);
+                    Ok(())
+                }
                 _ => Err(OperationError::UnknownParameter(name.to_string())),
             }
         }
@@ -292,22 +324,53 @@ mod tests {
     }
 
     #[test]
-    fn available_properties_excludes_a_number_grouped_with_a_colour_parameter() {
+    fn available_properties_includes_a_number_grouped_with_a_colour_parameter() {
         // RING_SELECTOR's exact shape: a Number sharing a group with a
-        // Color has no rendering effect of its own (it only picks which
-        // colour slot a later write lands on), so it must never be
-        // offered as an independently animatable property - no matter
-        // what shape or range the animation source has, animating it in
-        // isolation can never produce a visible result.
+        // Color has no rendering effect on its own, but mapped *together*
+        // with that Color in the same PATCH, it's how "select ring N,
+        // recolour it" works - so it must still be offered, not hidden.
         let mut graph = Graph::new(4, 4);
-        let target = graph.add_node(Box::new(FakeSelectorTarget { radius: Cell::new(0.0) }));
+        let target = graph.add_node(Box::new(FakeSelectorTarget::new()));
         let patch = graph.add_node(patch_node());
         graph.connect(patch, Input::Source, target).unwrap();
 
         let properties = graph.available_patch_properties(patch);
-        assert!(!properties.contains(&"SELECTOR".to_string()), "a Number grouped with a Color must be excluded, got {:?}", properties);
-        assert!(properties.contains(&"RADIUS".to_string()), "an ungrouped Number must still be offered");
-        assert!(properties.contains(&"SLOT_COLOR.R".to_string()), "the grouped Color itself must still be offered, decomposed");
+        assert!(properties.contains(&"SELECTOR".to_string()));
+        assert!(properties.contains(&"SLOT_COLOR.R".to_string()));
+    }
+
+    #[test]
+    fn a_selector_mapping_lands_before_a_colour_channel_mapping_in_the_same_tick() {
+        // The exact reported workflow: SELECTOR picks which of 3 colour
+        // slots gets recoloured, both driven by the same animation in the
+        // same tick. Mapped here in the "wrong" order on purpose (colour
+        // channel before selector) to prove apply_patch_nodes's own
+        // ordering fix, not insertion order, decides which lands first -
+        // without it, this colour write would land on slot 1 (last
+        // tick's/the initial selection) instead of slot 2 (this tick's).
+        let mut graph = Graph::new(4, 4);
+        let target = graph.add_node(Box::new(FakeSelectorTarget::new()));
+        // Outputs: index 0 -> the new SELECTOR (2), index 1 -> the new R (0.75).
+        let animation = graph.add_node(Box::new(FakeAnimationSource { x: 2.0, y: 0.75 }));
+        let patch = graph.add_node(patch_node());
+        graph.connect(patch, Input::Source, target).unwrap();
+        graph.connect(patch, Input::Reference, animation).unwrap();
+        graph.set_patch_mapping(patch, "SLOT_COLOR.R", 1, PatchMode::Replace).unwrap();
+        graph.set_patch_mapping(patch, "SELECTOR", 0, PatchMode::Replace).unwrap();
+
+        graph.apply_patch_nodes(&Context::default());
+
+        let target_op = graph.get_node(&target).unwrap();
+        match target_op.get_parameter("SELECTOR") {
+            Some(Value::Number(n)) => assert_eq!(n, 2.0),
+            other => panic!("expected SELECTOR to be 2.0, got {:?}", other),
+        }
+        // SELECTOR is now 2, so SLOT_COLOR reads slot 2 - the R write
+        // must have landed there, not on slot 1.
+        match target_op.get_parameter("SLOT_COLOR") {
+            Some(Value::Color(c)) => assert!((c.r - 0.75).abs() < 1e-6, "expected slot 2's R to be overwritten to 0.75, got {:?}", c),
+            other => panic!("expected a Color, got {:?}", other),
+        }
     }
 
     #[test]
