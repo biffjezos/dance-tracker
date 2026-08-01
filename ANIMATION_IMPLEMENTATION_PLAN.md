@@ -10,7 +10,7 @@ them.
 **Order matters. Do the phases in this order** - each is designed so the
 next one's prerequisite work is already done:
 
-1. Phase A - cheap animation-logic operations (Lisajous + 2-3 more), unwired.
+1. Phase A - cheap animation-logic operations (Lissajous + 2-3 more), unwired.
 2. Phase B - TEXT/GHOST/RING generators, usable standalone.
 3. Phase C - the parameter-wiring mechanism that connects A's outputs to B's (or any operation's) parameters.
 
@@ -53,23 +53,23 @@ that invariant to hold.
 
 ### A2. New module
 
-- `engine/src/operations/animate/mod.rs` - `pub mod lisajous;` (and one
-  `pub mod` line per op added in A4), plus `pub use lisajous::Lisajous;`
+- `engine/src/operations/animate/mod.rs` - `pub mod lissajous;` (and one
+  `pub mod` line per op added in A4), plus `pub use lissajous::Lissajous;`
   etc.
 - Add `pub mod animate;` to `engine/src/operations/mod.rs` (alongside the
   existing `compose`/`generators`/`key`/`sources`/`transform` lines).
 
-### A3. `Lisajous` - `engine/src/operations/animate/lisajous.rs`
+### A3. `Lissajous` - `engine/src/operations/animate/lissajous.rs`
 
 Follow the exact shape of `operations/transform/resize.rs` (struct +
 `Operation` impl + `inventory::submit!` + `#[cfg(test)] mod tests` in the
 same file).
 
 ```rust
-pub struct Lisajous {
+pub struct Lissajous {
     pub freq_x: f64,      // default 3.0
     pub freq_y: f64,      // default 2.0
-    pub phase_degrees: f64, // default 0.0 - the classic Lisajous phase offset
+    pub phase_degrees: f64, // default 0.0 - the classic Lissajous phase offset
     pub amplitude: f64,   // default 1.0
 }
 ```
@@ -93,7 +93,7 @@ pub struct Lisajous {
 - **Must override `is_live() -> bool { true }`.** This is the single
   easiest mistake to make and the one to flag loudest: `RenderExecutor`'s
   cross-tick cache (`executors/render.rs`) keys only on parameter
-  fingerprint + resolved inputs, never on `ctx.meta.time`. Lisajous has no
+  fingerprint + resolved inputs, never on `ctx.meta.time`. Lissajous has no
   inputs and (once you stop turning the knobs) unchanging parameters, so
   without `is_live() -> true` its output gets cached after the first tick
   and the animation visibly freezes. `LiveCountingSource` in
@@ -109,9 +109,9 @@ pub struct Lisajous {
     this is the most important test in the file)
   - `set_parameter_rejects_a_negative_amplitude` (mirror `resize.rs`'s
     `set_parameter_rejects_an_out_of_range_scale`)
-  - `lisajous_in_graph_is_valid` (mirror `resize.rs`'s own
+  - `lissajous_in_graph_is_valid` (mirror `resize.rs`'s own
     `resize_in_graph_is_valid`: `graph.add_node` + `graph.validate()` +
-    `RenderExecutor::new().execute(...)`, confirming an unwired Lisajous
+    `RenderExecutor::new().execute(...)`, confirming an unwired Lissajous
     node renders without error)
 
 ### A4. Two or three more, same module, same shape, same `is_live()` requirement
@@ -121,7 +121,7 @@ now. Reasonable starting set, cheapest first:
 
 - **`Sine`** - single output, params `FREQUENCY`/`PHASE`/`AMPLITUDE`/
   `OFFSET`. The simplest possible one; a good first op to write before
-  Lisajous if you want an easier warm-up on the pattern.
+  Lissajous if you want an easier warm-up on the pattern.
 - **`Square`** (or `Pulse`) - single output, hard on/off wave with a
   `DUTY_CYCLE` param - useful for strobe-like effects a smooth sine can't
   produce.
@@ -262,7 +262,7 @@ non-functional code: None) if it's not being built in this pass.
 
 ## Phase C - parameter wiring (connect Phase A's outputs to any Number parameter)
 
-This is the piece that turns "Lisajous exists as a node" into "Lisajous
+This is the piece that turns "Lissajous exists as a node" into "Lissajous
 can drive RING's radius." It's real engine work, not just UI - four
 sub-parts, in dependency order.
 
@@ -275,7 +275,7 @@ kept yet. `RenderExecutor::evaluate()` (`executors/render.rs`) always
 does `outputs.into_iter().next()`, throwing away everything after index
 0, and both its per-tick cache (`CachedNode.value: Value`) and its
 recursion memo (`HashMap<NodeId, Value>`) only ever store one `Value`
-per node. Lisajous's Y output (index 1) is unreachable through the
+per node. Lissajous's Y output (index 1) is unreachable through the
 executor as it stands today, even though `execute()` itself already
 returns both. Fix this first:
 
@@ -347,7 +347,7 @@ has to trigger revalidation for C3 to be safe.
 
 `compositor/graph/validate.rs`'s `visit_cycle_detection` currently only
 walks `node.inputs`. A parameter wire is a real dependency edge too - a
-Lisajous (hypothetically) wired into its own parameter, or a longer cycle
+Lissajous (hypothetically) wired into its own parameter, or a longer cycle
 formed purely through parameter wires, must be caught here, or
 `RenderExecutor`'s parameter-resolution step (C4) will recurse forever
 the first time someone builds one. Add a second loop over
@@ -457,7 +457,7 @@ implementing, not worth deciding here.
   `a_genuine_cycle_is_still_flagged_and_still_fails_validation` in
   `validate.rs`, but wiring node A's parameter to node B and B's
   parameter (or input) back to A.
-- Only after that: a manual/Playwright smoke check that wiring Lisajous
+- Only after that: a manual/Playwright smoke check that wiring Lissajous
   into a RING group's radius (or similar) actually animates in the
   browser - diagnostic only, per CLAUDE.md rule 4, not a committed test
   suite.
