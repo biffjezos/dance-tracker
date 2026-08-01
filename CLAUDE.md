@@ -58,6 +58,15 @@ commit elaborate one-off test suites as project deliverables. A passing
 test suite is not the goal - a working app is. If the app is broken,
 say so, don't paper over it with more tests.
 
+## Core pixel & color conventions
+
+How pixel data is tagged (colorspace) and blended (alpha handling) across
+every operation is a deliberate, already-decided convention, not
+something to re-derive - or "fix" - per operation. Read
+`PIXEL_CONVENTIONS.md` before adding a new pixel-producing or
+COMPOSE-menu operation, and before treating the current uniform-channel
+alpha blending in `add`/`multiply`/`screen` as a bug.
+
 ## Postponed/backlog work
 
 Specific features that have been deliberately postponed (MOVE operation,
