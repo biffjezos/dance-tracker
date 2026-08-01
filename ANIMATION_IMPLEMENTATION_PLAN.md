@@ -155,51 +155,51 @@ Each must work standalone, wired to nothing, exactly like `Checkerboard`
 (`operations/generators/`), same `OperationCategory::Generator`, same
 `menu: "GENERATE"`.
 
-### RING - spec is mostly already decided, use it
+### RING - real spec (confirmed with the user, supersedes an earlier wrong guess)
 
-Two sources already constrain the design, so this isn't a blank slate:
+An earlier draft of this plan guessed RING's shape from a hypothetical
+example in `CLAUDE.md` (per-group colour pickers) and from three old
+screenshots in `ui/assets/` (`rings.png`, `key-rings.png`,
+`key-rings-2.png`) that turned out to show at least two different,
+mutually inconsistent effects (a ripple/warp distortion in one, a plain
+generated ring texture in another, an unrelated diagonal-plaid keyed
+silhouette in the third) - none of that was a reliable spec, and the
+per-group-colour design built on it has been discarded. Use the actual
+spec below instead:
 
-- `PARKED_WORK.md`'s "Rings generator effect" entry (3h, 2/6): a rings
-  generator, no existing code in the tree.
-- `CLAUDE.md` rule 2's own example: *"If a RINGS node has 2 groups, its
-  colour-stroke picker offers exactly 2 - never a fixed 'up to 8' range
-  regardless of how many actually exist."* This means RING's design
-  already has a specific, non-negotiable shape: **multiple concentric
-  ring groups, each with its own stroke color**, and the parameter list
-  must be bounded by however many groups actually exist.
-
-Implementation shape:
-
-- `GROUP_COUNT: Number` parameter (step 1, min 1, max = whatever ceiling
-  you pick, e.g. 8) controls how many concentric groups exist.
-- Each group needs its own `Color` parameter. `ParameterDescriptor.name`
-  is `&'static str`, so these can't be `format!`-ed at runtime - use a
-  fixed pool of literal names sized to your chosen ceiling
-  (`"GROUP_1_COLOR"`, `"GROUP_2_COLOR"`, ... `"GROUP_8_COLOR"`) and have
-  `parameters()` return only the first `group_count` of them. This is
-  what satisfies CLAUDE.md rule 2: the *ceiling* can be a fixed pool
-  internally, but what `parameters()` actually *returns* must always be
-  bounded by the live `group_count`, never the pool size. Set
-  `GROUP_COUNT`'s own `max` to match the pool size so the stepper never
-  implies more groups are possible than the pool supports.
-- `get_parameter`/`set_parameter` index into an internal
-  `Vec<Color>` (or fixed `[Color; N]`) by parsing the group number out of
-  the name, or simpler: match each literal name explicitly (8 match arms
-  is fine, mirrors how `Checkerboard` already hand-writes `"A"`/`"B"`).
-- Radius/spacing: at minimum a `SPACING` or `BASE_RADIUS` +
-  `RADIUS_STEP` param pair so groups are visually concentric rings, not
-  stacked circles at the same radius. Stroke width is a reasonable
-  addition but not load-bearing to the spec above - keep it simple per
-  the user's stated preference.
+- **Static, not animated.** No `is_live()` override, no time dependency
+  in `execute()` at all - purely a function of its own parameters, same
+  as `Checkerboard`. (Wiring a Phase-A animation op into one of its
+  Number parameters later, via Phase C, is a separate, opt-in thing a
+  user can choose to do - RING itself has no built-in motion.)
+- Exactly four parameters, all `ParameterKind::Number`:
+  - `COUNT` - how many concentric rings (step 1, min 1).
+  - `RADIUS` - the outer radius of the whole ring set (the "like Saturn's
+    rings" size - how far out the pattern extends overall).
+  - `SPACING` - the distance between individual rings (only visually
+    matters when `COUNT` > 1, but always a real, settable parameter).
+  - `THICKNESS` - the stroke width of each ring (uniform across all
+    rings - the user's spec doesn't ask for per-ring thickness).
+- No per-group anything - no dynamic parameter pool, no `&'static str`
+  name-pool trick. This is a fixed four-parameter operation, the same
+  shape as `Resize`'s `SCALE_X`/`SCALE_Y`/`ALGORITHM`.
+- Centered on the frame (no position parameter unless asked for later -
+  don't add one speculatively).
+- Colour/fill: **not yet specified by the user - ask before inventing
+  one.** A ring needs *some* way to decide what's drawn where (stroke
+  colour vs. background, opacity), and the four properties above don't
+  cover that. Don't default this to `Checkerboard`'s two-colour pattern
+  or anything else without confirming first.
 - The old (deleted, pre-node-graph) UI hook was `toggleRingsEnabled` - an
   enable/disable boolean. **Don't reintroduce it.** In this node-graph
   architecture, a node's presence + wiring already is its enable/disable
   (CLAUDE.md rule 3) - an unwired or non-existent RING node already
   produces nothing, the same effect that toggle used to achieve in the
-  old non-graph version. Adding a redundant `ENABLED` parameter on top of
-  that would be scope creep the spec doesn't ask for.
+  old non-graph version.
 - Pixel generation itself: same shape as `Checkerboard::generate()` - a
-  `width`/`height` loop, `Value::Image` output, no inputs.
+  `width`/`height` loop computing each pixel's distance from center,
+  testing which ring band (if any) it falls in given `RADIUS`/`COUNT`/
+  `SPACING`/`THICKNESS`, `Value::Image` output, no inputs.
 
 ### TEXT - one real fork in the road, decide it before writing code
 
