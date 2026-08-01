@@ -12,6 +12,7 @@ import { nodeEditContextRegistry, renderGroupContext } from "./nodeEditContexts.
 import { getAllRealEntries, addNodeLayer, removeLayer } from "../state/registry.js";
 import { createNode } from "../core/operations.js";
 import { getWasmApp } from "../core/wasm.js";
+import { logger } from "../core/log.js";
 import {
     rebuildGraph,
     currentPreviewContentId,
@@ -85,7 +86,7 @@ export class MenuManager {
         this.currentContext = null;
 
         window.addEventListener("operationsLoaded", e => {
-            console.log("Operations loaded:", e.detail);
+            logger.debug("Operations loaded:", e.detail);
             this.operations = e.detail;
             this.renderCategoryButtons();
         });
@@ -130,7 +131,6 @@ export class MenuManager {
         items.addEventListener("click", e => {
             const button = e.target.closest("button[data-menu]");
             if (!button) return;
-            console.log("Main menu clicked:", button.dataset.menu);
             this.show(button.dataset.menu);
             this.closeMobileMenu();
         });
@@ -170,7 +170,6 @@ export class MenuManager {
     }
 
     show(category) {
-        console.log("Showing category:", category);
         this.category = category;
         // Set currentContext to the corresponding menu
         if (category === "nodes") {
@@ -365,7 +364,7 @@ export class MenuManager {
             try {
                 wasmApp.remove_node(nodeId);
             } catch (err) {
-                console.error("Failed to remove node:", err);
+                logger.error("Failed to remove node:", err);
             }
         }
 
@@ -423,13 +422,10 @@ export class MenuManager {
     }
 
     render() {
-        console.log("Rendering menu. Category:", this.category, "Operations count:", this.operations.length);
-
         this.subMenu.innerHTML = "";
 
         // Don't render if operations aren't loaded or no category selected
         if (this.operations.length === 0 || this.category === null) {
-            console.log("Not rendering: no operations or no category");
             return;
         }
 
@@ -546,12 +542,8 @@ export class MenuManager {
         const filteredOps = this.operations.filter(op => {
             const opMenu = (op.menu || op.Menu || "").toUpperCase();
             const category = (this.category || "").toUpperCase();
-            const match = opMenu === category;
-            console.log(`Filtering op: menu="${op.menu || op.Menu}" vs category="${this.category}" -> ${match}`);
-            return match;
+            return opMenu === category;
         });
-
-        console.log("Filtered operations:", filteredOps);
 
         // A category button only renders when something is actually
         // registered under it (see renderCategoryButtons), so this is
@@ -567,16 +559,14 @@ export class MenuManager {
         }
 
         filteredOps.forEach(op => {
-            console.log("Creating button for:", op.label || op.name || op);
             const button = document.createElement("button");
             button.innerText = op.label || op.name || op;
 
             button.onclick = () => {
-                console.log("Operation button clicked:", op);
+                logger.debug("Operation button clicked:", op);
 
                 // Check if this operation creates a node
                 if (op.create_node) {
-                    console.log("Operation creates node:", op.create_node);
                     // Create a child MenuContext for the create_node submenu
                     const createContext = new MenuContext("create_node", this.currentContext);
                     createContext.opId = op.create_node;
@@ -588,7 +578,7 @@ export class MenuManager {
 
                 // Use ui_action if available, otherwise fall back to action
                 const action = op.ui_action || op.action;
-                console.log("Dispatching action:", action);
+                logger.debug("Dispatching action:", action);
 
                 if (action) {
                     window.dispatchEvent(
@@ -603,11 +593,9 @@ export class MenuManager {
     }
 
     createNodeAndSelect(operationId) {
-        console.log("Creating node:", operationId);
-
         // Create the node in the graph
         createNode(operationId).then(nodeId => {
-            console.log("Node created with ID:", nodeId);
+            logger.debug("Node created:", operationId, nodeId);
 
             // Every create_node-backed operation is stored the same way -
             // its display label comes from the operation's own descriptor,
@@ -647,7 +635,7 @@ export class MenuManager {
             this.render();
             this.updateStatusBar();
         }).catch(err => {
-            console.error("Failed to create node:", err);
+            logger.error("Failed to create node:", err);
         });
     }
 

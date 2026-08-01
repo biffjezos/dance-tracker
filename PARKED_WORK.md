@@ -91,3 +91,49 @@ WASM feasibility check, passed:
 
 Still open: never tested against a real camera/NLE-exported ProRes file
 (only the crate's own encoder output and its own conformance claims).
+
+## Effects that once existed, not yet ported to the current architecture
+
+`ui/scripts/features/notWired.js` used to hold ten `window.addEventListener`
+stubs for controls from an earlier, pre-node-graph version of the app. None
+of them are dispatched from anywhere in the current UI - nothing wires a
+button to these event names anymore, so the file was dead weight and has
+been deleted. The event names below are the only surviving record of what
+they controlled; they're listed here so the effects themselves aren't lost,
+not because the old event-listener approach should be reused.
+
+- `toggleConstellation` - enable/disable a constellation (star-field/
+  particle) generator effect.
+- `constellationDistanceUp` / `constellationDistanceDown` - step the
+  constellation effect's distance/depth parameter.
+- `toggleRingsEnabled` - enable/disable a rings generator effect (a rings
+  operation exists in screenshots/assets - see `ui/assets/rings.png`,
+  `key-rings.png`, `key-rings-2.png` - but is not currently a registered
+  Rust operation).
+- `audioSyncMinuteUp` / `audioSyncMinuteDown` / `audioSyncSecondUp` /
+  `audioSyncSecondDown` / `audioSyncFrameUp` / `audioSyncFrameDown` -
+  step an audio-sync offset by minute/second/frame, for aligning generated
+  visuals to an audio track.
+
+None of this should be re-wired as bare `window` events again. Per the
+current architecture (see the operation-authoring flow the codebase itself
+demonstrates - a new `Operation` impl registered via `inventory::submit!`,
+picked up automatically by the menu and the generic parameter-edit UI),
+each of these should become:
+
+- Constellation and Rings: real `Generator`-category operations in
+  `engine/src/operations/generators/`, with their toggle/distance-style
+  controls expressed as ordinary `ParameterDescriptor`s (`Boolean` for the
+  enable toggle, `Number` with a declared step for distance) - the generic
+  edit context already renders steppers for exactly this shape of
+  parameter, no bespoke JS needed.
+- Audio sync: depends on how audio gets into the graph at all, which
+  doesn't exist yet (there's no audio input/analysis operation of any
+  kind today). That's a prerequisite piece of design, not just a matter of
+  adding parameters to an existing operation - minute/second/frame offset
+  would likely become a grouped `Number` parameter set (see `group` on
+  `ParameterDescriptor`) on whatever operation ends up owning audio sync.
+
+Not scheduled - listed here so the intent isn't lost, per "no default
+anything" this only becomes real once someone actually implements and
+wires it, not before.

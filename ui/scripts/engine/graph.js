@@ -21,8 +21,6 @@ import {
 const layerNodeIds = new Map(); // layerId -> wasmNodeId
 const layerSettingsHash = new Map(); // layerId -> hash of settings for change detection
 
-let lastPreviewScope = "video";
-
 // Helper to create a stable hash from settings for change detection
 function hashSettings(settings) {
     if (!settings) return "";
@@ -85,18 +83,18 @@ function buildLayerNode(entry) {
         return existingNodeId;
     }
 
+    // buildGenericContent always just returns the WASM node id the layer
+    // was created with (see its own comment) - there is no case here where
+    // a *different* node id replaces an existing one, so there is nothing
+    // to remove on the WASM side. wasmApp.remove_node() is what actually
+    // deletes a node (see menu.js's removeSelectedNode), and is unrelated
+    // to this rebuild path.
     const newNodeId = buildGenericContent(layer);
 
     if (newNodeId !== null) {
-        // Clean up old node if it exists
-        if (existingNodeId !== null) {
-            // Note: Rust/WASM doesn't have node removal yet, 
-            // but the generation mechanism in graph.rs will handle
-            // stale IDs correctly when removal is implemented
-        }
         setLayerNodeId(layerId, newNodeId);
     }
-    
+
     return newNodeId;
 }
 
@@ -180,8 +178,10 @@ export function currentPreviewContentId() {
         return cachedNodeIds.get(selectedNode.id) ?? layerNodeIds.get(selectedNode.id);
     }
 
-    // Fall back to scope-based preview (for legacy compatibility)
-    const entry = scopedEntry(lastPreviewScope);
+    // Fall back to the single selected video/image/camera layer -
+    // scopedEntry() only ever has one real scope ("video") today; see
+    // registry.js's scopedEntry() for why the parameter exists at all.
+    const entry = scopedEntry("video");
     if (!entry.id) return null;
     return cachedNodeIds.get(entry.id) ?? layerNodeIds.get(entry.id);
 }

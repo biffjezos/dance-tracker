@@ -5,6 +5,8 @@ CAMERA ENGINE
 ==================================================
 */
 
+import { logger } from "../core/log.js";
+
 let cameraInstance = null;
 
 export class Camera {
@@ -25,7 +27,7 @@ export class Camera {
     }
 
     async start() {
-        console.log("CAMERA START REQUESTED");
+        logger.debug("Camera start requested");
 
         try {
             this.stream = await navigator.mediaDevices.getUserMedia({
@@ -36,26 +38,15 @@ export class Camera {
                 audio: false
             });
 
-            console.log("STREAM RECEIVED");
-
             this.video.srcObject = this.stream;
 
             this.video.onloadedmetadata = () => {
-                console.log(
-                    "VIDEO SIZE:",
-                    this.video.videoWidth,
-                    this.video.videoHeight
-                );
-
+                logger.debug("Camera video size:", this.video.videoWidth, this.video.videoHeight);
                 this.video.play();
             };
 
         } catch (error) {
-            console.error(
-                "CAMERA FAILED:",
-                error.name,
-                error.message
-            );
+            logger.error("Camera failed:", error.name, error.message);
         }
     }
 

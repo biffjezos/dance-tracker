@@ -21,6 +21,7 @@ import {
 import {
     getWasmApp
 } from "../core/wasm.js";
+import { logger } from "../core/log.js";
 
 // Handle the open_image_picker action from menu
 window.addEventListener("menuOperation", e => {
@@ -44,7 +45,7 @@ window.addEventListener("menuOperation", e => {
             // Create image source node in WASM
             const wasmApp = getWasmApp();
             if (!wasmApp) {
-                console.error("WASM app not initialized");
+                logger.error("WASM app not initialized");
                 return;
             }
 
@@ -73,7 +74,7 @@ window.addEventListener("menuOperation", e => {
             reportSelection("video");
 
         } catch (error) {
-            console.error("Error loading image:", error);
+            logger.error("Error loading image:", error);
         } finally {
             // Clean up
             document.body.removeChild(input);
