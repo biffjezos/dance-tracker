@@ -24,16 +24,21 @@ impl Graph {
     /// that's what makes a multi-output source's second-and-later output
     /// (Lissajous's Y, not just X) reachable at all.
     ///
-    /// Plain (non-dotted) property mappings are applied before any
-    /// dotted Color-channel mapping ("RING_SELECTOR" before
-    /// "RING_COLOR.R"), regardless of which order the user created them
-    /// in - a selector-shaped Number parameter (RING_SELECTOR, grouped
-    /// with a Color parameter - see `available_patch_properties`) needs
-    /// to land *this* tick before a same-tick Color-channel write that
-    /// depends on it (`apply_colour_channel` reads whatever the target's
-    /// selector currently points at), or "select ring N, recolour it"
-    /// would always be one tick out of sync with which ring actually
-    /// gets the new colour.
+    /// Every plain (non-dotted) property mapping across *every* PATCH
+    /// node is applied before any dotted Color-channel mapping on any
+    /// PATCH node ("RING_SELECTOR" before "RING_COLOR.R") - two full
+    /// passes over `patch_ids`, not one. A selector-shaped Number
+    /// parameter (RING_SELECTOR, grouped with a Color parameter - see
+    /// `available_patch_properties`) needs to land *this* tick before a
+    /// same-tick Color-channel write that depends on it
+    /// (`apply_colour_channel` reads whatever the target's selector
+    /// currently points at), and that selector and that colour write can
+    /// legitimately live on two *different* PATCH nodes (driven by two
+    /// different animation sources, e.g. a step function selecting the
+    /// ring and a sine driving its colour) - so this can't just sort one
+    /// PATCH node's own mappings and call it done; it has to hold
+    /// regardless of which PATCH node each mapping lives on or which
+    /// order the nodes were created in.
     pub fn apply_patch_nodes(&mut self, ctx: &Context) {
         let patch_ids: Vec<super::NodeId> = self
             .nodes
@@ -48,32 +53,37 @@ impl Graph {
             })
             .collect();
 
-        for patch_id in patch_ids {
-            let Some(patch_node) = self.resolve(patch_id) else { continue };
-            let Some((_, target_id)) = patch_node.inputs.iter().find(|(key, _)| *key == Input::Source) else { continue };
-            let Some((_, animation_id)) = patch_node.inputs.iter().find(|(key, _)| *key == Input::Reference) else { continue };
-            let target_id = *target_id;
-            let animation_id = *animation_id;
-            let mut mappings = patch_node.animation_mappings.clone();
-            mappings.sort_by_key(|mapping| mapping.property.contains('.'));
+        for dotted in [false, true] {
+            for &patch_id in &patch_ids {
+                let Some(patch_node) = self.resolve(patch_id) else { continue };
+                let Some((_, target_id)) = patch_node.inputs.iter().find(|(key, _)| *key == Input::Source) else { continue };
+                let Some((_, animation_id)) = patch_node.inputs.iter().find(|(key, _)| *key == Input::Reference) else { continue };
+                let target_id = *target_id;
+                let animation_id = *animation_id;
+                let mappings: Vec<_> = patch_node.animation_mappings.iter()
+                    .filter(|mapping| mapping.property.contains('.') == dotted)
+                    .cloned()
+                    .collect();
+                if mappings.is_empty() { continue; }
 
-            let Some(animation_node) = self.resolve(animation_id) else { continue };
-            let Ok(outputs) = animation_node.operation.execute(ctx, &[]) else { continue };
+                let Some(animation_node) = self.resolve(animation_id) else { continue };
+                let Ok(outputs) = animation_node.operation.execute(ctx, &[]) else { continue };
 
-            for mapping in &mappings {
-                let Some(raw_value) = outputs.get(mapping.output_index) else { continue };
-                let value = Self::combine_patch_value(mapping.mode, mapping.base, raw_value);
+                for mapping in &mappings {
+                    let Some(raw_value) = outputs.get(mapping.output_index) else { continue };
+                    let value = Self::combine_patch_value(mapping.mode, mapping.base, raw_value);
 
-                if let Some((base, channel)) = mapping.property.split_once('.') {
-                    self.apply_colour_channel(target_id, base, channel, &value);
-                } else if !self.try_set_target_parameter(target_id, &mapping.property, &value) {
-                    // Target has no real parameter by this name - it's
-                    // one of the raw pixel-channel fallbacks
-                    // (available_patch_properties only ever offers those
-                    // when the target has no real parameters at all), so
-                    // it belongs on PATCH's own internal state instead.
-                    if let Some(patch_node) = self.resolve_mut(patch_id) {
-                        let _ = patch_node.operation.set_parameter(&mapping.property, value.clone());
+                    if let Some((base, channel)) = mapping.property.split_once('.') {
+                        self.apply_colour_channel(target_id, base, channel, &value);
+                    } else if !self.try_set_target_parameter(target_id, &mapping.property, &value) {
+                        // Target has no real parameter by this name - it's
+                        // one of the raw pixel-channel fallbacks
+                        // (available_patch_properties only ever offers those
+                        // when the target has no real parameters at all), so
+                        // it belongs on PATCH's own internal state instead.
+                        if let Some(patch_node) = self.resolve_mut(patch_id) {
+                            let _ = patch_node.operation.set_parameter(&mapping.property, value.clone());
+                        }
                     }
                 }
             }
@@ -369,6 +379,38 @@ mod tests {
         // must have landed there, not on slot 1.
         match target_op.get_parameter("SLOT_COLOR") {
             Some(Value::Color(c)) => assert!((c.r - 0.75).abs() < 1e-6, "expected slot 2's R to be overwritten to 0.75, got {:?}", c),
+            other => panic!("expected a Color, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ordering_holds_across_two_separate_patch_nodes_targeting_the_same_source() {
+        // The selector and the colour write can legitimately live on two
+        // *different* PATCH nodes (a step function driving the selector,
+        // a separate animation driving the colour). Created here in the
+        // "wrong" order on purpose - the colour PATCH first, the selector
+        // PATCH second - to prove the fix isn't just "sort within one
+        // node's own mappings" but holds regardless of which PATCH node
+        // (or graph creation order) each mapping lives on.
+        let mut graph = Graph::new(4, 4);
+        let target = graph.add_node(Box::new(FakeSelectorTarget::new()));
+        let animation = graph.add_node(Box::new(FakeAnimationSource { x: 2.0, y: 0.75 }));
+
+        let colour_patch = graph.add_node(patch_node());
+        graph.connect(colour_patch, Input::Source, target).unwrap();
+        graph.connect(colour_patch, Input::Reference, animation).unwrap();
+        graph.set_patch_mapping(colour_patch, "SLOT_COLOR.R", 1, PatchMode::Replace).unwrap();
+
+        let selector_patch = graph.add_node(patch_node());
+        graph.connect(selector_patch, Input::Source, target).unwrap();
+        graph.connect(selector_patch, Input::Reference, animation).unwrap();
+        graph.set_patch_mapping(selector_patch, "SELECTOR", 0, PatchMode::Replace).unwrap();
+
+        graph.apply_patch_nodes(&Context::default());
+
+        let target_op = graph.get_node(&target).unwrap();
+        match target_op.get_parameter("SLOT_COLOR") {
+            Some(Value::Color(c)) => assert!((c.r - 0.75).abs() < 1e-6, "expected slot 2's (this tick's selection) R to be overwritten, got {:?}", c),
             other => panic!("expected a Color, got {:?}", other),
         }
     }
