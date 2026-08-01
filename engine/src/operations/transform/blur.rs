@@ -119,6 +119,7 @@ impl Operation for Blur {
             action: None,
             ui_action: None,
             create_node: Some("blur"),
+            submenu: Some("ASTRA"),
         }
     }
 

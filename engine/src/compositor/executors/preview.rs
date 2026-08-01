@@ -124,6 +124,7 @@ mod tests {
                 action: None,
                 ui_action: None,
                 create_node: None,
+                submenu: None,
             }
         }
 
@@ -156,6 +157,7 @@ mod tests {
                 action: None,
                 ui_action: None,
                 create_node: None,
+                submenu: None,
             }
         }
 

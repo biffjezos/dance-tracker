@@ -78,6 +78,7 @@ impl Operation for Screen {
             action: None,
             ui_action: None,
             create_node: Some("screen"),
+            submenu: None,
         }
     }
 

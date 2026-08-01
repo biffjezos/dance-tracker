@@ -83,6 +83,7 @@ impl Operation for Checkerboard {
             action: None,
             ui_action: None,
             create_node: Some("checkerboard"),
+            submenu: None,
         }
     }
 

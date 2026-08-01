@@ -46,6 +46,7 @@ impl Operation for Invert {
             action: None,
             ui_action: None,
             create_node: Some("invert"),
+            submenu: Some("SPECTRA"),
         }
     }
 

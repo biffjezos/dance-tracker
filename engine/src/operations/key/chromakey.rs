@@ -80,6 +80,7 @@ impl Operation for ChromaKey {
             action: None,
             ui_action: None,
             create_node: Some("chromakey"),
+            submenu: None,
         }
     }
 

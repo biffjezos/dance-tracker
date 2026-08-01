@@ -54,6 +54,7 @@ impl Operation for ImageSource {
             action: None,
             ui_action: Some("open_image_picker"),
             create_node: None,
+            submenu: None,
         }
     }
     fn as_any(&self) -> &dyn Any {

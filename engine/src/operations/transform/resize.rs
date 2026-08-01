@@ -115,6 +115,7 @@ impl Operation for Resize {
             action: None,
             ui_action: None,
             create_node: Some("resize"),
+            submenu: Some("KINETIC"),
         }
     }
 

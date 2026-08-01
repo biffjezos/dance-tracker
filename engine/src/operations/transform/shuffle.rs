@@ -122,6 +122,7 @@ impl Operation for Shuffle {
             action: None,
             ui_action: None,
             create_node: Some("shuffle"),
+            submenu: Some("SPECTRA"),
         }
     }
     

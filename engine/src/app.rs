@@ -72,6 +72,7 @@ struct OperationView {
     ui_action: Option<&'static str>,
     create_node: Option<&'static str>,
     category: &'static str,
+    submenu: Option<&'static str>,
 }
 
 /*
@@ -184,6 +185,7 @@ impl App {
                 ui_action: descriptor.ui_action,
                 create_node: descriptor.create_node,
                 category: category.as_str(),
+                submenu: descriptor.submenu,
             })
             .collect();
 
