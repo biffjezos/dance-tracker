@@ -180,16 +180,41 @@ spec below instead:
     matters when `COUNT` > 1, but always a real, settable parameter).
   - `THICKNESS` - the stroke width of each ring (uniform across all
     rings - the user's spec doesn't ask for per-ring thickness).
-- No per-group anything - no dynamic parameter pool, no `&'static str`
-  name-pool trick. This is a fixed four-parameter operation, the same
-  shape as `Resize`'s `SCALE_X`/`SCALE_Y`/`ALGORITHM`.
 - Centered on the frame (no position parameter unless asked for later -
   don't add one speculatively).
-- Colour/fill: **not yet specified by the user - ask before inventing
-  one.** A ring needs *some* way to decide what's drawn where (stroke
-  colour vs. background, opacity), and the four properties above don't
-  cover that. Don't default this to `Checkerboard`'s two-colour pattern
-  or anything else without confirming first.
+- **Each ring gets its own colour**, confirmed by the user, via a ring
+  selector + colour chooser in a deep menu - not a dynamic per-ring
+  parameter pool. Two more parameters, both `group: Some("COLOUR")`:
+  - `RING_SELECTOR` - `ParameterKind::Number { step: 1.0, min: Some(1.0), max: Some(count) }`.
+    The `max` must track the live `COUNT` value (recomputed in
+    `parameters()`, not a fixed literal), so the stepper never offers
+    more rings than actually exist, per CLAUDE.md rule 2 - exactly the
+    same requirement the earlier (discarded) per-group-colour design was
+    trying to satisfy, just met a completely different way.
+  - `RING_COLOR` - `ParameterKind::Color`. Its `get_parameter`/
+    `set_parameter` read/write whichever index `RING_SELECTOR` currently
+    points at, out of an internal `Vec<Color>` sized to `COUNT` (grow/
+    shrink it when `COUNT` changes via `set_parameter("COUNT", ...)` -
+    pick a reasonable fill for newly-added slots, e.g. clone the last
+    ring's colour, and say so in a comment rather than leaving it
+    unexplained).
+  - This is **existing UI infrastructure, not new work**: `menu.js`'s
+    `enterParameterGroup()` (the `param_group` `MenuContext`, with UP
+    navigating back out) already implements exactly this "deep menu"
+    drill-in, and `Checkerboard`'s own `A`/`B` colour parameters already
+    use `group: Some("COLOUR")` to render inside one. RING reuses the
+    identical mechanism - one stepper (`RING_SELECTOR`) plus one colour
+    field (`RING_COLOR`) in that pane, instead of two fixed named colour
+    fields. No JS changes needed for the group/drill-in behaviour itself.
+  - Always exactly two parameter entries in `parameters()` regardless of
+    `COUNT` - this is what makes it simpler than the discarded design,
+    which needed a whole fixed-name-pool workaround to stay within
+    `ParameterDescriptor.name: &'static str`.
+  - Still open: what fills the space *between* rings and outside the
+    outermost one - transparent (matching `Resize`'s convention for
+    uncovered space) is the reasonable default and doesn't need to be
+    asked about separately, but flag it in the PR/commit description
+    when implemented so it's a visible decision, not a silent one.
 - The old (deleted, pre-node-graph) UI hook was `toggleRingsEnabled` - an
   enable/disable boolean. **Don't reintroduce it.** In this node-graph
   architecture, a node's presence + wiring already is its enable/disable
