@@ -88,10 +88,6 @@ impl Operation for Lissajous {
         }
     }
 
-    fn output_names(&self) -> Vec<&'static str> {
-        vec!["X", "Y"]
-    }
-
     fn parameters(&self) -> Vec<ParameterDescriptor> {
         vec![
             ParameterDescriptor {

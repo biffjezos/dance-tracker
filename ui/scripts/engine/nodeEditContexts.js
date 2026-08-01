@@ -169,20 +169,6 @@ export function renderGenericEditContext(menuManager, nodeEntry) {
         groupButton.onclick = () => menuManager.enterParameterGroup(groupName);
         row.appendChild(groupButton);
     });
-
-    // Only an animation-category operation (Lissajous, Sine, Square, ...)
-    // can drive another node's parameter - everything else stays exactly
-    // as plain as it already is, unaware anything could be wired to it
-    // (see ANIMATION_IMPLEMENTATION_PLAN.md's Phase C: the picker lives
-    // on the driver's own edit screen, never on the target's).
-    const operation = menuManager.operations.find(op => op.id === nodeEntry.kind);
-    if (operation && operation.category === "animation") {
-        const row = startParamRow(menuManager);
-        const inputButton = document.createElement("button");
-        inputButton.innerText = "INPUT >";
-        inputButton.onclick = () => menuManager.enterAnimationTarget();
-        row.appendChild(inputButton);
-    }
 }
 
 /**
@@ -200,87 +186,6 @@ export function renderGroupContext(menuManager, nodeEntry, groupName) {
     renderParameterLabel(startParamRow(menuManager), groupName);
 
     parameters.forEach(parameter => renderParameter(menuManager, startParamRow(menuManager), nodeId, parameter));
-}
-
-/**
- * The "INPUT" deep-menu sub-pane an animation-category node's own edit
- * screen drills into (see ANIMATION_IMPLEMENTATION_PLAN.md's Phase C).
- * Two levels: pick the target node this driver controls, then - once a
- * target is picked - one "<OUTPUT NAME> CONTROLS ___" stepper per output
- * this driver declares, each bounded by the target's own real Number
- * parameters. Nothing here is hardcoded: candidates, outputs, and
- * target parameters all come from node_parameters()/node_outputs(),
- * exactly like renderInputSteppers does for ordinary pixel wiring.
- */
-export function renderAnimationTargetContext(menuManager, nodeEntry) {
-    const wasmApp = getWasmApp();
-    if (!wasmApp) return;
-
-    const nodeId = nodeEntry.layer.nodeId;
-
-    // Eligible targets: any real node other than this one, whose own
-    // operation is not itself an animation (connect_animation_target
-    // rejects that server-side too - filtering it out here just keeps
-    // the picker from offering a choice that would only bounce back as
-    // an error), and that has at least one real Number parameter to
-    // offer below. A node with none would be a dead-end pick, so it's
-    // simply not offered - same "bounded by what's real" rule as
-    // RING_SELECTOR never offering more rings than exist.
-    const candidates = getAllRealEntries().filter(entry => {
-        if (entry.id === nodeEntry.id) return false;
-        const op = menuManager.operations.find(o => o.id === entry.kind);
-        if (!op || op.category === "animation") return false;
-        const candidateId = resolveNodeId(entry.id);
-        if (candidateId === null) return false;
-        return wasmApp.node_parameters(candidateId).some(p => p.kind === "NUMBER");
-    });
-
-    const currentTargetIndex = wasmApp.animation_target(nodeId);
-    const hasTarget = currentTargetIndex !== null && currentTargetIndex !== undefined;
-
-    const targetEntry = candidates.find(entry => resolveNodeId(entry.id) === currentTargetIndex);
-    const targetOptions = ["NONE", ...candidates.map(entry => entry.label)];
-    const targetOptionIndex = targetEntry ? targetOptions.indexOf(targetEntry.label) : 0;
-
-    const targetRow = startParamRow(menuManager);
-    renderParameterLabel(targetRow, "TARGET");
-    renderStepperButtons(targetRow, targetOptions[targetOptionIndex], direction => {
-        const nextIndex = (targetOptionIndex + direction + targetOptions.length) % targetOptions.length;
-        if (nextIndex === 0) {
-            wasmApp.disconnect_animation_target(nodeId);
-        } else {
-            const target = candidates[nextIndex - 1];
-            const targetId = resolveNodeId(target.id);
-            if (targetId !== null) {
-                wasmApp.connect_animation_target(nodeId, targetId);
-            }
-        }
-        menuManager.render();
-    }, true);
-
-    // No target yet - nothing real to map an output to, so stop here
-    // rather than show dead "CONTROLS" rows with only NONE in them.
-    if (!hasTarget) return;
-
-    const targetParameters = wasmApp.node_parameters(currentTargetIndex).filter(p => p.kind === "NUMBER");
-    const paramOptions = ["NONE", ...targetParameters.map(p => p.name)];
-
-    wasmApp.node_outputs(nodeId).forEach(output => {
-        const currentMapping = wasmApp.animation_mapping(nodeId, output.index);
-        const optionIndex = currentMapping ? Math.max(0, paramOptions.indexOf(currentMapping)) : 0;
-
-        const row = startParamRow(menuManager);
-        renderParameterLabel(row, `${output.name} CONTROLS`);
-        renderStepperButtons(row, paramOptions[optionIndex], direction => {
-            const nextIndex = (optionIndex + direction + paramOptions.length) % paramOptions.length;
-            if (nextIndex === 0) {
-                wasmApp.clear_animation_mapping(nodeId, output.index);
-            } else {
-                wasmApp.set_animation_mapping(nodeId, output.index, paramOptions[nextIndex]);
-            }
-            menuManager.render();
-        });
-    });
 }
 
 /**

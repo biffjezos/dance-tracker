@@ -429,151 +429,207 @@ visible" and "large ring visible" without either `RING` node's own
 
 ---
 
-## Phase C - parameter wiring (IMPLEMENTED)
+## Phase C - parameter wiring (connect Phase A's outputs to any Number parameter)
 
-Built, tested (179 Rust tests passing, native + `wasm32-unknown-unknown`
-both build clean), and verified live in a browser: wired `SINE` into
-`MIX.AMOUNT` and confirmed the render actually animates over real time
-(three screenshots at different moments show the crossfade sweeping).
-The design below **supersedes an earlier draft of this section**, which
-had the consumer (the target) own the wire and required widening
-`Execute::execute` from `&Graph` to `&mut Graph`. Mid-design, direction
-flipped (see the conversation this plan was drafted from: "in the ui i
-want to keep that nodes manipulate the inputs, no node should select
-its output as property") - the **driver** now owns the connection and
-authors it from its own edit screen, which turned out to avoid the
-`&mut Graph` widening entirely. What actually shipped:
+This is the piece that turns "Lissajous exists as a node" into "Lissajous
+can drive RING's radius." It's real engine work, not just UI - four
+sub-parts, in dependency order.
 
-### Storage - on the driver, not the target
+### C0. Prerequisite you will hit immediately: multi-output values don't actually work today
 
-`compositor/graph/node.rs`'s `Node` gained two fields:
+`metadata().outputs` is already `Vec<OutputKind>` "so a future
+multi-output operation doesn't need the shape to change" (see the comment
+on `OutputKind` in `compositor/metadata.rs`) - but that promise isn't
+kept yet. `RenderExecutor::evaluate()` (`executors/render.rs`) always
+does `outputs.into_iter().next()`, throwing away everything after index
+0, and both its per-tick cache (`CachedNode.value: Value`) and its
+recursion memo (`HashMap<NodeId, Value>`) only ever store one `Value`
+per node. Lissajous's Y output (index 1) is unreachable through the
+executor as it stands today, even though `execute()` itself already
+returns both. Fix this first:
+
+- `CachedNode.value: Value` -> `CachedNode.values: Vec<Value>`
+- `memo: HashMap<NodeId, Value>` -> `HashMap<NodeId, Vec<Value>>`
+- `evaluate()`/`evaluate_profiled()` return `Vec<Value>` instead of a
+  single `Value`; callers that only ever wanted the first value (the
+  existing pixel-consuming call sites) take `.into_iter().next()` /
+  `[0]` at their own call site instead of inside `evaluate` - this keeps
+  every *existing* single-output operation working unchanged.
+- No `Operation` impl changes - `execute()` already returns `Vec<Value>`,
+  this only touches how the executor stores/threads that vec through.
+- Existing tests in `executors/render.rs`'s `#[cfg(test)] mod tests`
+  should keep passing with mechanical updates only (they already build
+  `graph` as `mut`, so `.execute(&graph, ...)` callers don't need new
+  bindings, just signature updates alongside C3 below).
+
+### C1. Graph-level storage for parameter wires
+
+`compositor/graph/node.rs` - add to `Node`:
 
 ```rust
-pub animation_target: Option<NodeId>,
-pub animation_mappings: Vec<(usize, &'static str)>, // (output_index, target_parameter_name)
+pub struct Node {
+    pub operation: Box<dyn Operation>,
+    pub inputs: Vec<(Input, NodeId)>,
+    pub parameter_wires: Vec<(&'static str, NodeId, usize)>, // (param name, source node, output index)
+}
 ```
 
-One target node per driver (not per output - "select source" is a single
-pick), and a sparse list mapping each of the driver's own output indices
-to a parameter name on that one target. `&'static str`, matching
-`ParameterDescriptor.name` exactly like the discarded design intended -
-resolved and validated once at connect-time, never a caller-supplied
-owned string stored long-term.
+Deliberately `&'static str`, matching `ParameterDescriptor.name`, not an
+owned `String` - resolved and validated once at connect-time (C2) against
+the target operation's own `parameters()` list, the same way `Input` (a
+fixed `Copy` enum) is validated today. This avoids threading owned
+strings through the render hot path for something that's always actually
+one of a small fixed set of `&'static str`s per operation.
 
-### Graph API - `compositor/graph/edit.rs`
+### C2. Graph API - `connect_parameter` / `disconnect_parameter`
 
-- `connect_animation_target(driver, target)` - rejects `driver == target`,
-  rejects a driver whose own `metadata().category != OperationCategory::Animation`,
-  and rejects a `target` that's *itself* Animation-category. That last
-  rule is what makes chained/cyclic driving structurally impossible
-  rather than something to detect: `validate.rs`'s cycle DFS did not
-  need touching at all, because a driver can never point at another
-  driver in the first place. Clears `animation_mappings` on every
-  target change (they named parameters on the *old* target).
-- `disconnect_animation_target(driver)` - clears target and all mappings.
-- `set_animation_mapping(driver, output_index, target_parameter: &str)` -
-  validates `output_index` against the driver's own declared output
-  count, and `target_parameter` against the target's *current, real*
-  `ParameterKind::Number` parameters, storing the matched `&'static str`
-  from the target's own `ParameterDescriptor` (never the caller's `&str`).
-- `clear_animation_mapping(driver, output_index)`.
-- `remove_node` now also clears `animation_target`/`animation_mappings`
-  on any node whose target was just removed, same spirit as its existing
-  `inputs.retain(...)` cleanup for pixel wires.
+`compositor/graph/edit.rs` - mirror `connect`/`disconnect` exactly:
 
-### Execution - a flat pre-pass, not a widened `Execute` trait
+```rust
+pub fn connect_parameter(
+    &mut self,
+    node: NodeId,
+    parameter: &str,
+    source: NodeId,
+    output_index: usize,
+) -> Result<(), OperationError> {
+    // 1. resolve(node) and resolve(source) must both exist (OperationError::UnknownNode)
+    // 2. look up `parameter` in node's operation.parameters(); reject unknown
+    //    names (new OperationError variant, or reuse UnknownParameter)
+    // 3. reject if that parameter's ParameterKind is not Number - start
+    //    restrictive (see ANIMATION_CONVENTIONS.md's "explicitly not
+    //    decided yet" list; Boolean/Enum/Color wiring is future scope,
+    //    not this pass)
+    // 4. store the *matched* &'static str from the descriptor (not the
+    //    caller's &str) in parameter_wires, replacing any existing wire
+    //    for that parameter name (same retain-then-push pattern `connect` uses)
+}
 
-`compositor/graph/drive.rs` (new file, mirrors the `describe`/`edit`/
-`resolve`/`validate` split) - `Graph::apply_animation_drivers(&mut self,
-ctx: &Context)`:
+pub fn disconnect_parameter(&mut self, node: NodeId, parameter: &str) -> Result<(), OperationError>
+```
 
-- Scans every node once for `animation_target.is_some() &&
-  !animation_mappings.is_empty()`, calls that driver's own `execute(ctx, &[])`
-  (drivers declare zero pixel inputs - see Phase A - so no input
-  resolution is needed), and for each `(output_index, target_parameter)`
-  pushes the corresponding output value into the target via its
-  **already-existing** `set_parameter()` - exactly the injection point
-  `ANIMATION_CONVENTIONS.md` decided on, just fed by a wired driver
-  instead of an (unbuilt) authored curve.
-- A **flat** pass, not a recursive DAG walk, on purpose: since a driver
-  can never target another driver (enforced above), there is no
-  ordering dependency between drivers to resolve - every driver can be
-  evaluated in any order.
-- Called once per tick from `App::render_tick` *and* `App::preview_tick`
-  (`app.rs`), *before* the normal executor call - so `RenderExecutor`'s
-  existing cache (which already fingerprints a node via `get_parameter()`
-  on every declared parameter) picks up the animated change for free.
-  **This is why `Execute::execute`'s `&Graph` signature never needed
-  widening**: the mutation happens in a separate step before the normal
-  immutable DAG walk, not inside it.
-- Infallible by design: a `set_parameter()` rejection (an animated
-  value momentarily outside the target's valid range) is silently
-  dropped for that tick rather than propagated as an error - the target
-  keeps its last value, the whole render never blanks over one
-  out-of-range tick. Same reasoning as a human typing a bad value by
-  hand being rejected, not crashing anything.
-- What actually did need adding, orthogonal to the above: `metadata().outputs`
-  already being `Vec<OutputKind>` was never the blocker C0's original
-  draft worried about - `execute()` already returns the full `Vec<Value>`
-  and this pre-pass reads it directly by index, no executor-level
-  multi-output plumbing required. What *was* missing: a way to *label*
-  each output ("X"/"Y", not just positionally distinguishable) for the
-  UI. Added `Operation::output_names() -> Vec<&'static str>` as a new
-  **default-provided** trait method (`Vec::new()` by default - purely
-  cosmetic, nothing in the engine depends on it) - overridden by
-  Lissajous (`["X", "Y"]`), Sine and Square (`["OUTPUT"]`). This is a
-  small, additive trait extension, not the kind of change
-  `ANIMATION_CONVENTIONS.md`'s "never touch `Operation`/`ParameterKind`"
-  rule was guarding against (that rule is about the parameter
-  get/set/describe path specifically staying the one hook for state).
+Both must set `self.validation = ValidationState::Dirty;`, same as
+`connect`/`disconnect` - a parameter wire is a graph-structural edit and
+has to trigger revalidation for C3 to be safe.
 
-### WASM bindings - `app.rs`
+### C3. Extend cycle detection to parameter wires
 
-Mirrors `connect_node_input`/`disconnect_node_input`/`node_inputs` in
-shape: `node_outputs(node_id)` (index + label per declared output),
-`animation_target(node_id)` (current target or `None`),
-`animation_mapping(node_id, output_index)` (current mapping or `None`),
-`connect_animation_target`, `disconnect_animation_target`,
-`set_animation_mapping`, `clear_animation_mapping`. No binding needed
-for "list eligible targets" or "list eligible target parameters" -
-both are derived in JS from the already-existing `node_parameters()`
-(filtered to `kind === "NUMBER"`) and the already-cached
-`menuManager.operations` (filtered to exclude `category === "animation"`).
+`compositor/graph/validate.rs`'s `visit_cycle_detection` currently only
+walks `node.inputs`. A parameter wire is a real dependency edge too - a
+Lissajous (hypothetically) wired into its own parameter, or a longer cycle
+formed purely through parameter wires, must be caught here, or
+`RenderExecutor`'s parameter-resolution step (C4) will recurse forever
+the first time someone builds one. Add a second loop over
+`node.parameter_wires` right after the existing `for (_, input) in
+&node.inputs` loop, feeding the same `state`/`path`/`cycle_nodes`
+machinery. Also extend the `unknown_input_nodes` detection loop earlier
+in `run_validation` and the `dependents` construction in
+`propagate_invalidity` the same way - a parameter wire pointing at a
+removed node needs `UnknownInput`-equivalent handling, not a silent
+no-op. (Note: this file's own comment already documents a pre-existing
+stale-DFS-state bug affecting `state`/`path` reuse across top-level
+roots, tracked in `PARKED_WORK.md` - don't fix that as a side effect
+here, it needs its own regression test per that entry's own notes.)
 
-### JS UI - a new deep-menu pane, authored from the driver
+### C4. Resolve wires before `execute()` - reuses the exact hook `ANIMATION_CONVENTIONS.md` already decided
 
-`ui/scripts/engine/nodeEditContexts.js`:
+This is the one signature change with real blast radius, so do it
+deliberately: `Execute::execute` (`executors/mod.rs`) and both impls
+(`RenderExecutor`, `PreviewExecutor`) currently take `graph: &Graph`.
+Injecting a wire-resolved value via the operation's existing
+`set_parameter()` needs mutable access to the node, so this must become
+`graph: &mut Graph`. Blast radius, fully enumerated (checked against the
+current tree, not guessed):
 
-- `renderGenericEditContext` (the default edit-screen renderer every
-  node without a bespoke context gets) now adds an `INPUT >` button -
-  but only when the node's own operation is Animation-category (checked
-  via `menuManager.operations`, never a hardcoded id list).
-- New `renderAnimationTargetContext(menuManager, nodeEntry)`: a `TARGET`
-  stepper (`NONE` + every eligible node, same shape as
-  `renderInputSteppers`'s candidate list), and - only once a target is
-  picked, so there's never a dead "CONTROLS" row with nothing real to
-  offer - one `"<OUTPUT NAME> CONTROLS ___"` stepper per output the
-  driver declares, each bounded by the *current* target's real Number
-  parameters.
+- `Execute` trait definition - one line.
+- `RenderExecutor::evaluate`/`evaluate_profiled` and
+  `PreviewExecutor::execute` - signatures only; `PreviewExecutor` doesn't
+  need to *do* anything with parameter wires in this pass if you want to
+  scope C4 to the render path first, but it must still compile against
+  the trait.
+- Two call sites in `app.rs`: `render_tick` (~line 533) and
+  `preview_tick` (~line 581), both already `&mut self` methods on `App` -
+  changing `&self.graph` to `&mut self.graph` there is a non-breaking,
+  mechanical change, not a structural one.
+- Existing tests in `executors/render.rs` / `executors/preview.rs` that
+  call `.execute(&graph, ...)` directly - mechanical `&graph` ->
+  `&mut graph` at each call; every one of those tests already declares
+  `let mut graph = ...`, so no new `mut` bindings are needed, just the
+  call-site edit.
 
-`ui/scripts/engine/menu.js`:
+With that done, in `RenderExecutor::evaluate` (after resolving
+`input_values`, before computing `param_fingerprint`):
 
-- `CONTEXT_HANDLERS` gained `animation_target: "renderAnimationTargetContext"`.
-- New `MenuManager.renderAnimationTargetContext()` method (mirrors
-  `renderParamGroupContext`) and `enterAnimationTarget()` navigation
-  method (mirrors `enterParameterGroup`, minus the group-name argument -
-  there's only ever one "INPUT" pane per driver).
+```rust
+for &(param_name, source_id, output_index) in &node_data.operation_parameter_wires() {
+    // evaluate() the source node recursively (same memo/cache path
+    // pixel inputs already use), pull `output_index` out of its Vec<Value>
+    // (this is exactly what C0 made possible), and:
+    graph.resolve_mut(node).unwrap().operation.set_parameter(param_name, value)?;
+}
+```
 
-### Verified
+Because this genuinely mutates the operation's stored parameter value
+(not a side-channel override), the *existing* cache-invalidation logic in
+`RenderExecutor` - which already fingerprints parameters via
+`get_parameter()` after every `execute()` - picks up wire-driven changes
+for free. No special-casing needed there; this is the payoff of storing
+the resolved value through the real `set_parameter()` call instead of
+inventing a parallel "override" path.
 
-`cargo test` (4 new tests in `drive.rs`, plus the full suite - 179
-passing), `cargo build --target wasm32-unknown-unknown` clean, and a
-real browser session: created two `RING`s, a `MIX` wired to both, a
-`SINE` tuned to sweep `0..1` (`OFFSET=0.5, AMPLITUDE=0.5`), drilled into
-`SINE`'s `INPUT` pane, picked `MIX 1` as `TARGET`, mapped `OUTPUT
-CONTROLS -> AMOUNT`, set `MIX` as `LIVE`, and screenshotted the render
-at three points in time - the crossfade visibly swings between "mostly
-Ring 1" and "both rings blended" as `SINE` oscillates, live.
+Order of operations within `evaluate()` matters: resolve parameter wires
+*before* computing `param_fingerprint`, so the fingerprint reflects the
+value the wire just set, not last tick's stored value.
+
+### C5. WASM bindings
+
+`app.rs` - mirror `connect_node_input`/`disconnect_node_input` (~line
+347-390) exactly:
+
+```rust
+pub fn connect_node_parameter(&mut self, node_id: u32, parameter: String, source_id: u32, output_index: u32) -> Result<(), JsValue>
+pub fn disconnect_node_parameter(&mut self, node_id: u32, parameter: String) -> Result<(), JsValue>
+```
+
+Also extend `ParameterView` (or add a sibling field) so
+`node_parameters()` reports whether a given parameter currently has a
+wire attached and to which node/output - `renderInputSteppers` in
+`menu.js` needs this to show current state, same as `InputView.source`
+does for pixel wires today.
+
+### C6. JS UI - reuse `renderInputSteppers`'s exact pattern, don't invent a new one
+
+`ui/scripts/engine/menu.js`'s `renderInputSteppers` (~line 372) is
+already fully generic: query the node's real inputs from the graph
+(never hardcoded), offer NONE + every other real node as stepper options,
+call `connect_node_input`/`disconnect_node_input`. Write
+`renderParameterWireSteppers` as a straight copy of that shape, querying
+`wasmApp.node_parameters(nodeId)` filtered to Number-kind parameters
+(from C5's extended `ParameterView`) instead of `wasmApp.node_inputs`,
+and calling `connect_node_parameter`/`disconnect_node_parameter`. Hook it
+into whatever renders a node's parameter list today (near
+`renderInputSteppers`'s own call site) so a Number parameter shows both
+its normal stepper *and* a "wire source" option - exact UI arrangement
+(combined row vs. separate row) is a small enough call to make while
+implementing, not worth deciding here.
+
+### C7. Verify
+
+- `cargo test` - all of C0-C4's changes should be provable at the Rust
+  level per CLAUDE.md rule 4: a graph-level test wiring a
+  `ConfigurableSource`-style stub's Number parameter to a stub signal
+  source, ticking twice, and asserting the parameter's resolved value
+  changed between ticks (the animate-ops equivalent of
+  `changing_a_parameter_forces_re_execution_next_tick`, already in
+  `executors/render.rs`) is the key regression test to add.
+- A cycle-through-parameter-wire test mirroring
+  `a_genuine_cycle_is_still_flagged_and_still_fails_validation` in
+  `validate.rs`, but wiring node A's parameter to node B and B's
+  parameter (or input) back to A.
+- Only after that: a manual/Playwright smoke check that wiring Lissajous
+  into a RING group's radius (or similar) actually animates in the
+  browser - diagnostic only, per CLAUDE.md rule 4, not a committed test
+  suite.
 
 ---
 

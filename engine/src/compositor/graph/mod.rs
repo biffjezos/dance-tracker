@@ -1,7 +1,6 @@
 // graph/mod.rs
 
 mod describe;
-mod drive;
 mod edit;
 pub mod node;
 mod resolve;
