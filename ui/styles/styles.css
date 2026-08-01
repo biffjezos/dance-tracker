@@ -303,6 +303,30 @@ input[type="color"]::-webkit-color-swatch {
   width: 18ch;
 }
 
+/* Only attached when the stepper's own value label is click-to-type
+   (renderStepperButtons' onDirectEdit - currently just NUMBER
+   parameters), same reasoning as .node-name-label-editable: the cursor
+   is the only hint, so it only shows up where clicking actually does
+   something. */
+.node-value-label-editable {
+  cursor: text;
+}
+
+/* Replaces .node-value-label in place while typing (see
+   startDirectValueEdit) - same size so the stepper's -/+ buttons don't
+   reflow, same pink accent border as .node-name-input for a consistent
+   "this field is live" cue. */
+.node-value-input {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-body);
+  color: var(--color-text-input);
+  background: var(--color-bg-input);
+  border: 2px solid var(--color-border-button);
+  width: 10ch;
+  text-align: center;
+  padding: 0;
+}
+
 /* Node name display - fixed width for 23 characters */
 .node-name-label {
   font-family: var(--font-family-primary);

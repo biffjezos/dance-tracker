@@ -435,12 +435,29 @@ function renderNumberParameter(menuManager, container, nodeId, parameter) {
     // either way).
     const displayValue = current.toFixed(stepDecimals(step));
 
-    renderStepperButtons(container, displayValue, direction => {
-        let next = roundToStepPrecision(current + direction * step, step);
+    const clampToRange = value => {
+        let next = value;
         if (parameter.min != null) next = Math.max(parameter.min, next);
         if (parameter.max != null) next = Math.min(parameter.max, next);
+        return next;
+    };
+
+    renderStepperButtons(container, displayValue, direction => {
+        const next = clampToRange(roundToStepPrecision(current + direction * step, step));
         dispatchParameterUpdate(nodeId, parameter.name, String(next));
         menuManager.render();
+    }, {
+        onDirectEdit: text => {
+            const typed = parseFloat(text);
+            // An empty field, stray text, or anything else that doesn't
+            // parse leaves the parameter untouched rather than sending
+            // NaN through to Rust.
+            if (!Number.isNaN(typed)) {
+                const next = clampToRange(roundToStepPrecision(typed, step));
+                dispatchParameterUpdate(nodeId, parameter.name, String(next));
+            }
+            menuManager.render();
+        }
     });
 }
 
@@ -484,9 +501,13 @@ function dispatchParameterUpdate(nodeId, parameterName, value) {
  * -1 or +1 and is responsible for dispatching the update. `wide` widens
  * the value field for content that's legitimately longer than a typical
  * parameter value - a wired node's own display name, not a short number
- * or enum choice.
+ * or enum choice. `onDirectEdit(text)`, if given, makes the value label
+ * itself click-to-edit (same pattern as the node name label in menu.js) -
+ * only NUMBER parameters wire this up, since stepping through a closed
+ * set (an Enum, a wired-node selector, a PATCH mapping) doesn't have a
+ * "type a value" equivalent.
  */
-function renderStepperButtons(container, valueText, onStep, wide = false) {
+function renderStepperButtons(container, valueText, onStep, { wide = false, onDirectEdit = null } = {}) {
     const minusButton = document.createElement("button");
     minusButton.innerText = "-";
     minusButton.onclick = () => onStep(-1);
@@ -495,12 +516,51 @@ function renderStepperButtons(container, valueText, onStep, wide = false) {
     const valueLabel = document.createElement("span");
     valueLabel.innerText = ` ${valueText} `;
     valueLabel.className = wide ? "node-value-label node-value-label-wide" : "node-value-label";
+
+    if (onDirectEdit) {
+        valueLabel.classList.add("node-value-label-editable");
+        valueLabel.title = "Click to type a value";
+        valueLabel.onclick = () => startDirectValueEdit(valueLabel, valueText, onDirectEdit);
+    }
+
     container.appendChild(valueLabel);
 
     const plusButton = document.createElement("button");
     plusButton.innerText = "+";
     plusButton.onclick = () => onStep(1);
     container.appendChild(plusButton);
+}
+
+/**
+ * Swap a value label for a text input, exactly the way
+ * menu.js's startRenamingNode swaps the node name label - click the text,
+ * type a replacement, Enter or losing focus commits it via `onCommit`,
+ * Escape reverts to `originalText` without committing anything.
+ */
+function startDirectValueEdit(valueLabel, originalText, onCommit) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.inputMode = "decimal";
+    input.className = "node-value-input";
+    input.value = originalText.trim();
+
+    // Escape doesn't skip the commit (that would leave the bare <input>
+    // stranded on screen with nothing to replace it) - it resets the
+    // field's value back to the original text first, so the commit that
+    // still runs on blur is just a no-op re-render showing the
+    // unmodified value, same shape as menu.js's startRenamingNode.
+    input.onblur = () => onCommit(input.value);
+    input.onkeydown = e => {
+        if (e.key === "Enter") input.blur();
+        if (e.key === "Escape") {
+            input.value = originalText;
+            input.blur();
+        }
+    };
+
+    valueLabel.replaceWith(input);
+    input.focus();
+    input.select();
 }
 
 /**
