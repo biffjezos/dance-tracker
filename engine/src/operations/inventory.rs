@@ -68,22 +68,8 @@ pub fn populate_registry(registry: &mut OperationRegistry) {
     }
 }
 
-/// Macro for registering operations with inventory
-/// Usage: inventory::submit! { OperationInfo { constructor: || Box::new(MyOperation::new()) } }
+/// What every operation file submits directly via `inventory::submit! { OperationInfo { ... } }`.
 #[derive(Debug)]
 pub struct OperationInfo {
     pub constructor: OperationConstructor,
-}
-
-/// Helper macro to make operation registration cleaner
-/// This creates a static OperationInfo that gets collected by inventory
-#[macro_export]
-macro_rules! register_operation {
-    ($operation_type:ty, $constructor:expr) => {
-        inventory::submit! {
-            OperationInfo {
-                constructor: $constructor
-            }
-        }
-    };
 }

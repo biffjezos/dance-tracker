@@ -1,5 +1,6 @@
 import { getOperations, executeOperation } from "./core/operations.js";
 import { initWasm, getWasmApp } from "./core/wasm.js";
+import { logger } from "./core/log.js";
 
 import { WIDTH, HEIGHT } from "./engine/constants.js";
 import { Camera } from "./engine/camera.js";
@@ -98,12 +99,7 @@ window.addEventListener("updateNodeParameter", e => {
         value
     } = e.detail;
 
-    console.log(
-        "Update node parameter:",
-        nodeId,
-        parameter,
-        value
-    );
+    logger.debug("Update node parameter:", nodeId, parameter, value);
 
     const wasmApp = getWasmApp();
 

@@ -238,7 +238,6 @@ mod tests {
     use crate::compositor::graph::Graph;
     use crate::compositor::executors::{Execute, RenderExecutor};
     use crate::graphics::ImageFormat;
-    use crate::operations::sources::ImageSource;
 
     fn context(width: u32, height: u32) -> Context {
         Context {

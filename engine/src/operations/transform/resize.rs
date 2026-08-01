@@ -244,17 +244,12 @@ mod tests {
     use super::*;
     use crate::compositor::graph::Graph;
     use crate::compositor::executors::{Execute, RenderExecutor};
-    use crate::graphics::ImageFormat;
 
     fn context(width: u32, height: u32) -> Context {
         Context {
             meta: crate::compositor::Meta { width, height, ..Default::default() },
             ..Default::default()
         }
-    }
-
-    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<Image> {
-        Arc::new(Image { pixels, width, height, format: ImageFormat::Rgba8 })
     }
 
     #[test]

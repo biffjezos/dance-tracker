@@ -4,6 +4,8 @@ DANCE TRACKER 5000
 RECORDING ENGINE
 ==================================================
 */
+import { logger } from "../core/log.js";
+
 export class Recorder {
     constructor(canvas) {
         this.canvas = canvas;
@@ -37,10 +39,10 @@ export class Recorder {
             };
             this.recorder.start();
             this.recording = true;
-            console.log("Recording started", this.recorder.mimeType);
+            logger.debug("Recording started", this.recorder.mimeType);
             return true;
         } catch (error) {
-            console.error("RECORDING FAILED TO START:", error.name, error.message);
+            logger.error("Recording failed to start:", error.name, error.message);
             this.recording = false;
             this.recorder = null;
             return false;
@@ -63,22 +65,22 @@ export class Recorder {
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
-                console.log("Recording saved");
+                logger.debug("Recording saved");
             } catch (error) {
-                console.error("RECORDING FAILED TO SAVE:", error.name, error.message);
+                logger.error("Recording failed to save:", error.name, error.message);
             }
         };
         try {
             this.recorder.stop();
         } catch (error) {
-            console.error("RECORDING FAILED TO STOP:", error.name, error.message);
+            logger.error("Recording failed to stop:", error.name, error.message);
             this.recording = false;
             this.recorder = null;
             return false;
         }
         this.recording = false;
         this.recorder = null;
-        console.log("Recording stopped");
+        logger.debug("Recording stopped");
         return true;
     }
 }

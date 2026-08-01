@@ -20,6 +20,7 @@ import {
 import {
     getWasmApp
 } from "../core/wasm.js";
+import { logger } from "../core/log.js";
 
 /*
     Attach a live HTMLVideoElement (a decoded file, or a camera stream) to a
@@ -69,7 +70,7 @@ window.addEventListener("menuOperation", e => {
             await video.play();
             const wasmApp = getWasmApp();
             if (!wasmApp) {
-                console.error("WASM app not initialized");
+                logger.error("WASM app not initialized");
                 return;
             }
             const nodeId = createLiveSourceNode(wasmApp, "video_source", video);
@@ -89,7 +90,7 @@ window.addEventListener("menuOperation", e => {
             setSelectedVideoEntry(layer);
             reportSelection("video");
         } catch (error) {
-            console.error("Error loading video:", error);
+            logger.error("Error loading video:", error);
         } finally {
             input.remove();
         }
@@ -114,7 +115,7 @@ function activateCamera() {
         id: "camera-" + number,
         number,
         name: "CAMERA " + number,
-        kind: "video",
+        kind: "camera",
         videoEl: video,
         settings: defaultUniversalSettings()
     };

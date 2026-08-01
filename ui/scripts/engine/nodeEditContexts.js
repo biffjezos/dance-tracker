@@ -125,17 +125,6 @@ export function renderImageEditContext(menuManager, nodeEntry) {
 }
 
 /**
- * Render function for video edit context
- * Shows: ANIMATION CONTROLS
- */
-export function renderVideoEditContext(menuManager, nodeEntry) {
-    const videoLabel = document.createElement("span");
-    videoLabel.innerText = " VIDEO EDIT: ANIMATION CONTROLS ";
-    videoLabel.className = "node-selector-label";
-    menuManager.subMenu.appendChild(videoLabel);
-}
-
-/**
  * Default edit context, used for any node kind without its own bespoke
  * registration.
  *
@@ -416,6 +405,9 @@ function renderInputSteppers(menuManager, nodeEntry, nodeId) {
 }
 
 // Register all known edit contexts
-// These map node kinds to their respective edit UIs
-nodeEditContextRegistry.register("video", renderVideoEditContext);
+// These map node kinds to their respective edit UIs. video/camera sources
+// currently declare no parameters or inputs (supports_edit() is false for
+// them), so they never reach an edit context at all - only kinds that
+// actually have something to edit need a registration here, and the
+// generic default below is enough for all of them today.
 nodeEditContextRegistry.registerDefault(renderGenericEditContext);
