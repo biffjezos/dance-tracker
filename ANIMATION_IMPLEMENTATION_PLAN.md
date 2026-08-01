@@ -299,13 +299,18 @@ a time lag. There is no frame-feedback/persistence involved at all.
     `ParameterKind` for this (no existing `ParameterKind` covers a 2D
     vector - `graphics::geometry::Point2D`/`Center` are unrelated, unused
     MOVE scaffolding, not a fit here).
-  - `OPACITY_STEP` - confirmed: signed (can be negative *or* positive),
-    added once per ghost step. Ghost `n`'s opacity multiplier is
-    `(1.0 + n * OPACITY_STEP).clamp(0.0, 1.0)` for `n` in `1..=GHOST_COUNT`
-    (the source itself, `n = 0`, always renders at its own native
-    opacity - it's the reference point, same as it is for `DISTANCE`).
-    Positive fades ghosts *in* with distance, negative fades them *out* -
-    both are real, user-facing choices, not a hardcoded direction.
+  - `OPACITY_MULTIPLIER` - **one shared value, applied identically to
+    every ghost - not indexed by `n`, no per-ghost formula.** Corrected
+    from an earlier draft of this plan, which wrongly turned "opacity
+    changes by a step property" into a progressive `1 + n * step`
+    formula that varied per ghost - the user explicitly did not say
+    that; every ghost `n` in `1..=GHOST_COUNT` uses this exact same
+    multiplier, clamped `0.0..1.0`. "Step" here just means the ordinary
+    UI increment on a `Number` parameter (the `step` field every other
+    `ParameterKind::Number` already has, e.g. `Resize`'s `SCALE_X`), not
+    a per-ghost math term. The source itself (`n = 0`) always renders at
+    its own native opacity, unaffected by this parameter - it's the
+    reference point, same as it is for `DISTANCE`.
 - **Position formula** (fully specified by the user's own example):
   `ghost_n_offset = n * DISTANCE * (SPATIAL_X, SPATIAL_Y)` for
   `n = 1..=GHOST_COUNT`.
@@ -325,7 +330,8 @@ a time lag. There is no frame-feedback/persistence involved at all.
      `ghost_n_offset` (nearest-neighbor shift with transparent padding at
      the vacated edge - same inverse-mapping shape `Resize::resize_pixels`
      already uses, just a translation instead of a scale), then multiply
-     its alpha channel by that ghost's opacity multiplier.
+     its alpha channel by `OPACITY_MULTIPLIER` (the same value for every
+     ghost).
   4. Composite the source's own cutout (`n = 0`, full opacity) and all
      `n = 1..=GHOST_COUNT` ghost layers into one output image. **Stacking
      order for overlapping ghosts is a real open question the user
@@ -347,7 +353,7 @@ a time lag. There is no frame-feedback/persistence involved at all.
      stay exactly as they are.
   6. No extra gamut-safety logic needed in that helper: alpha-over is a
      convex combination (`fg * a + bg * (1-a)`) weighted by an opacity
-     already clamped to `0.0..1.0` (step 3's `OPACITY_STEP` formula), so
+     already clamped to `0.0..1.0` (`OPACITY_MULTIPLIER`), so
      it can't *introduce* an out-of-gamut result the way `Add`/`Multiply`/
      `Screen` can. If `Source` itself is already out-of-gamut
      (FloatImage from an upstream `ADD` chain, say), that can still carry
