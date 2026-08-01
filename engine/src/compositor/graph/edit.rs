@@ -204,6 +204,14 @@ impl Graph {
     /// "B"/"A" as a fallback, since there's nothing else to offer. Empty
     /// if no SOURCE is wired yet - never a fixed list unrelated to what's
     /// actually wired.
+    ///
+    /// A Number parameter that shares a `group` with a Color parameter
+    /// (RING's RING_SELECTOR, grouped "COLOUR" alongside RING_COLOR) is
+    /// excluded: it's a selector picking *which* colour instance a later
+    /// RING_COLOR write lands on, not a value with any rendering effect
+    /// of its own - animating it in isolation can never produce a
+    /// visible result no matter what shape or range the animation source
+    /// has, so offering it here would just be misleading.
     pub fn available_patch_properties(&self, patch: NodeId) -> Vec<String> {
         let Some(node) = self.resolve(patch) else { return Vec::new() };
         let Some((_, target_id)) = node.inputs.iter().find(|(key, _)| *key == Input::Source) else {
@@ -211,10 +219,21 @@ impl Graph {
         };
         let Some(target_node) = self.resolve(*target_id) else { return Vec::new() };
 
+        let all_parameters = target_node.operation.parameters();
+        let colour_groups: Vec<&'static str> = all_parameters.iter()
+            .filter(|p| matches!(p.kind, ParameterKind::Color))
+            .filter_map(|p| p.group)
+            .collect();
+
         let mut properties = Vec::new();
-        for parameter in target_node.operation.parameters() {
+        for parameter in &all_parameters {
             match parameter.kind {
-                ParameterKind::Number { .. } => properties.push(parameter.name.to_string()),
+                ParameterKind::Number { .. } => {
+                    if parameter.group.is_some_and(|g| colour_groups.contains(&g)) {
+                        continue;
+                    }
+                    properties.push(parameter.name.to_string());
+                }
                 ParameterKind::Color => {
                     for channel in ["R", "G", "B", "A"] {
                         properties.push(format!("{}.{}", parameter.name, channel));

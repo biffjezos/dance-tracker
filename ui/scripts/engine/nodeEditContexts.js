@@ -228,6 +228,29 @@ export function renderPatchPropertiesPane(menuManager, nodeEntry) {
  * button above already gates entry, but that check ran on the previous
  * screen).
  */
+const CHANNEL_LABELS = { R: "RED", G: "GREEN", B: "BLUE", A: "ALPHA" };
+
+/**
+ * A property identifier as PATCH's own API uses it ("A.R", "KEY_COLOR.A",
+ * bare "R") is deliberately terse and stable - other code parses it
+ * (`property.split_once('.')` on the Rust side) and every UI call
+ * (patch_mapping/set_patch_mapping/clear_patch_mapping) round-trips it
+ * verbatim. None of that requires it to also be what gets displayed: a
+ * bare channel letter ("R") is ambiguous with a colour PARAMETER that
+ * happens to be named a single letter too (CHECKERBOARD's own two
+ * colours are literally named "A" and "B"), so "A.A" - parameter "A"'s
+ * alpha channel - read on screen as meaningless doubled noise. Spelling
+ * the channel out (RED/GREEN/BLUE/ALPHA) and dropping the dot fixes that
+ * without touching the wire format at all.
+ */
+function formatPatchPropertyLabel(property) {
+    const [base, channel] = property.split(".");
+    if (channel) {
+        return `${base.replace(/_/g, " ")} ${CHANNEL_LABELS[channel] || channel}`;
+    }
+    return CHANNEL_LABELS[property] || property.replace(/_/g, " ");
+}
+
 function renderPatchMappingRows(menuManager, nodeId) {
     const wasmApp = getWasmApp();
     if (!wasmApp) return;
@@ -241,7 +264,20 @@ function renderPatchMappingRows(menuManager, nodeId) {
 
     const outputs = wasmApp.node_outputs(referenceInput.source);
     const outputOptions = ["NONE", ...outputs.map(output => output.name)];
-    const MODES = ["REPLACE", "ADD", "SUBTRACT"];
+    // ADD is proposed first (MODES[0]) for a brand-new mapping, not
+    // REPLACE: an animation source's own natural range (e.g. SINE's
+    // default -1..1) is almost never close to a target property's own
+    // meaningful range (RADIUS in the tens/hundreds, COUNT a small
+    // integer with its own min). REPLACE against a mismatched range
+    // isn't just "a small effect" - it can clamp to a constant forever
+    // (a target's min sitting at or above the animation's own max, e.g.
+    // COUNT's min=1 meeting SINE's default max=1, stuck at exactly 1
+    // every tick) or collapse a large-scale property down into the
+    // animation's tiny range. ADD instead offsets from whatever the
+    // property was already set to (its captured base), which is visible
+    // and reasonable by default regardless of how the animation source
+    // happens to be tuned.
+    const MODES = ["ADD", "REPLACE", "SUBTRACT"];
 
     properties.forEach(property => {
         const mapping = wasmApp.patch_mapping(nodeId, property);
@@ -249,7 +285,7 @@ function renderPatchMappingRows(menuManager, nodeId) {
         const currentMode = mapping ? mapping.mode : MODES[0];
 
         const row = startParamRow(menuManager);
-        renderParameterLabel(row, property);
+        renderParameterLabel(row, formatPatchPropertyLabel(property));
         renderStepperButtons(row, outputOptions[optionIndex], direction => {
             const nextIndex = (optionIndex + direction + outputOptions.length) % outputOptions.length;
             if (nextIndex === 0) {

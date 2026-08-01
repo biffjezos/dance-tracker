@@ -211,6 +211,44 @@ mod tests {
         fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> { Ok(vec![]) }
     }
 
+    /// A stand-in for RING specifically: a Number parameter (SELECTOR)
+    /// grouped alongside a Color parameter (SLOT_COLOR) - the same shape
+    /// as RING_SELECTOR + RING_COLOR under RING's "COLOUR" group - plus
+    /// one ordinary ungrouped Number (RADIUS), to prove the exclusion is
+    /// scoped to the grouped-with-a-Color case and doesn't over-reach.
+    struct FakeSelectorTarget {
+        radius: Cell<f64>,
+    }
+
+    impl Operation for FakeSelectorTarget {
+        fn descriptor(&self) -> OperationDescriptor { descriptor("fake_selector_target", "FAKE SELECTOR TARGET") }
+        fn as_any(&self) -> &dyn Any { self }
+        fn as_any_mut(&mut self) -> &mut dyn Any { self }
+        fn metadata(&self) -> OperationMetadata {
+            OperationMetadata { display_name: "FakeSelectorTarget", category: OperationCategory::Generator, inputs: vec![], outputs: vec![] }
+        }
+        fn parameters(&self) -> Vec<ParameterDescriptor> {
+            vec![
+                ParameterDescriptor { name: "RADIUS", kind: ParameterKind::Number { step: 1.0, min: Some(0.0), max: None }, group: None },
+                ParameterDescriptor { name: "SELECTOR", kind: ParameterKind::Number { step: 1.0, min: Some(1.0), max: Some(1.0) }, group: Some("COLOUR") },
+                ParameterDescriptor { name: "SLOT_COLOR", kind: ParameterKind::Color, group: Some("COLOUR") },
+            ]
+        }
+        fn get_parameter(&self, name: &str) -> Option<Value> {
+            match name {
+                "RADIUS" => Some(Value::Number(self.radius.get())),
+                _ => None,
+            }
+        }
+        fn set_parameter(&mut self, name: &str, value: Value) -> Result<(), OperationError> {
+            match (name, value) {
+                ("RADIUS", Value::Number(v)) => { self.radius.set(v); Ok(()) }
+                _ => Err(OperationError::UnknownParameter(name.to_string())),
+            }
+        }
+        fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> { Ok(vec![]) }
+    }
+
     /// A stand-in for IMAGE 1: zero parameters at all, so
     /// available_patch_properties must fall back to raw R/G/B/A.
     struct FakeUnparameterizedTarget;
@@ -251,6 +289,25 @@ mod tests {
 
         let properties = graph.available_patch_properties(patch);
         assert_eq!(properties, vec!["R", "G", "B", "A"]);
+    }
+
+    #[test]
+    fn available_properties_excludes_a_number_grouped_with_a_colour_parameter() {
+        // RING_SELECTOR's exact shape: a Number sharing a group with a
+        // Color has no rendering effect of its own (it only picks which
+        // colour slot a later write lands on), so it must never be
+        // offered as an independently animatable property - no matter
+        // what shape or range the animation source has, animating it in
+        // isolation can never produce a visible result.
+        let mut graph = Graph::new(4, 4);
+        let target = graph.add_node(Box::new(FakeSelectorTarget { radius: Cell::new(0.0) }));
+        let patch = graph.add_node(patch_node());
+        graph.connect(patch, Input::Source, target).unwrap();
+
+        let properties = graph.available_patch_properties(patch);
+        assert!(!properties.contains(&"SELECTOR".to_string()), "a Number grouped with a Color must be excluded, got {:?}", properties);
+        assert!(properties.contains(&"RADIUS".to_string()), "an ungrouped Number must still be offered");
+        assert!(properties.contains(&"SLOT_COLOR.R".to_string()), "the grouped Color itself must still be offered, decomposed");
     }
 
     #[test]

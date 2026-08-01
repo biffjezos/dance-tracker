@@ -20,9 +20,10 @@ impl NodeId {
 /// How a PATCH mapping combines the animation source's value with the
 /// target property: overwrite it outright, or offset from the value the
 /// property had before PATCH took it over (see `PatchMapping::base`).
-/// `Replace` is the default for a freshly-created mapping - existing
-/// PATCH usage keeps behaving exactly as before unless a mapping is
-/// explicitly switched to Add/Subtract.
+/// There's no implicit default here - `set_patch_mapping` always takes
+/// an explicit mode, chosen by the caller (the UI decides what to
+/// propose for a brand-new mapping, currently Add - see
+/// nodeEditContexts.js's own comment on why).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PatchMode {
     Replace,
