@@ -12,10 +12,14 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind},
     Value,
 };
-use crate::graphics::{Image, ImageFormat};
+use crate::graphics::{FloatImage, Image, ImageFormat};
 
-/// Subtract operation - Foreground minus Background, per channel, clamped
-/// at 0. Simple building block, same shape as Multiply.
+/// Subtract operation - Foreground minus Background, per channel,
+/// unclamped: a difference below 0.0 is a legitimate out-of-gamut result
+/// (used deliberately in matte/difference work), same as any real
+/// compositor's Subtract/Minus node - not an error to clip away here.
+/// CLAMP is the explicit, deliberate step back down to a normal 0..1
+/// Image. Same shape as Multiply, other than that.
 pub struct Subtract;
 
 impl Subtract {
@@ -23,8 +27,10 @@ impl Subtract {
         Self
     }
 
-    pub fn subtract_pixels(a: &[u8], b: &[u8]) -> Vec<u8> {
-        let mut output = vec![0u8; a.len()];
+    /// Raw per-channel difference, normalized to 0.0..1.0 input range -
+    /// NOT clamped. See this module's own doc comment for why.
+    pub fn subtract_pixels(a: &[u8], b: &[u8]) -> Vec<f32> {
+        let mut output = vec![0f32; a.len()];
 
         for ((source_a, source_b), target) in a
             .chunks_exact(4)
@@ -32,7 +38,8 @@ impl Subtract {
             .zip(output.chunks_exact_mut(4))
         {
             for channel in 0..4 {
-                target[channel] = source_a[channel].saturating_sub(source_b[channel]);
+                target[channel] =
+                    source_a[channel] as f32 / 255.0 - source_b[channel] as f32 / 255.0;
             }
         }
 
@@ -93,7 +100,7 @@ impl Operation for Subtract {
             // Identity (MASK=0) is Foreground unmodified - see add.rs's
             // metadata() for why Foreground and not Background.
             inputs: vec![Input::Foreground, Input::Background, Input::Mask],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -132,13 +139,12 @@ impl Operation for Subtract {
             .transpose()?;
 
         let subtracted = Self::subtract_pixels(&first_image.pixels, &second_image.pixels);
-        let subtracted = crate::graphics::apply_mask(&first_image.pixels, subtracted, mask.as_ref(), first_image.width, first_image.height)?;
+        let subtracted = crate::graphics::apply_mask_wide(&first_image.pixels, subtracted, mask.as_ref(), first_image.width, first_image.height)?;
 
-        Ok(vec![Value::Image(Arc::new(Image {
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels: subtracted,
             width: first_image.width,
             height: first_image.height,
-            format: first_image.format,
         }))])
     }
 }
@@ -158,13 +164,29 @@ mod tests {
     }
 
     #[test]
-    fn subtracting_clamps_at_zero() {
+    fn subtracting_below_zero_is_left_out_of_gamut_not_clamped() {
         let a = image(vec![50, 0, 100, 255], 1, 1);
         let b = image(vec![100, 50, 30, 10], 1, 1);
 
         let out = Subtract::subtract_pixels(&a.pixels, &b.pixels);
 
-        assert_eq!(out, vec![0, 0, 70, 245]);
+        // 50-100 and 0-50 both go negative - left as real out-of-range
+        // floats (-50/255 ~= -0.196), not clipped to 0.0 here.
+        assert!((out[0] - (-50.0 / 255.0)).abs() < 0.001);
+        assert!((out[1] - (-50.0 / 255.0)).abs() < 0.001);
+        assert!((out[2] - 70.0 / 255.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn a_difference_that_stays_in_gamut_round_trips_through_clamp_unchanged() {
+        let a = image(vec![50, 0, 100, 255], 1, 1);
+        let b = image(vec![10, 0, 30, 10], 1, 1);
+
+        let out = Subtract::subtract_pixels(&a.pixels, &b.pixels);
+        let float_image = FloatImage { pixels: out, width: 1, height: 1 };
+        let clamped = float_image.to_image_clamped(0.0, 1.0);
+
+        assert_eq!(clamped.pixels, vec![40, 0, 70, 245]);
     }
 
     #[test]
@@ -173,8 +195,11 @@ mod tests {
         let color = image(vec![10, 20, 30, 200], 1, 1);
 
         let out = Subtract::subtract_pixels(&color.pixels, &black.pixels);
+        let expected = FloatImage::from_image(&color).pixels;
 
-        assert_eq!(out, color.pixels);
+        for (a, b) in out.iter().zip(expected.iter()) {
+            assert!((a - b).abs() < 0.001);
+        }
     }
 
     fn context(width: u32, height: u32) -> Context {
@@ -200,8 +225,13 @@ mod tests {
             .unwrap();
 
         match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, fg.pixels),
-            other => panic!("expected an image, got {:?}", other),
+            Value::FloatImage(out) => {
+                let expected = FloatImage::from_image(&fg).pixels;
+                for (a, b) in out.pixels.iter().zip(expected.iter()) {
+                    assert!((a - b).abs() < 0.001);
+                }
+            }
+            other => panic!("expected a float image, got {:?}", other),
         }
     }
 }

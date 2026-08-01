@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use crate::graphics::{
     color::Color,
+    float_image::FloatImage,
     frame::Frame,
     geometry::Center,
     image::Image,
@@ -15,6 +16,10 @@ pub enum Value {
     Frame(Arc<Frame>),
     Mask(Arc<Mask>),
     Image(Arc<Image>),
+    // Unclamped RGBA - see FloatImage's own doc comment. Never produced by
+    // a source; only by an operation whose math can legitimately go out of
+    // gamut (ADD, SUBTRACT). CLAMP is the explicit way back to Image.
+    FloatImage(Arc<FloatImage>),
     Video(Arc<Video>),
     Number(f64),
     Boolean(bool),
@@ -46,6 +51,7 @@ pub fn value_ptr_eq(a: &Value, b: &Value) -> bool {
         (Value::Frame(a), Value::Frame(b)) => Arc::ptr_eq(a, b),
         (Value::Mask(a), Value::Mask(b)) => Arc::ptr_eq(a, b),
         (Value::Image(a), Value::Image(b)) => Arc::ptr_eq(a, b),
+        (Value::FloatImage(a), Value::FloatImage(b)) => Arc::ptr_eq(a, b),
         (Value::Video(a), Value::Video(b)) => Arc::ptr_eq(a, b),
         (Value::Number(a), Value::Number(b)) => a == b,
         (Value::Boolean(a), Value::Boolean(b)) => a == b,

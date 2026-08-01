@@ -64,6 +64,16 @@ window.addEventListener("clearLiveNode", () => {
     liveNodeLabel = null;
 });
 
+// Reflects App::is_output_out_of_gamut() - the OUTPUT canvas already shows
+// a clamped approximation regardless (a canvas can only ever show a
+// bounded image), so this exists purely to make that fact visible rather
+// than letting an unclamped ADD/SUBTRACT result look identical to a
+// properly-clamped one just because both happen to display something.
+function updateGamutWarning(outOfGamut) {
+    const warning = document.getElementById("gamut-warning");
+    if (warning) warning.hidden = !outOfGamut;
+}
+
 function loop() {
     const liveOutputTitle = document.getElementById("live-output-title");
     if (liveOutputTitle) {
@@ -78,12 +88,17 @@ function loop() {
         if (wasmApp && outputNodeId !== null && outputNodeId !== undefined) {
             try {
                 wasmApp.render_tick(outputNodeId, masterCanvas);
+                updateGamutWarning(wasmApp.is_output_out_of_gamut());
             } catch (error) {
                 // expected transient failure
+                updateGamutWarning(false);
             }
         } else {
             masterCanvas.getContext("2d").clearRect(0, 0, masterCanvas.width, masterCanvas.height);
+            updateGamutWarning(false);
         }
+    } else {
+        updateGamutWarning(false);
     }
     renderPreview();
     requestAnimationFrame(loop);

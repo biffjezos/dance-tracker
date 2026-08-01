@@ -63,6 +63,45 @@ pub fn apply_mask(
     Ok(out)
 }
 
+/// Float-space equivalent of `apply_mask`, for operations whose "processed"
+/// result is unclamped (e.g. ADD/SUBTRACT, which can go out of gamut) -
+/// blending in u8 space first would force a premature clamp before the
+/// blend even happens. `original` is still u8 (every source is u8-only
+/// today) and is normalized to 0.0..1.0 before blending; `processed` and
+/// the result are both 0.0..1.0-normalized floats, unclamped. Passing
+/// `None` (nothing wired) returns `processed` untouched, same as
+/// `apply_mask`.
+pub fn apply_mask_wide(
+    original: &[u8],
+    processed: Vec<f32>,
+    mask: Option<&(Vec<u8>, u32, u32)>,
+    width: u32,
+    height: u32,
+) -> Result<Vec<f32>, OperationError> {
+    let Some((mask_pixels, mask_width, mask_height)) = mask else {
+        return Ok(processed);
+    };
+
+    if *mask_width != width || *mask_height != height {
+        return Err(OperationError::InvalidInputType(format!(
+            "MASK is {}x{}, but the node it's masking is {}x{}",
+            mask_width, mask_height, width, height
+        )));
+    }
+
+    let mut out = vec![0f32; processed.len()];
+    for i in (0..processed.len()).step_by(4) {
+        let weight = mask_pixels[i + 3] as f32 / 255.0;
+        for c in 0..4 {
+            let o = original[i + c] as f32 / 255.0;
+            let p = processed[i + c];
+            out[i + c] = o * (1.0 - weight) + p * weight;
+        }
+    }
+
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,6 +148,53 @@ mod tests {
         let processed = vec![200, 200, 200, 255, 200, 200, 200, 255];
         let mask = (vec![0, 0, 0, 255], 1, 1);
         let err = apply_mask(&original, processed, Some(&mask), 2, 1).unwrap_err();
+        assert!(matches!(err, OperationError::InvalidInputType(_)));
+    }
+
+    #[test]
+    fn wide_no_mask_returns_processed_unchanged() {
+        let original = vec![0, 0, 0, 255];
+        let processed = vec![1.5, 1.5, 1.5, 1.0];
+        let out = apply_mask_wide(&original, processed.clone(), None, 1, 1).unwrap();
+        assert_eq!(out, processed);
+    }
+
+    #[test]
+    fn wide_zero_alpha_mask_reproduces_the_original_normalized() {
+        let original = vec![255, 0, 0, 255];
+        let processed = vec![1.5, 1.5, 1.5, 1.0];
+        let mask = (vec![0, 0, 0, 0], 1, 1);
+        let out = apply_mask_wide(&original, processed, Some(&mask), 1, 1).unwrap();
+        assert_eq!(out, vec![1.0, 0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn wide_full_alpha_mask_reproduces_the_out_of_gamut_processed_value() {
+        let original = vec![0, 0, 0, 255];
+        let processed = vec![1.5, -0.2, 0.5, 1.0];
+        let mask = (vec![0, 0, 0, 255], 1, 1);
+        let out = apply_mask_wide(&original, processed.clone(), Some(&mask), 1, 1).unwrap();
+        assert_eq!(out, processed);
+    }
+
+    #[test]
+    fn wide_half_alpha_mask_can_still_land_out_of_gamut() {
+        // Blending halfway toward an out-of-gamut value can itself still
+        // be out of gamut - this is correct (matches how a real
+        // compositor's mix/merge preserves HDR), not something to clamp.
+        let original = vec![0, 0, 0, 255];
+        let processed = vec![2.0, 0.0, 0.0, 1.0];
+        let mask = (vec![0, 0, 0, 128], 1, 1);
+        let out = apply_mask_wide(&original, processed, Some(&mask), 1, 1).unwrap();
+        assert!(out[0] > 1.0, "expected an out-of-gamut blend, got {}", out[0]);
+    }
+
+    #[test]
+    fn wide_mismatched_mask_dimensions_error_instead_of_silently_ignoring_it() {
+        let original = vec![0, 0, 0, 255, 0, 0, 0, 255];
+        let processed = vec![1.5, 1.5, 1.5, 1.0, 1.5, 1.5, 1.5, 1.0];
+        let mask = (vec![0, 0, 0, 255], 1, 1);
+        let err = apply_mask_wide(&original, processed, Some(&mask), 2, 1).unwrap_err();
         assert!(matches!(err, OperationError::InvalidInputType(_)));
     }
 }

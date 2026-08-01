@@ -12,10 +12,14 @@ use crate::compositor::{
     metadata::{OperationCategory, OperationMetadata, OutputKind},
     Value,
 };
-use crate::graphics::{Image, ImageFormat};
+use crate::graphics::{FloatImage, Image, ImageFormat};
 
 /// Add operation - adds RGBA channels from two inputs pixel by pixel,
-/// clamped to 255. Simple building block, same shape as Multiply.
+/// unclamped: a sum above 1.0 is a legitimate out-of-gamut result (an
+/// overexposed highlight, e.g.), same as any real compositor's Add/Plus
+/// node - not an error to clip away here. CLAMP is the explicit,
+/// deliberate step back down to a normal 0..1 Image. Same shape as
+/// Multiply, other than that.
 pub struct Add;
 
 impl Add {
@@ -23,8 +27,10 @@ impl Add {
         Self
     }
 
-    pub fn add_pixels(a: &[u8], b: &[u8]) -> Vec<u8> {
-        let mut output = vec![0u8; a.len()];
+    /// Raw per-channel sum, normalized to 0.0..1.0 input range - NOT
+    /// clamped. See this module's own doc comment for why.
+    pub fn add_pixels(a: &[u8], b: &[u8]) -> Vec<f32> {
+        let mut output = vec![0f32; a.len()];
 
         for ((source_a, source_b), target) in a
             .chunks_exact(4)
@@ -32,8 +38,8 @@ impl Add {
             .zip(output.chunks_exact_mut(4))
         {
             for channel in 0..4 {
-                target[channel] = (source_a[channel] as u16 + source_b[channel] as u16)
-                    .min(255) as u8;
+                target[channel] =
+                    source_a[channel] as f32 / 255.0 + source_b[channel] as f32 / 255.0;
             }
         }
 
@@ -95,7 +101,7 @@ impl Operation for Add {
             // that still makes sense to show on its own with no compositing
             // applied, unlike Background which is meaningless alone here.
             inputs: vec![Input::Foreground, Input::Background, Input::Mask],
-            outputs: vec![OutputKind::Image],
+            outputs: vec![OutputKind::FloatImage],
         }
     }
 
@@ -134,13 +140,12 @@ impl Operation for Add {
             .transpose()?;
 
         let added = Self::add_pixels(&first_image.pixels, &second_image.pixels);
-        let added = crate::graphics::apply_mask(&first_image.pixels, added, mask.as_ref(), first_image.width, first_image.height)?;
+        let added = crate::graphics::apply_mask_wide(&first_image.pixels, added, mask.as_ref(), first_image.width, first_image.height)?;
 
-        Ok(vec![Value::Image(Arc::new(Image {
+        Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels: added,
             width: first_image.width,
             height: first_image.height,
-            format: first_image.format,
         }))])
     }
 }
@@ -160,13 +165,31 @@ mod tests {
     }
 
     #[test]
-    fn adding_clamps_at_255() {
+    fn adding_above_255_is_left_out_of_gamut_not_clamped() {
         let a = image(vec![200, 0, 100, 255], 1, 1);
         let b = image(vec![100, 50, 200, 255], 1, 1);
 
         let out = Add::add_pixels(&a.pixels, &b.pixels);
 
-        assert_eq!(out, vec![255, 50, 255, 255]);
+        // 200+100 and 100+200 both exceed 255 - left as real out-of-range
+        // floats (300/255 ~= 1.176), not clipped to 1.0 here.
+        assert!((out[0] - 300.0 / 255.0).abs() < 0.001);
+        assert!((out[1] - 50.0 / 255.0).abs() < 0.001);
+        assert!((out[2] - 300.0 / 255.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn a_sum_that_stays_in_gamut_round_trips_through_clamp_unchanged() {
+        // The common case (no overflow) should still recover the exact
+        // same u8 result CLAMP would produce, once the caller clamps it.
+        let a = image(vec![100, 0, 50, 255], 1, 1);
+        let b = image(vec![50, 20, 30, 0], 1, 1);
+
+        let out = Add::add_pixels(&a.pixels, &b.pixels);
+        let float_image = FloatImage { pixels: out, width: 1, height: 1 };
+        let clamped = float_image.to_image_clamped(0.0, 1.0);
+
+        assert_eq!(clamped.pixels, vec![150, 20, 80, 255]);
     }
 
     #[test]
@@ -175,8 +198,11 @@ mod tests {
         let color = image(vec![10, 20, 30, 200], 1, 1);
 
         let out = Add::add_pixels(&black.pixels, &color.pixels);
+        let expected = FloatImage::from_image(&color).pixels;
 
-        assert_eq!(out, color.pixels);
+        for (a, b) in out.iter().zip(expected.iter()) {
+            assert!((a - b).abs() < 0.001);
+        }
     }
 
     fn context(width: u32, height: u32) -> Context {
@@ -202,8 +228,13 @@ mod tests {
             .unwrap();
 
         match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, fg.pixels),
-            other => panic!("expected an image, got {:?}", other),
+            Value::FloatImage(out) => {
+                let expected = FloatImage::from_image(&fg).pixels;
+                for (a, b) in out.pixels.iter().zip(expected.iter()) {
+                    assert!((a - b).abs() < 0.001);
+                }
+            }
+            other => panic!("expected a float image, got {:?}", other),
         }
     }
 
@@ -223,8 +254,13 @@ mod tests {
             .unwrap();
 
         match &values[0] {
-            Value::Image(out) => assert_eq!(out.pixels, Add::add_pixels(&fg.pixels, &bg.pixels)),
-            other => panic!("expected an image, got {:?}", other),
+            Value::FloatImage(out) => {
+                let expected = Add::add_pixels(&fg.pixels, &bg.pixels);
+                for (a, b) in out.pixels.iter().zip(expected.iter()) {
+                    assert!((a - b).abs() < 0.001);
+                }
+            }
+            other => panic!("expected a float image, got {:?}", other),
         }
     }
 }
