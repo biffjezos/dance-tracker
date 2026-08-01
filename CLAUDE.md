@@ -64,6 +64,28 @@ Specific features that have been deliberately postponed (MOVE operation,
 frame-accurate video decode) are tracked in `PARKED_WORK.md`, not here -
 read it before touching either of those areas.
 
+### Editing PARKED_WORK.md
+
+Only relevant if you're adding to or changing that file. Every entry
+needs, at minimum:
+
+- A title - the deferred feature/fix.
+- `**Work:**` / `**Complexity:**` - same `(Xh, Y/6)` scale as an audit
+  finding (see "Codebase audit tasks" below).
+- `**Depends on:**` - free text: what has to happen first, and why. Say
+  "Nothing - unimplemented, not blocked" if nothing actually blocks it
+  (most of these are just unstarted, not stuck). This is what lets a
+  session - or a direct question from the user - get a real answer
+  ("it's parked because X, not because no one's gotten to it") instead
+  of having to reconstruct the reasoning from scratch or guess.
+- `**Existing non-functional code:**` - free text: any stub/dead code
+  already in the tree that belongs to this item (file + why it's inert),
+  or "None". This exists specifically so a session doesn't reflexively
+  delete scaffolding it doesn't recognize, or re-add a stub that's
+  already there under a different name - cross-session, nobody but this
+  file remembers which half-finished code belongs to a planned feature
+  versus which is genuinely stale.
+
 ## Codebase audit tasks
 
 When asked to audit this codebase (quality, maintainability, bug count,

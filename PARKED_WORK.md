@@ -5,17 +5,28 @@ tickets, effectively. It's separate from `CLAUDE.md` so that file can stay
 focused on standing behavioral rules for anyone (or any agent) working in
 this codebase, rather than growing into a backlog.
 
-## MOVE operation / `graphics/geometry.rs` (`Point2D`, `Center`)
+Every entry below follows the same format - see CLAUDE.md's "Editing
+PARKED_WORK.md" section for what each field means and why (in short: so a
+session that hasn't seen this file before can tell, at a glance, whether
+an item is genuinely blocked or just unstarted, and whether any code
+already in the tree belongs to it before touching that code).
 
-`Point2D`/`Center` exist but are unused - they're scaffolding for a
-planned MOVE transform operation that was never implemented. Postponed
-specifically because MOVE's intended UI (arrow keys nudge the selected
-node's position while its EDIT screen is open) collides with keyboard
-scrubbing (arrow keys step the focused canvas's video forward/back) -
-today there is exactly one global `keydown` listener (Space-bar only,
-in `app.js`) with no concept of "what do arrow keys mean right now."
-Bolting a MOVE-specific special case onto that would just relocate the
-conflict, not solve it.
+## MOVE operation
+
+**Work:** 6h · **Complexity:** 5/6
+**Depends on:** A general keyboard-input-context system that doesn't
+exist yet. MOVE's intended UI (arrow keys nudge the selected node's
+position while its EDIT screen is open) collides with keyboard scrubbing
+(arrow keys step the focused canvas's video forward/back) - today there
+is exactly one global `keydown` listener (Space-bar only, in `app.js`)
+with no concept of "what do arrow keys mean right now." Bolting a
+MOVE-specific special case onto that would just relocate the conflict,
+not solve it. This is a prerequisite design task, not an external
+blocker - nothing stops someone from doing it, it just hasn't been done.
+**Existing non-functional code:** `engine/src/graphics/geometry.rs`'s
+`Point2D`/`Center` structs - defined, unused (`cargo build` flags both as
+dead code), scaffolding for the position value MOVE would read/write.
+Nothing else exists for this yet - no operation, no UI.
 
 Before starting MOVE (or any other operation that wants its own
 keybindings - ROTATE/SCALE are likely next), design a general keyboard-
@@ -31,39 +42,45 @@ questions to resolve before implementing, from the last discussion:
 3. Should the context be tied to "a node is in EDIT mode" specifically,
    or more generally to whatever menu/screen is currently open?
 
-## Video playback: two different approaches, only one is live
+## Frame-accurate video decode (ProRes)
+
+**Work:** 16h · **Complexity:** 6/6 (Opus territory - real codec/WASM
+integration work, not a Sonnet-default-effort task)
+**Depends on:** Nothing blocking - the format decision and WASM
+feasibility check are both already done (see below). The one open item
+is validating the decoder against real-world files before depending on
+it in production.
+**Existing non-functional code:** `operations/sources/video.rs`'s
+`VideoSource::set_video`/`get_video`, `compositor/value.rs`'s
+`Value::Video`, `graphics/video.rs`'s `Video::frame_at` - all defined,
+none ever called from the JS side (`set_video()` has no caller anywhere),
+so this whole path is currently inert. This is the "pre-decode into
+memory" side of the two-approaches split described below, not
+`oxideav-prores` integration itself, which hasn't been started.
 
 There are two unconnected ways to get a video frame into the graph:
 
 - **Live (what's actually used today):** hand Rust an `HtmlVideoElement`
   (`set_pixel_source_on_node`); every tick, draw whatever the browser is
   currently showing onto a scratch canvas and read pixels back. The
-  browser owns `currentTime`/seeking/play-pause entirely. Keyboard
-  scrubbing (accelerating hold-to-scrub, ideally via a sigmoid ramp on
-  hold duration - discussed but not built) would extend this: an arrow-
-  key handler nudging `videoEl.currentTime` directly. `engine/transport.js`
-  already flags that scrub/seek was deliberately deferred - only
-  play/stop/rewindToStart exist so far.
-- **Dead (`operations/sources/video.rs`'s `VideoSource::set_video`/
-  `get_video`, `Value::Video`, `Video::frame_at`):** pre-decode an entire
-  video into a `Vec<Arc<Image>>` in memory, then index into it by time.
-  Nothing on the JS side ever calls `set_video()`, so this path is inert.
-  It exists because it would give frame-exact stepping (a `<video>`
-  element only exposes continuous seconds, not discrete frame indices)
-  and true reverse playback (browsers don't support that reliably via
+  browser owns `currentTime`/seeking/play-pause entirely.
+- **Dead (the scaffolding listed above):** pre-decode an entire video
+  into a `Vec<Arc<Image>>` in memory, then index into it by time. It
+  exists because it would give frame-exact stepping (a `<video>` element
+  only exposes continuous seconds, not discrete frame indices) and true
+  reverse playback (browsers don't support that reliably via
   `currentTime`/negative playback rate) - relevant if the live approach's
   scrub ever feels imprecise, or for a future frame-accurate export
   feature, but far heavier (decode + hold the whole video in memory) and
-  currently unfinished on both the Rust and JS sides. Don't wire it up
-  without deciding it's actually worth that cost over the live path.
+  currently unfinished on both the Rust and JS sides.
 
-**If/when this gets built:** decode the codec in Rust rather than relying
-on the browser - browsers don't decode any professional intermediate
-codec (ProRes/DNxHD/CineForm) natively, and this app has no server to
-transcode uploads first. All-intra codecs (frame independent, no inter-
-frame prediction) are what make random-access frame decode cheap
-regardless of position in an hour-long file - that's the actual property
-being bought here, not "Rust decode" per se.
+**Decide the codec in Rust rather than relying on the browser** - browsers
+don't decode any professional intermediate codec (ProRes/DNxHD/CineForm)
+natively, and this app has no server to transcode uploads first. All-intra
+codecs (frame independent, no inter-frame prediction) are what make
+random-access frame decode cheap regardless of position in an hour-long
+file - that's the actual property being bought here, not "Rust decode"
+per se.
 
 Decided: **ProRes**, via `OxideAV/oxideav-prores` (pure Rust, MIT,
 decode+encode, all 6 profiles, 8/10/12/16-bit) - over DNxHD/CineForm,
@@ -92,48 +109,74 @@ WASM feasibility check, passed:
 Still open: never tested against a real camera/NLE-exported ProRes file
 (only the crate's own encoder output and its own conformance claims).
 
-## Effects that once existed, not yet ported to the current architecture
+## Frame-exact transport controls (play/stop/scrub)
 
-`ui/scripts/features/notWired.js` used to hold ten `window.addEventListener`
-stubs for controls from an earlier, pre-node-graph version of the app. None
-of them are dispatched from anywhere in the current UI - nothing wires a
-button to these event names anymore, so the file was dead weight and has
-been deleted. The event names below are the only surviving record of what
-they controlled; they're listed here so the effects themselves aren't lost,
-not because the old event-listener approach should be reused.
+**Work:** 6h · **Complexity:** 3/6 (mostly UI wiring once the harder
+frame-decode problem is solved by the item above)
+**Depends on:** "Frame-accurate video decode (ProRes)", directly above.
+Real scrubbing/frame-stepping needs discrete frame indexing, which the
+live `HTMLVideoElement` path (what exists today) can't provide reliably -
+`<video>` only exposes continuous seconds via `currentTime`, not frame
+numbers, and reverse playback isn't reliable via a negative playback
+rate. This item should not be started before that one lands; there is no
+separate frame-exact-transport-only shortcut.
+**Existing non-functional code:** None beyond what the dependency above
+already lists. `ui/scripts/engine/transport.js` currently exports
+working (not stub) `play`/`stop`/`rewindToStart` against a live
+`HTMLVideoElement` - deliberately minimal on purpose, per its own top
+comment, pending this work. Extend it, don't replace it.
 
-- `toggleConstellation` - enable/disable a constellation (star-field/
-  particle) generator effect.
-- `constellationDistanceUp` / `constellationDistanceDown` - step the
-  constellation effect's distance/depth parameter.
-- `toggleRingsEnabled` - enable/disable a rings generator effect (a rings
-  operation exists in screenshots/assets - see `ui/assets/rings.png`,
-  `key-rings.png`, `key-rings-2.png` - but is not currently a registered
-  Rust operation).
-- `audioSyncMinuteUp` / `audioSyncMinuteDown` / `audioSyncSecondUp` /
-  `audioSyncSecondDown` / `audioSyncFrameUp` / `audioSyncFrameDown` -
-  step an audio-sync offset by minute/second/frame, for aligning generated
-  visuals to an audio track.
+Full transport UI - play, stop, and frame-accurate scrubbing (accelerating
+hold-to-scrub, ideally via a sigmoid ramp on hold duration - discussed but
+not designed in detail) - once the ProRes decode path above lands and
+frames can be addressed by index instead of only by continuous seconds.
 
-None of this should be re-wired as bare `window` events again. Per the
-current architecture (see the operation-authoring flow the codebase itself
-demonstrates - a new `Operation` impl registered via `inventory::submit!`,
-picked up automatically by the menu and the generic parameter-edit UI),
-each of these should become:
+## Constellation generator effect
 
-- Constellation and Rings: real `Generator`-category operations in
-  `engine/src/operations/generators/`, with their toggle/distance-style
-  controls expressed as ordinary `ParameterDescriptor`s (`Boolean` for the
-  enable toggle, `Number` with a declared step for distance) - the generic
-  edit context already renders steppers for exactly this shape of
-  parameter, no bespoke JS needed.
-- Audio sync: depends on how audio gets into the graph at all, which
-  doesn't exist yet (there's no audio input/analysis operation of any
-  kind today). That's a prerequisite piece of design, not just a matter of
-  adding parameters to an existing operation - minute/second/frame offset
-  would likely become a grouped `Number` parameter set (see `group` on
-  `ParameterDescriptor`) on whatever operation ends up owning audio sync.
+**Work:** 3h · **Complexity:** 2/6
+**Depends on:** Nothing - unimplemented, not blocked. A straightforward
+`Generator`-category operation, same shape as the existing `checkerboard`/
+rings-style generators already in the codebase to use as reference.
+**Existing non-functional code:** None currently in the tree. Its old
+(dead, deleted) UI hook was `ui/scripts/features/notWired.js`'s
+`toggleConstellation`/`constellationDistanceUp`/`constellationDistanceDown`
+`window` event stubs - removed, since nothing dispatched them and the
+current architecture doesn't work that way (see below).
 
-Not scheduled - listed here so the intent isn't lost, per "no default
-anything" this only becomes real once someone actually implements and
-wires it, not before.
+A star-field/particle generator effect with a toggle and a distance/depth
+parameter, from an earlier, pre-node-graph version of the app.
+
+## Rings generator effect
+
+**Work:** 3h · **Complexity:** 2/6
+**Depends on:** Nothing - unimplemented, not blocked.
+**Existing non-functional code:** None currently in the tree - no Rust
+operation, no UI. `ui/assets/rings.png`, `key-rings.png`, `key-rings-2.png`
+are screenshots of it existing in some earlier build, not code. Its old
+(dead, deleted) UI hook was `notWired.js`'s `toggleRingsEnabled` stub.
+
+A rings generator effect with an enable/disable toggle, from the same
+earlier version of the app as Constellation above.
+
+## Audio sync
+
+**Work:** 10h · **Complexity:** 5/6
+**Depends on:** No audio input/analysis operation of any kind exists in
+the graph today - there's no way to get audio into a node chain at all
+yet. That's a prerequisite design task (what does an audio source/
+analysis operation even look like here), not just a matter of adding
+parameters to an existing operation.
+**Existing non-functional code:** None currently in the tree. Its old
+(dead, deleted) UI hooks were `notWired.js`'s `audioSyncMinuteUp/Down`,
+`audioSyncSecondUp/Down`, `audioSyncFrameUp/Down` stubs.
+
+Step an audio-sync offset by minute/second/frame, for aligning generated
+visuals to an audio track. Once an audio source exists, this would likely
+become a grouped `Number` parameter set (see `group` on
+`ParameterDescriptor`) on whatever operation ends up owning audio sync.
+
+---
+
+For all three effects above: per "no default anything" (CLAUDE.md),
+these only become real once someone actually implements and wires them
+as proper operations - not by reintroducing bare `window` event stubs.
