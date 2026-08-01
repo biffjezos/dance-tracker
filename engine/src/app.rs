@@ -151,6 +151,13 @@ pub struct App {
     // absolute wall-clock value - Video::frame_at expects 0.0 to mean "the
     // start of playback", not "the start of the Unix epoch".
     start_time_ms: f64,
+    // Whether the last render_tick's output value was an out-of-gamut
+    // FloatImage (see graphics::FloatImage) - the render boundary still
+    // clamps it for display (a canvas can only ever show a bounded image),
+    // but this is what lets the UI warn that display isn't the same thing
+    // as an explicit CLAMP, so the out-of-range data isn't silently lost
+    // on the user just because something is still visible.
+    output_out_of_gamut: bool,
 }
 
 
@@ -168,6 +175,7 @@ impl App {
             frame_counter: 0,
             render_executor: RenderExecutor::new(),
             start_time_ms: now_ms(),
+            output_out_of_gamut: false,
         }
     }
     // Returns Result (not JsValue directly) so a serialization failure
@@ -548,11 +556,25 @@ impl App {
         let first_value = values.first()
             .ok_or_else(|| JsValue::from_str("No output value"))?;
 
+        self.output_out_of_gamut = match first_value {
+            Value::FloatImage(float_image) => float_image.is_out_of_gamut(),
+            _ => false,
+        };
+
         // Renderer boundary dispatch: convert any renderable Value to Frame
         let frame = to_render_frame(first_value)
             .map_err(|e| JsValue::from_str(&format!("Failed to convert to render frame: {:?}", e)))?;
 
         write_frame_to_canvas(&canvas, &frame)
+    }
+
+    /// Whether the node last drawn by render_tick was an out-of-gamut
+    /// FloatImage (R/G/B outside 0..1) - the canvas still shows a clamped
+    /// approximation of it either way (see ToRenderFrame for FloatImage),
+    /// this is what lets the UI tell the user that display isn't the same
+    /// thing as an explicit CLAMP.
+    pub fn is_output_out_of_gamut(&self) -> bool {
+        self.output_out_of_gamut
     }
 
 

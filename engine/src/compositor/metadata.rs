@@ -117,6 +117,9 @@ pub enum OutputKind {
     Frame,
     Mask,
     Image,
+    // Unclamped RGBA - see graphics::FloatImage. Only ADD/SUBTRACT declare
+    // this today; CLAMP is what converts it back to Image.
+    FloatImage,
     Video,
     Number,
     Boolean,

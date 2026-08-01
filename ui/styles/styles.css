@@ -467,3 +467,12 @@ video, canvas {
 #output-resolution:hover {
   color: var(--color-border-button);
 }
+
+/* Shown only while OUTPUT's current node is producing an out-of-gamut
+   FloatImage (see render.js's updateGamutWarning) - the canvas still
+   displays a clamped approximation regardless (a canvas can't show
+   anything else), this is what makes that fact visible instead of silent. */
+.gamut-warning {
+  color: var(--color-text-warning);
+  font-weight: bold;
+}
