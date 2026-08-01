@@ -345,6 +345,16 @@ a time lag. There is no frame-feedback/persistence involved at all.
      function GHOST's `execute()` calls), **not** a retrofit of
      `Add`/`Multiply`/`Screen`'s existing uniform-channel semantics, which
      stay exactly as they are.
+  6. No extra gamut-safety logic needed in that helper: alpha-over is a
+     convex combination (`fg * a + bg * (1-a)`) weighted by an opacity
+     already clamped to `0.0..1.0` (step 3's `OPACITY_STEP` formula), so
+     it can't *introduce* an out-of-gamut result the way `Add`/`Multiply`/
+     `Screen` can. If `Source` itself is already out-of-gamut
+     (FloatImage from an upstream `ADD` chain, say), that can still carry
+     through the blend - but that's the same "blending toward an
+     out-of-gamut value can still be out of gamut" behaviour
+     `mask.rs`'s own tests already establish as correct, not a new case
+     to special-case here.
 
 ---
 
