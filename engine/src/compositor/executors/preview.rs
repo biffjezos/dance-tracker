@@ -256,4 +256,60 @@ mod tests {
 
         assert_eq!(calls_of(&graph, source_id), 2, "unlike RenderExecutor, PreviewExecutor must never persist a cache across separate execute() calls");
     }
+
+    fn chromakey_add_pixels(executor: &PreviewExecutor) -> Vec<u8> {
+        // Mirrors executors::render::tests's chromakey -> add pixel-identity
+        // test, for PreviewExecutor's own (structurally identical) bbox
+        // threading in evaluate_unmemoized/evaluate_memoized.
+        use std::sync::Arc;
+        use crate::graphics::{ImageFormat, U8Image};
+        use crate::operations::compose::Add;
+        use crate::operations::key::ChromaKey;
+        use crate::operations::sources::ImageSource;
+
+        let mut graph = Graph::new(1, 1);
+
+        let mut green_source = ImageSource::new();
+        green_source.set_image(Arc::new(U8Image {
+            pixels: vec![0, 255, 0, 255],
+            width: 1,
+            height: 1,
+            format: ImageFormat::Rgba8,
+        }));
+        let source_id = graph.add_node(Box::new(green_source));
+
+        let chromakey_id = graph.add_node(Box::new(ChromaKey::new()));
+        graph.connect(chromakey_id, Input::Source, source_id).unwrap();
+
+        let mut backdrop = ImageSource::new();
+        backdrop.set_image(Arc::new(U8Image {
+            pixels: vec![10, 20, 30, 255],
+            width: 1,
+            height: 1,
+            format: ImageFormat::Rgba8,
+        }));
+        let backdrop_id = graph.add_node(Box::new(backdrop));
+
+        let add_id = graph.add_node(Box::new(Add::new()));
+        graph.connect(add_id, Input::Foreground, chromakey_id).unwrap();
+        graph.connect(add_id, Input::Background, backdrop_id).unwrap();
+
+        let values = executor.execute(&graph, add_id, &context()).expect("should succeed");
+        match &values[0] {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels.clone(),
+            other => panic!("expected a float image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn phase_0_bbox_threading_does_not_change_a_real_multi_node_graphs_output_memoized() {
+        let pixels = chromakey_add_pixels(&PreviewExecutor::new(true));
+        assert_eq!(pixels, vec![10, 255, 30, 255], "PreviewExecutor's memoized path must be unchanged by Phase 0's threading");
+    }
+
+    #[test]
+    fn phase_0_bbox_threading_does_not_change_a_real_multi_node_graphs_output_unmemoized() {
+        let pixels = chromakey_add_pixels(&PreviewExecutor::new(false));
+        assert_eq!(pixels, vec![10, 255, 30, 255], "PreviewExecutor's unmemoized path must be unchanged by Phase 0's threading");
+    }
 }
