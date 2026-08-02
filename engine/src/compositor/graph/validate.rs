@@ -222,12 +222,12 @@ fn run_validation(
             // wired to - the operation itself decides whether it can run anyway.
             let metadata = node.operation.metadata();
 
-            let unwired = metadata.inputs.iter().find(|key| {
-                !node.inputs.iter().any(|(wired, _)| wired == *key)
+            let unwired = metadata.inputs.iter().find(|descriptor| {
+                !node.inputs.iter().any(|(wired, _)| *wired == descriptor.kind)
             });
 
-            if let Some(key) = unwired {
-                result.node_states[index] = NodeValidation::MissingInput(*key);
+            if let Some(descriptor) = unwired {
+                result.node_states[index] = NodeValidation::MissingInput(descriptor.kind);
             }
         } else {
             // This node slot is empty (removed node)
@@ -414,7 +414,7 @@ mod tests {
     use super::*;
     use std::any::Any;
     use crate::compositor::{
-        metadata::{OperationCategory, OperationMetadata, OutputKind},
+        metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind},
         operations::Operation,
         operation_descriptor::OperationDescriptor,
         Context,
@@ -441,7 +441,9 @@ mod tests {
             OperationMetadata {
                 display_name: "Stub",
                 category: OperationCategory::Color,
-                inputs: self.inputs.clone(),
+                inputs: self.inputs.iter()
+                    .map(|kind| InputDescriptor { kind: *kind, accepts: &[] })
+                    .collect(),
                 outputs: vec![OutputKind::Image],
             }
         }

@@ -9,7 +9,7 @@ use crate::compositor::{
     input::find_input,
     Operation,
     OperationDescriptor,
-    metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
+    metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
     Value,
 };
 use crate::graphics::FloatImage;
@@ -83,7 +83,10 @@ impl Operation for Mix {
         OperationMetadata {
             display_name: "Mix",
             category: OperationCategory::Composite,
-            inputs: vec![Input::Foreground, Input::Background],
+            inputs: vec![
+                InputDescriptor { kind: Input::Foreground, accepts: PIXEL_KINDS },
+                InputDescriptor { kind: Input::Background, accepts: PIXEL_KINDS },
+            ],
             outputs: vec![OutputKind::FloatImage],
         }
     }

@@ -2,12 +2,7 @@ import {
     state
 } from "../engine/state.js";
 export function defaultUniversalSettings() {
-    return {
-        maskedBy: {
-            source: "none",
-            channel: "alpha"
-        }
-    };
+    return {};
 }
 // Exported (not just used internally by getAllRealEntries) so callers that
 // just created a layer can compute its entry id without duplicating the
@@ -79,11 +74,4 @@ export function setSelectedVideoEntry(layer) {
 // scope is ever introduced.
 export function scopedEntry(scope) {
     return selectedVideoEntry();
-}
-export function resolveMaskSourceLabel(sourceId) {
-    if (!sourceId || sourceId === "none") {
-        return "NONE";
-    }
-    const match = getAllRealEntries().find(entry => entry.id === sourceId);
-    return match ? match.label : "NONE";
 }

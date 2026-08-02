@@ -9,7 +9,7 @@ use crate::compositor::{
     input::find_input,
     Operation,
     OperationDescriptor,
-    metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
+    metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
     Value,
 };
 use crate::graphics::{Color, FloatImage};
@@ -111,7 +111,14 @@ impl Operation for HueKey {
         OperationMetadata {
             display_name: "Hue Key",
             category: OperationCategory::Mask,
-            inputs: vec![Input::Source, Input::Reference, Input::Mask],
+            inputs: vec![
+                InputDescriptor { kind: Input::Source, accepts: PIXEL_KINDS },
+                // Unlike PATCH's REFERENCE (a Number source), HueKey's
+                // REFERENCE is a pixel source - rgb_to_hsv's FloatImage
+                // output is what gets wired here (see PARKED_WORK.md).
+                InputDescriptor { kind: Input::Reference, accepts: PIXEL_KINDS },
+                InputDescriptor { kind: Input::Mask, accepts: PIXEL_KINDS },
+            ],
             outputs: vec![OutputKind::FloatImage],
         }
     }
@@ -328,6 +335,22 @@ mod tests {
             .unwrap();
 
         assert_eq!(as_u8_pixels(&values[0]), vec![0, 255, 0, 0], "pure green must key out via RGB TO HSV -> HUE KEY");
+    }
+
+    #[test]
+    fn reference_input_accepts_differs_from_patchs_reference() {
+        // Proves accepts is per-operation, not per-Input-variant: Reference
+        // means "Number source" on PATCH, "pixel source" here.
+        use crate::operations::compose::Patch;
+
+        let hue_key_metadata = HueKey::new().metadata();
+        let hue_key_reference = hue_key_metadata.inputs.iter().find(|d| d.kind == Input::Reference).unwrap();
+
+        let patch_metadata = Patch::new().metadata();
+        let patch_reference = patch_metadata.inputs.iter().find(|d| d.kind == Input::Reference).unwrap();
+
+        assert_ne!(hue_key_reference.accepts, patch_reference.accepts);
+        assert!(hue_key_reference.accepts.contains(&OutputKind::FloatImage));
     }
 
     /// Test-only helper for building a synthetic "RGB TO HSV output"

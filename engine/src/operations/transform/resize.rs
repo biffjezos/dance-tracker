@@ -9,7 +9,7 @@ use crate::compositor::{
     input::find_input,
     Operation,
     OperationDescriptor,
-    metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
+    metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
     Value,
 };
 use crate::graphics::FloatImage;
@@ -142,7 +142,7 @@ impl Operation for Resize {
             // but Resize's own output is a *different* size than its input
             // at any scale != 100% - there's no single pixel-for-pixel
             // identity to blend a mask against here.
-            inputs: vec![Input::Source],
+            inputs: vec![InputDescriptor { kind: Input::Source, accepts: PIXEL_KINDS }],
             outputs: vec![OutputKind::FloatImage],
         }
     }

@@ -9,7 +9,7 @@ use crate::compositor::{
     input::find_input,
     Operation,
     OperationDescriptor,
-    metadata::{OperationCategory, OperationMetadata, OutputKind},
+    metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, PIXEL_KINDS},
     Value,
 };
 use crate::graphics::FloatImage;
@@ -82,7 +82,11 @@ impl Operation for Add {
             // Identity (MASK=0) is Foreground unmodified - it's the input
             // that still makes sense to show on its own with no compositing
             // applied, unlike Background which is meaningless alone here.
-            inputs: vec![Input::Foreground, Input::Background, Input::Mask],
+            inputs: vec![
+                InputDescriptor { kind: Input::Foreground, accepts: PIXEL_KINDS },
+                InputDescriptor { kind: Input::Background, accepts: PIXEL_KINDS },
+                InputDescriptor { kind: Input::Mask, accepts: PIXEL_KINDS },
+            ],
             outputs: vec![OutputKind::FloatImage],
         }
     }

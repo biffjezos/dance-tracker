@@ -11,8 +11,10 @@ import { getWasmApp } from "../core/wasm.js";
  * - selected node id
  * - selected node reference
  * - node navigation state
- * 
- * NO channel state - channel select will be a real Rust operation later
+ *
+ * No channel state here - channel/type-compatible wiring is handled by
+ * the real graph wiring system (node_inputs()'s `accepts`, filtered in
+ * nodeEditContexts.js's renderInputSteppers).
  */
 export class NodeSelectionState {
     constructor() {

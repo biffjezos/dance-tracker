@@ -13,11 +13,13 @@ use crate::compositor::{
     input::find_input,
     Value,
     metadata::{
+        InputDescriptor,
         OperationCategory,
         OperationMetadata,
         OutputKind,
         ParameterDescriptor,
         ParameterKind,
+        PIXEL_KINDS,
     },
 };
 
@@ -268,7 +270,10 @@ impl Operation for Ghost {
         OperationMetadata {
             display_name: "Ghost",
             category: OperationCategory::Composite,
-            inputs: vec![Input::Source, Input::Mask],
+            inputs: vec![
+                InputDescriptor { kind: Input::Source, accepts: PIXEL_KINDS },
+                InputDescriptor { kind: Input::Mask, accepts: PIXEL_KINDS },
+            ],
             outputs: vec![OutputKind::FloatImage],
         }
     }

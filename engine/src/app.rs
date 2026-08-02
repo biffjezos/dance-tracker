@@ -100,17 +100,22 @@ declares, and the node currently feeding it, if any.
 struct InputView {
     name: &'static str,
     source: Option<u32>,
+    // Which OutputKind tags (see OutputKind::as_str()) may be wired into
+    // this input - empty means unrestricted (every real node is a valid
+    // candidate).
+    accepts: Vec<&'static str>,
 }
 
 /*
 What the UI is told about one declared output of a node: its index (what
-`set_patch_mapping` addresses it by) and its human-readable label (see
-`Operation::output_names`).
+`set_patch_mapping` addresses it by), its human-readable label (see
+`Operation::output_names`), and its OutputKind tag (see OutputKind::as_str()).
 */
 #[derive(Serialize)]
 struct OutputView {
     index: u32,
     name: String,
+    kind: String,
 }
 
 /*
@@ -352,13 +357,14 @@ impl App {
             .metadata
             .inputs
             .iter()
-            .map(|key| InputView {
-                name: key.name(),
+            .map(|descriptor| InputView {
+                name: descriptor.kind.name(),
                 source: description
                     .inputs
                     .iter()
-                    .find(|(wired, _)| wired == key)
+                    .find(|(wired, _)| *wired == descriptor.kind)
                     .map(|(_, source)| source.index()),
+                accepts: descriptor.accepts.iter().map(|kind| kind.as_str()).collect(),
             })
             .collect::<Vec<_>>();
 
@@ -402,9 +408,10 @@ impl App {
             .outputs
             .iter()
             .enumerate()
-            .map(|(index, _kind)| OutputView {
+            .map(|(index, kind)| OutputView {
                 index: index as u32,
                 name: names.get(index).copied().unwrap_or("OUTPUT").to_string(),
+                kind: kind.as_str().to_string(),
             })
             .collect();
 

@@ -9,7 +9,7 @@ use crate::compositor::{
     input::find_input,
     Operation,
     OperationDescriptor,
-    metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
+    metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
     Value,
 };
 use crate::graphics::{Color, FloatImage};
@@ -120,7 +120,7 @@ impl Operation for RgbToHsv {
             // Deliberately no Input::Mask: blending raw RGB against
             // HSV-packed values pixel-by-pixel has no meaningful result -
             // there's no "partially converted", only converted or not.
-            inputs: vec![Input::Source],
+            inputs: vec![InputDescriptor { kind: Input::Source, accepts: PIXEL_KINDS }],
             outputs: vec![OutputKind::FloatImage],
         }
     }

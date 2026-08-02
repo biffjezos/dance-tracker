@@ -10,7 +10,7 @@ use crate::compositor::{
     Input,
     input::find_input,
     Value,
-    metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor},
+    metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor},
 };
 
 use crate::graphics::FloatImage;
@@ -87,7 +87,13 @@ impl Operation for Patch {
         OperationMetadata {
             display_name: "Patch",
             category: OperationCategory::Composite,
-            inputs: vec![Input::Source, Input::Reference],
+            inputs: vec![
+                // SOURCE is "the node being manipulated" (see this
+                // operation's own doc comment) - it can be anything, so no
+                // restriction.
+                InputDescriptor { kind: Input::Source, accepts: &[] },
+                InputDescriptor { kind: Input::Reference, accepts: &[OutputKind::Number] },
+            ],
             outputs: vec![OutputKind::FloatImage],
         }
     }
@@ -223,5 +229,19 @@ mod tests {
         let mut patch = Patch::new();
         let err = patch.set_parameter("Q", Value::Number(0.5)).unwrap_err();
         assert!(matches!(err, OperationError::InvalidParameterType(_)));
+    }
+
+    #[test]
+    fn source_input_accepts_is_unrestricted() {
+        let metadata = Patch::new().metadata();
+        let source = metadata.inputs.iter().find(|d| d.kind == Input::Source).unwrap();
+        assert!(source.accepts.is_empty(), "SOURCE can be anything - the empty-accepts escape hatch");
+    }
+
+    #[test]
+    fn reference_input_accepts_exactly_number() {
+        let metadata = Patch::new().metadata();
+        let reference = metadata.inputs.iter().find(|d| d.kind == Input::Reference).unwrap();
+        assert_eq!(reference.accepts, &[OutputKind::Number]);
     }
 }

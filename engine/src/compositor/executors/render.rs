@@ -235,7 +235,10 @@ mod tests {
             OperationMetadata {
                 display_name: "Combine",
                 category: OperationCategory::Composite,
-                inputs: vec![Input::Foreground, Input::Background],
+                inputs: vec![
+                    crate::compositor::metadata::InputDescriptor { kind: Input::Foreground, accepts: &[] },
+                    crate::compositor::metadata::InputDescriptor { kind: Input::Background, accepts: &[] },
+                ],
                 outputs: vec![],
             }
         }

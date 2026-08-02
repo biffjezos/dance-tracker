@@ -9,7 +9,7 @@ use crate::compositor::{
     input::find_input,
     Operation,
     OperationDescriptor,
-    metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind},
+    metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
     Value,
 };
 use crate::graphics::{Color, FloatImage};
@@ -97,7 +97,10 @@ impl Operation for ChromaKey {
         OperationMetadata {
             display_name: "Chroma Key",
             category: OperationCategory::Mask,
-            inputs: vec![Input::Source, Input::Mask],
+            inputs: vec![
+                InputDescriptor { kind: Input::Source, accepts: PIXEL_KINDS },
+                InputDescriptor { kind: Input::Mask, accepts: PIXEL_KINDS },
+            ],
             outputs: vec![OutputKind::FloatImage],
         }
     }
@@ -180,6 +183,14 @@ mod tests {
 
     fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<U8Image> {
         Arc::new(U8Image { pixels, width, height, format: ImageFormat::Rgba8 })
+    }
+
+    #[test]
+    fn mask_input_accepts_float_image_and_image() {
+        let metadata = ChromaKey::new().metadata();
+        let mask = metadata.inputs.iter().find(|d| d.kind == Input::Mask).unwrap();
+        assert!(mask.accepts.contains(&OutputKind::FloatImage));
+        assert!(mask.accepts.contains(&OutputKind::Image));
     }
 
     fn as_u8_pixels(value: &Value) -> Vec<u8> {
