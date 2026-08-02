@@ -179,9 +179,11 @@ impl RenderExecutor {
 
         let name = node_data.operation.metadata().display_name;
         let node_ctx = Context { input_bboxes: input_bboxes.clone(), ..ctx.clone() };
+        crate::graphics::mask::reset_pixels_computed();
         let (outputs, duration_ms) = measure_ms(|| node_data.operation.execute(&node_ctx, &input_values));
+        let pixels_computed = crate::graphics::mask::take_pixels_computed();
         let outputs = outputs?;
-        entries.push(ProfileEntry { name, duration_ms });
+        entries.push(ProfileEntry { name, duration_ms, pixels_computed });
 
         // ok_or (not unwrap): see evaluate() above.
         let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;

@@ -107,6 +107,48 @@ impl Blur {
 
         out
     }
+
+    /// The blurred value of a single output pixel, computed directly from
+    /// `pixels` rather than via the two-pass `blur_pixels` above -
+    /// mathematically identical to it (not an approximation): a separable
+    /// box blur's per-axis pixel count at a given output x (or y) never
+    /// depends on the other axis, so the two-pass average
+    /// `(1/countY) * sum_y[ (1/countX) * sum_x pixels ]` always equals the
+    /// single-pass 2D window average `sum / (countX * countY)` over the
+    /// same rectangular window. Used by `execute()`'s bbox-restricted path
+    /// (Phase 3 of BBOX_CONVENTIONS.md) via `compute_within_bbox`, so only
+    /// the pixels actually inside the relevant work area get this
+    /// per-pixel recomputation instead of the full two-pass buffer.
+    fn blur_single_pixel(pixels: &[f32], width: u32, height: u32, radius: u32, x: u32, y: u32) -> [f32; 4] {
+        let w = width as usize;
+        let h = height as usize;
+        let r = radius as usize;
+        let xu = x as usize;
+        let yu = y as usize;
+
+        let x_start = xu.saturating_sub(r);
+        let x_end = (xu + r).min(w - 1);
+        let y_start = yu.saturating_sub(r);
+        let y_end = (yu + r).min(h - 1);
+
+        let mut sum = [0f32; 4];
+        let mut count = 0u32;
+
+        for yi in y_start..=y_end {
+            let row_start = yi * w * 4;
+            for xi in x_start..=x_end {
+                let idx = row_start + xi * 4;
+                sum[0] += pixels[idx];
+                sum[1] += pixels[idx + 1];
+                sum[2] += pixels[idx + 2];
+                sum[3] += pixels[idx + 3];
+                count += 1;
+            }
+        }
+
+        let inv = 1.0 / count as f32;
+        [sum[0] * inv, sum[1] * inv, sum[2] * inv, sum[3] * inv]
+    }
 }
 
 impl Default for Blur {
@@ -194,7 +236,34 @@ impl Operation for Blur {
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
-        let blurred = self.blur_pixels(&source.pixels, source.width, source.height);
+        // Phase 3 of BBOX_CONVENTIONS.md: with a MASK wired, apply_mask
+        // below blends every pixel outside the relevant region straight
+        // back to `original` anyway - so restrict the actual blur compute
+        // to the intersection of MASK's own reported box and this node's
+        // own natural (SOURCE's) box, skipping the rest instead of
+        // running the full two-pass blur over the whole frame
+        // unconditionally. Without a MASK, there's nothing to restrict
+        // against - every pixel matters - so the original full-frame path
+        // is used unchanged.
+        let blurred = if mask.is_some() {
+            let natural_box = find_bbox(&ctx.input_bboxes, Input::Source)
+                .unwrap_or_else(|| Rect::full(source.width, source.height));
+            let mask_box = find_bbox(&ctx.input_bboxes, Input::Mask)
+                .unwrap_or_else(|| Rect::full(source.width, source.height));
+            let work_area = natural_box.intersect(&mask_box);
+
+            let radius = self.radius_px;
+            let width = source.width;
+            let height = source.height;
+            let pixels = &source.pixels;
+
+            crate::graphics::compute_within_bbox(width, height, work_area, pixels, |x, y| {
+                Self::blur_single_pixel(pixels, width, height, radius, x, y)
+            })
+        } else {
+            self.blur_pixels(&source.pixels, source.width, source.height)
+        };
+
         let blurred = crate::graphics::apply_mask(&source.pixels, blurred, mask.as_ref(), source.width, source.height)?;
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
@@ -494,5 +563,156 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, OperationError::InvalidInputType(_)));
+    }
+
+    #[test]
+    fn consume_equivalence_a_real_mask_bbox_produces_the_same_output_as_a_full_frame_one() {
+        // BBOX_CONVENTIONS.md's Phase 3 consume-equivalence invariant:
+        // restricting compute to a bbox must never change the final
+        // (apply_mask-blended) output versus running unrestricted. Same
+        // Source/Mask pixel data both times - only the *reported* bbox
+        // metadata passed via ctx.input_bboxes differs.
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(1.0)).unwrap();
+
+        // 6x1: distinct source pixels so blur produces distinct values
+        // per output pixel; mask is fully opaque (weight 1) only at
+        // x=2..4, zero elsewhere.
+        let source = image(
+            (0..6).flat_map(|n| [n * 10, n * 10 + 1, n * 10 + 2, 255]).collect(),
+            6, 1,
+        );
+        let mask = image(
+            vec![
+                0, 0, 0, 0,   0, 0, 0, 0,
+                0, 0, 0, 255, 0, 0, 0, 255,
+                0, 0, 0, 0,   0, 0, 0, 0,
+            ],
+            6, 1,
+        );
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let ctx_with_real_box = Context {
+            input_bboxes: vec![
+                (Input::Source, crate::compositor::bbox::Rect::full(6, 1)),
+                (Input::Mask, crate::compositor::bbox::Rect { x0: 2, y0: 0, x1: 4, y1: 1 }),
+            ],
+            ..context(6, 1)
+        };
+        let ctx_full_frame = context(6, 1); // input_bboxes empty -> falls back to Rect::full everywhere
+
+        let restricted = blur.execute(&ctx_with_real_box, &inputs).unwrap();
+        let unrestricted = blur.execute(&ctx_full_frame, &inputs).unwrap();
+
+        assert_eq!(as_u8_pixels(&restricted[0]), as_u8_pixels(&unrestricted[0]));
+    }
+
+    #[test]
+    fn a_smaller_mask_bbox_computes_strictly_fewer_pixels_than_a_full_frame_one() {
+        use crate::graphics::mask::{reset_pixels_computed, take_pixels_computed};
+
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(1.0)).unwrap();
+
+        let source = image((0..16).flat_map(|n| [n, n, n, 255]).collect(), 4, 4);
+        let mask = image(vec![255; 4 * 4 * 4], 4, 4); // fully opaque everywhere - doesn't affect which pixels get computed, only the reported box does
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let small_box_ctx = Context {
+            input_bboxes: vec![
+                (Input::Source, crate::compositor::bbox::Rect::full(4, 4)),
+                (Input::Mask, crate::compositor::bbox::Rect { x0: 1, y0: 1, x1: 2, y1: 2 }),
+            ],
+            ..context(4, 4)
+        };
+        reset_pixels_computed();
+        blur.execute(&small_box_ctx, &inputs).unwrap();
+        let small_box_pixels = take_pixels_computed().expect("BLUR with a wired MASK must record a pixel count");
+
+        let full_frame_ctx = context(4, 4); // no reported Mask box -> falls back to full-frame
+        reset_pixels_computed();
+        blur.execute(&full_frame_ctx, &inputs).unwrap();
+        let full_frame_pixels = take_pixels_computed().expect("BLUR with a wired MASK must record a pixel count");
+
+        assert_eq!(small_box_pixels, 1, "a 1x1 mask box must compute exactly one pixel");
+        assert_eq!(full_frame_pixels, 16, "a full-frame mask box must compute every pixel");
+        assert!(small_box_pixels < full_frame_pixels, "a smaller mask bbox must do strictly less work");
+    }
+
+    #[test]
+    fn checkerboard_resize_move_geometric_mask_end_to_end_matches_with_bbox_consumption_on_or_off() {
+        // AC3-style graph-level integration test: a geometric mask
+        // (CHECKERBOARD -> RESIZE -> MOVE, the same motivating pipeline
+        // from the MOVE spec) wired as BLUR's own MASK, confirming
+        // end-to-end pixel-identical output whether real (bbox-restricted,
+        // "on") boxes are threaded through the graph or not ("off",
+        // simulating pre-Phase-3 always-full-frame behaviour).
+        use crate::compositor::graph::Graph;
+        use crate::compositor::executors::{Execute, PreviewExecutor, RenderExecutor};
+        use crate::graphics::Color;
+        use crate::operations::generators::Checkerboard;
+        use crate::operations::sources::ImageSource;
+        use crate::operations::transform::{Move, Resize};
+
+        let mut graph = Graph::new(4, 4);
+
+        let mut source = ImageSource::new();
+        source.set_image(image((0..16).flat_map(|n| [n * 15, n * 15, n * 15, 255]).collect(), 4, 4));
+        let source_id = graph.add_node(Box::new(source));
+
+        let mut checkerboard = Checkerboard::new();
+        checkerboard.color_a = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+        checkerboard.color_b = checkerboard.color_a;
+        let checkerboard_id = graph.add_node(Box::new(checkerboard));
+
+        let mut resize = Resize::new();
+        resize.set_parameter("SCALE_X", Value::Number(50.0)).unwrap();
+        resize.set_parameter("SCALE_Y", Value::Number(50.0)).unwrap();
+        let resize_id = graph.add_node(Box::new(resize));
+        graph.connect(resize_id, Input::Source, checkerboard_id).unwrap();
+
+        let move_id = graph.add_node(Box::new(Move::new()));
+        graph.connect(move_id, Input::Source, resize_id).unwrap();
+
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(1.0)).unwrap();
+        let blur_id = graph.add_node(Box::new(blur));
+        graph.connect(blur_id, Input::Source, source_id).unwrap();
+        graph.connect(blur_id, Input::Mask, move_id).unwrap();
+
+        graph.validate().expect("the wired pipeline is valid");
+
+        let ctx = context(4, 4);
+
+        // "On": through the real graph/RenderExecutor, which computes and
+        // threads real (non-full-frame) boxes from CHECKERBOARD -> RESIZE
+        // -> MOVE into BLUR's own ctx.input_bboxes.
+        let on_values = RenderExecutor::new().execute(&graph, blur_id, &ctx).unwrap();
+        let on_pixels = as_u8_pixels(&on_values[0]);
+
+        // "Off": call BLUR's own execute() directly with the same resolved
+        // Source/Mask Values (fetched by evaluating those same graph nodes)
+        // but no bbox info at all - ctx.input_bboxes stays empty, so
+        // find_bbox falls back to full-frame everywhere, exactly
+        // pre-Phase-3 behaviour.
+        let source_value = PreviewExecutor::default().execute(&graph, source_id, &ctx).unwrap().into_iter().next().unwrap();
+        let mask_value = PreviewExecutor::default().execute(&graph, move_id, &ctx).unwrap().into_iter().next().unwrap();
+
+        let blur_off = Blur { radius_px: 1 };
+        let off_values = blur_off.execute(&ctx, &[
+            (Input::Source, source_value),
+            (Input::Mask, mask_value),
+        ]).unwrap();
+        let off_pixels = as_u8_pixels(&off_values[0]);
+
+        assert_eq!(on_pixels, off_pixels, "bbox consumption on vs off must produce pixel-identical output");
     }
 }

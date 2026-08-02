@@ -4,6 +4,14 @@
 pub struct ProfileEntry {
     pub name: &'static str,
     pub duration_ms: f64,
+    /// How many pixels this node's own execute() actually computed, if it
+    /// went through `graphics::mask::compute_within_bbox` (see
+    /// BBOX_CONVENTIONS.md's Phase 3) - `None` for any node that didn't
+    /// (either it has no wired MASK to restrict against, or it hasn't
+    /// migrated to bbox-consuming yet). Populated by reading the counter
+    /// `compute_within_bbox` leaves behind immediately after `execute()`
+    /// returns, not threaded through `execute()`'s own signature.
+    pub pixels_computed: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -15,7 +23,10 @@ pub struct Profile {
 impl std::fmt::Display for Profile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for entry in &self.entries {
-            writeln!(f, "{}: {:.1}ms", entry.name, entry.duration_ms)?;
+            match entry.pixels_computed {
+                Some(pixels) => writeln!(f, "{}: {:.1}ms ({} px)", entry.name, entry.duration_ms, pixels)?,
+                None => writeln!(f, "{}: {:.1}ms", entry.name, entry.duration_ms)?,
+            }
         }
         write!(f, "Total: {:.1}ms", self.total_ms)
     }
