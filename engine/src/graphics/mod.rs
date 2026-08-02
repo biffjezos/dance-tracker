@@ -11,7 +11,7 @@ pub mod video;
 pub use color::Color;
 pub use float_image::FloatImage;
 pub use frame::Frame;
-pub use mask::{ apply_mask, resolve_pixels };
+pub use mask::{ apply_mask, resolve_pixels, compute_within_bbox };
 pub use u8_image::{ U8Image, ImageFormat };
 pub use video::Video;
 
