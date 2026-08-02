@@ -76,6 +76,17 @@ tunable state must go through `parameters()`/`get_parameter()`/
 before adding a new parameter, or before assuming a future animation
 system would need `Operation`/`ParameterKind` to change shape.
 
+## Bounding-box (bbox) awareness convention
+
+Not implemented yet, but the shape of the mechanism is already decided so
+it doesn't get retrofitted per operation later: every operation reports a
+bounding box for its own output (defaulted to full-frame, always safe),
+and may separately, optionally, consume its inputs' boxes to skip real
+per-pixel work outside the relevant region. Read `BBOX_CONVENTIONS.md`
+before adding a new pixel-producing operation's spatial behavior, or
+before assuming a node must always compute over the full frame.
+
+
 ## Postponed/backlog work
 
 Specific features that have been deliberately postponed (MOVE operation,
