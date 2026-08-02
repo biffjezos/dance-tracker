@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::compositor::{Context, Input, OperationError, Value};
+use crate::compositor::{bbox::Rect, Context, Input, OperationError, Value};
 use crate::compositor::graph::{Graph, NodeId};
 use super::Execute;
 
@@ -41,42 +41,52 @@ impl Execute for PreviewExecutor {
         ctx: &Context,
     ) -> Result<Vec<Value>, OperationError> {
         if !self.memoize {
-            return Self::evaluate_unmemoized(graph, node, ctx).map(|value| vec![value]);
+            return Self::evaluate_unmemoized(graph, node, ctx).map(|(value, _bbox)| vec![value]);
         }
 
         let mut memo = HashMap::new();
-        Self::evaluate_memoized(graph, node, ctx, &mut memo).map(|value| vec![value])
+        Self::evaluate_memoized(graph, node, ctx, &mut memo).map(|(value, _bbox)| vec![value])
     }
 }
 
 impl PreviewExecutor {
+    /// Returns the node's own output value alongside the bbox it reported
+    /// (see BBOX_CONVENTIONS.md) - threaded privately through this
+    /// recursion only; the public `Execute::execute()` above still
+    /// returns bare `Value`s.
     fn evaluate_unmemoized(
         graph: &Graph,
         node: NodeId,
         ctx: &Context,
-    ) -> Result<Value, OperationError> {
+    ) -> Result<(Value, Rect), OperationError> {
         let node_data = graph.resolve(node).ok_or(OperationError::UnknownNode)?;
 
         let mut input_values: Vec<(Input, Value)> = Vec::new();
+        let mut input_bboxes: Vec<(Input, Rect)> = Vec::new();
 
         for &(key, input_node_id) in &node_data.inputs {
-            let value = Self::evaluate_unmemoized(graph, input_node_id, ctx)?;
+            let (value, bbox) = Self::evaluate_unmemoized(graph, input_node_id, ctx)?;
             input_values.push((key, value));
+            input_bboxes.push((key, bbox));
         }
 
-        let outputs = node_data.operation.execute(ctx, &input_values)?;
+        let node_ctx = Context { input_bboxes: input_bboxes.clone(), ..ctx.clone() };
+        let outputs = node_data.operation.execute(&node_ctx, &input_values)?;
         // ok_or (not unwrap) so an operation that violates the "always
         // returns exactly one output" convention errors out this one
         // preview instead of panicking the whole WASM instance.
-        outputs.into_iter().next().ok_or(OperationError::NoOutput)
+        let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;
+        let bbox = node_data.operation.output_bbox(&node_ctx, &input_bboxes, &value);
+
+        Ok((value, bbox))
     }
 
     fn evaluate_memoized(
         graph: &Graph,
         node: NodeId,
         ctx: &Context,
-        memo: &mut HashMap<NodeId, Value>,
-    ) -> Result<Value, OperationError> {
+        memo: &mut HashMap<NodeId, (Value, Rect)>,
+    ) -> Result<(Value, Rect), OperationError> {
         if let Some(cached) = memo.get(&node) {
             return Ok(cached.clone());
         }
@@ -84,20 +94,24 @@ impl PreviewExecutor {
         let node_data = graph.resolve(node).ok_or(OperationError::UnknownNode)?;
 
         let mut input_values: Vec<(Input, Value)> = Vec::new();
+        let mut input_bboxes: Vec<(Input, Rect)> = Vec::new();
 
         for &(key, input_node_id) in &node_data.inputs {
-            let value = Self::evaluate_memoized(graph, input_node_id, ctx, memo)?;
+            let (value, bbox) = Self::evaluate_memoized(graph, input_node_id, ctx, memo)?;
             input_values.push((key, value));
+            input_bboxes.push((key, bbox));
         }
 
-        let outputs = node_data.operation.execute(ctx, &input_values)?;
+        let node_ctx = Context { input_bboxes: input_bboxes.clone(), ..ctx.clone() };
+        let outputs = node_data.operation.execute(&node_ctx, &input_values)?;
         // See evaluate_unmemoized: ok_or, not unwrap, so a no-output
         // operation errors out this preview instead of panicking.
         let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;
+        let bbox = node_data.operation.output_bbox(&node_ctx, &input_bboxes, &value);
 
-        memo.insert(node, value.clone());
+        memo.insert(node, (value.clone(), bbox));
 
-        Ok(value)
+        Ok((value, bbox))
     }
 }
 
@@ -241,5 +255,61 @@ mod tests {
         executor.execute(&graph, source_id, &context()).expect("should succeed");
 
         assert_eq!(calls_of(&graph, source_id), 2, "unlike RenderExecutor, PreviewExecutor must never persist a cache across separate execute() calls");
+    }
+
+    fn chromakey_add_pixels(executor: &PreviewExecutor) -> Vec<u8> {
+        // Mirrors executors::render::tests's chromakey -> add pixel-identity
+        // test, for PreviewExecutor's own (structurally identical) bbox
+        // threading in evaluate_unmemoized/evaluate_memoized.
+        use std::sync::Arc;
+        use crate::graphics::{ImageFormat, U8Image};
+        use crate::operations::compose::Add;
+        use crate::operations::key::ChromaKey;
+        use crate::operations::sources::ImageSource;
+
+        let mut graph = Graph::new(1, 1);
+
+        let mut green_source = ImageSource::new();
+        green_source.set_image(Arc::new(U8Image {
+            pixels: vec![0, 255, 0, 255],
+            width: 1,
+            height: 1,
+            format: ImageFormat::Rgba8,
+        }));
+        let source_id = graph.add_node(Box::new(green_source));
+
+        let chromakey_id = graph.add_node(Box::new(ChromaKey::new()));
+        graph.connect(chromakey_id, Input::Source, source_id).unwrap();
+
+        let mut backdrop = ImageSource::new();
+        backdrop.set_image(Arc::new(U8Image {
+            pixels: vec![10, 20, 30, 255],
+            width: 1,
+            height: 1,
+            format: ImageFormat::Rgba8,
+        }));
+        let backdrop_id = graph.add_node(Box::new(backdrop));
+
+        let add_id = graph.add_node(Box::new(Add::new()));
+        graph.connect(add_id, Input::Foreground, chromakey_id).unwrap();
+        graph.connect(add_id, Input::Background, backdrop_id).unwrap();
+
+        let values = executor.execute(&graph, add_id, &context()).expect("should succeed");
+        match &values[0] {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels.clone(),
+            other => panic!("expected a float image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn phase_0_bbox_threading_does_not_change_a_real_multi_node_graphs_output_memoized() {
+        let pixels = chromakey_add_pixels(&PreviewExecutor::new(true));
+        assert_eq!(pixels, vec![10, 255, 30, 255], "PreviewExecutor's memoized path must be unchanged by Phase 0's threading");
+    }
+
+    #[test]
+    fn phase_0_bbox_threading_does_not_change_a_real_multi_node_graphs_output_unmemoized() {
+        let pixels = chromakey_add_pixels(&PreviewExecutor::new(false));
+        assert_eq!(pixels, vec![10, 255, 30, 255], "PreviewExecutor's unmemoized path must be unchanged by Phase 0's threading");
     }
 }

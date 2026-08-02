@@ -2,6 +2,7 @@
 
 use serde::Serialize;
 
+use crate::compositor::bbox::Rect;
 use crate::compositor::value::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -43,4 +44,10 @@ impl Input {
 
 pub fn find_input(inputs: &[(Input, Value)], key: Input) -> Option<&Value> {
     inputs.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
+}
+
+/// Same shape as `find_input`, for the bbox each wired input reported -
+/// see `Context::input_bboxes` and `Operation::output_bbox`.
+pub fn find_bbox(bboxes: &[(Input, Rect)], key: Input) -> Option<Rect> {
+    bboxes.iter().find(|(k, _)| *k == key).map(|(_, r)| *r)
 }

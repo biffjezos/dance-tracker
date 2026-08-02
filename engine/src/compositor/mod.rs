@@ -1,5 +1,6 @@
 // src/compositor/mod.rs
  
+pub mod bbox;
 pub mod context;
 pub mod error;
 pub mod executors;
@@ -11,6 +12,7 @@ pub mod operation_descriptor;
 pub mod registry;
 pub mod value;
 
+pub use bbox::Rect;
 pub use context::{ Context, Meta };
 pub use error::OperationError;
 pub use input::Input;
