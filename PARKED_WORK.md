@@ -205,6 +205,86 @@ a menu and push a second-level submenu context (the node-selector/
 param-group push/pop pattern already in `menu.js`/`nodeEditContexts.js`
 is directly reusable) instead of one flat button list per menu.
 
+## MORPH operation (SDF-based mask shape interpolation)
+
+**Work:** 6h · **Complexity:** 4/6
+**Depends on:** Nothing blocking - the prerequisite plumbing this was
+originally scoped after (typed input compatibility, `InputDescriptor`/
+`accepts` on `OperationMetadata.inputs`) is done, merged into `dev` via
+PR #97. Two design questions are open, not blocking, but worth resolving
+before starting:
+
+1. Which two `Input` slots carry "mask state A" and "mask state B" - the
+   current `Input` enum (`Source`/`Reference`/`Content`/`Mask`/
+   `Foreground`/`Background`) has no natural pair for two same-role mask
+   inputs. Reusing `Foreground`/`Background` is the obvious fit (already
+   typed to accept pixel data via `PIXEL_KINDS`), but overloads names
+   otherwise associated with the `compose` operations' blend semantics.
+2. Whether progress over the `DURATION` (frames) parameter is driven by
+   an explicit start-frame/trigger or read directly off `ctx.meta.frame`.
+   This is the same category of "how does a built-in-animated operation
+   know when to start counting" question RING's PULSATE apparently ran
+   into (added in `b5e2b07`, reverted in `eee1113`, no reason recorded in
+   either commit message) - worth understanding why PULSATE was reverted
+   before picking the same time-driving approach here.
+
+**Existing non-functional code:** None. `compose/mix.rs` is the nearest
+existing pattern (two-pixel-input blend) but performs a flat alpha
+crossfade, not a shape morph, and was explicitly ruled out as
+insufficient for this feature: a naive alpha crossfade of a circle mask
+and a box mask ghosts/double-exposes mid-transition (both shapes visible,
+fading) rather than producing a single continuously-deforming solid
+silhouette.
+
+A MORPH operation that takes two masks (state A, state B) and a
+frame-count `DURATION`, and outputs a mask whose silhouette continuously
+deforms from A's shape to B's over that duration - via signed-distance-
+field interpolation (distance-transform both source masks, linearly
+interpolate the two distance fields by frame progress, threshold back to
+a solid alpha mask each frame), not a per-pixel alpha crossfade. The
+distance transform is real per-pixel compute, more than anything
+currently in `compose`/`key`, though still workable at this app's
+resolutions.
+
+Motivating example: a filled RING (THICKNESS at its max, i.e. a solid
+disc) morphing into a small box (a resized CHECKERBOARD, same colours) -
+wired as another node's MASK, the masked footage's visible shape animates
+circle -> box as the underlying mask morphs.
+
+## Content-derived bbox tightening for chromakey/hue_key
+
+**Work:** 5h · **Complexity:** 4/6
+**Depends on:** The base bounding-box mechanism (`BBOX_CONVENTIONS.md`,
+`Rect`/`Operation::output_bbox`/`Context.input_bboxes`) landing first -
+this round's implementation spec deliberately scopes that mechanism to
+`RESIZE`/`MOVE`/`BLUR`/geometric masks only, explicitly excluding this
+item. Management's call: chromakey is the headline case for why bbox
+awareness matters (a green-screen key's silhouette is exactly the kind of
+"most of the frame doesn't matter" region this whole effort is about), but
+its region has no fixed shape and can change every frame on video - real
+content-dependent work, not a parameter-derived box like `BLUR`'s
+kernel-radius grow. Validate the mechanism on the simpler, static/
+geometric cases first, then come back to this.
+**Existing non-functional code:** None yet - `output_bbox()`'s trait
+signature already includes an `output: &Value` argument specifically so
+this item doesn't require a second signature change when it's picked up
+(see `BBOX_CONVENTIONS.md`'s "where this lives in the type system"
+section).
+
+Once the base mechanism exists: add a shared helper (`graphics/bbox.rs` or
+alongside `apply_mask` in `graphics/mask.rs`) that scans a computed
+alpha channel for the tightest enclosing `Rect` where `alpha > 0.0`
+(strict, not a rounding threshold - a barely-nonzero pixel could still
+matter to something downstream, e.g. an ADD). `chromakey`/`hue_key`
+override `output_bbox()` to call it on their own `output` argument. Open
+question worth resolving before starting: since a keyed region can change
+shape every frame on video, is per-tick re-scanning (a single O(width *
+height) linear pass, cheap relative to the keying math itself) sufficient,
+or does the box need any temporal smoothing/hysteresis to avoid a
+flickering box size destabilizing downstream ops' own compute-region
+choices tick to tick? No evidence either way yet - worth a real
+measurement before deciding, not a guess.
+
 ## Constellation generator effect
 
 **Work:** 3h · **Complexity:** 2/6
