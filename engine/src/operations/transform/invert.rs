@@ -286,9 +286,10 @@ mod tests {
     fn consume_equivalence_holds_even_when_source_itself_reports_a_sub_frame_box() {
         // Same lesson as BLUR's evaluator-caught bug: verify directly that
         // a sub-frame SOURCE box doesn't cause under-computation. Unlike
-        // BLUR, INVERT is a pure per-pixel op with no spreading, so its
-        // natural box is exactly SOURCE's own reported box (no growth
-        // needed) - this test confirms that holds, not just assumes it.
+        // BLUR, INVERT's natural box is Rect::full, independent of SOURCE
+        // entirely (see execute()'s own comment - INVERT isn't
+        // zero-preserving, so SOURCE's box plays no role in work_area at
+        // all) - this test confirms that holds, not just assumes it.
         let invert = Invert::new();
 
         let mut source_pixels = vec![0u8; 10 * 4];
