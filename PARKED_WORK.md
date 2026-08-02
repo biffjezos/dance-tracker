@@ -44,29 +44,38 @@ path too, not just the normal one. Needs a regression test exercising
 exactly this multi-root scenario (a cycle plus an unrelated node visited
 afterward) before landing.
 
-## MOVE operation
+## MOVE operation: arrow-key nudging
 
 **Work:** 6h · **Complexity:** 5/6
 **Depends on:** A general keyboard-input-context system that doesn't
-exist yet. MOVE's intended UI (arrow keys nudge the selected node's
-position while its EDIT screen is open) collides with keyboard scrubbing
-(arrow keys step the focused canvas's video forward/back) - today there
-is exactly one global `keydown` listener (Space-bar only, in `app.js`)
-with no concept of "what do arrow keys mean right now." Bolting a
-MOVE-specific special case onto that would just relocate the conflict,
-not solve it. This is a prerequisite design task, not an external
-blocker - nothing stops someone from doing it, it just hasn't been done.
+exist yet. The base MOVE operation itself now exists
+(`engine/src/operations/transform/move_op.rs`) - `OFFSET_X`/`OFFSET_Y`
+are plain `Number` parameters, edited through the existing generic
+stepper UI (the same steppers RESIZE's `SCALE_X`/`SCALE_Y` use). What
+remains parked is only the originally-envisioned *additional* UI: arrow
+keys nudging the selected node's position while its EDIT screen is open.
+That collides with keyboard scrubbing (arrow keys step the focused
+canvas's video forward/back) - today there is exactly one global
+`keydown` listener (Space-bar only, in `app.js`) with no concept of
+"what do arrow keys mean right now." Bolting a MOVE-specific special
+case onto that would just relocate the conflict, not solve it. This is
+a prerequisite design task, not an external blocker - nothing stops
+someone from doing it, it just hasn't been done.
 **Existing non-functional code:** `engine/src/graphics/geometry.rs`'s
 `Point2D`/`Center` structs - defined, unused (`cargo build` flags both as
-dead code), scaffolding for the position value MOVE would read/write.
-Nothing else exists for this yet - no operation, no UI.
+dead code), predate MOVE and were deliberately not used by it (MOVE
+stores `offset_x`/`offset_y` as plain `f64` fields, matching RESIZE's
+`scale_x`/`scale_y` - see the MOVE spec's "Out of scope" section). Still
+nothing claims them; leave them for whoever eventually needs a
+`Point2D`-shaped parameter type.
 
-Before starting MOVE (or any other operation that wants its own
-keybindings - ROTATE/SCALE are likely next), design a general keyboard-
-context system first: something like a stack of "current input context"
-that a node's EDIT mode can push (claiming arrow keys) and pop on exit,
-falling back to whatever scrub/transport context was underneath. Open
-questions to resolve before implementing, from the last discussion:
+Before adding arrow-key nudging to MOVE (or any other operation that
+wants its own keybindings - ROTATE/SCALE are likely next), design a
+general keyboard-context system first: something like a stack of
+"current input context" that a node's EDIT mode can push (claiming
+arrow keys) and pop on exit, falling back to whatever scrub/transport
+context was underneath. Open questions to resolve before implementing,
+from the last discussion:
 
 1. Should scrub-while-editing-MOVE ever work simultaneously, or is it
    always strictly one-or-the-other?
