@@ -3,10 +3,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::compositor::{
+    bbox::Rect,
     Context,
     OperationError,
     Input,
-    input::find_input,
+    input::{find_bbox, find_input},
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
@@ -63,6 +64,31 @@ impl ChromaKey {
         }
 
         output
+    }
+
+    /// The keyed value of a single pixel, computed directly from `pixels`
+    /// - identical math to `key_pixels`'s own loop body, just for one
+    /// index. Used by `execute()`'s bbox-restricted path (Phase 3 of
+    /// BBOX_CONVENTIONS.md).
+    fn key_single_pixel(pixels: &[f32], key_color: Color, threshold: f64, x: u32, y: u32, width: u32) -> [f32; 4] {
+        let key_r = key_color.r as f64;
+        let key_g = key_color.g as f64;
+        let key_b = key_color.b as f64;
+
+        let idx = ((y * width + x) * 4) as usize;
+        let r = pixels[idx] as f64;
+        let g = pixels[idx + 1] as f64;
+        let b = pixels[idx + 2] as f64;
+
+        let distance = ((r - key_r).powi(2) + (g - key_g).powi(2) + (b - key_b).powi(2)).sqrt()
+            / 3f64.sqrt();
+
+        [
+            pixels[idx],
+            pixels[idx + 1],
+            pixels[idx + 2],
+            if distance <= threshold { 0.0 } else { pixels[idx + 3] },
+        ]
     }
 }
 
@@ -159,7 +185,38 @@ impl Operation for ChromaKey {
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
-        let keyed = Self::key_pixels(&source.pixels, self.key_color, self.threshold);
+        // Phase 3 of BBOX_CONVENTIONS.md: with a MASK wired, apply_mask
+        // below blends every pixel outside the relevant region straight
+        // back to `original` anyway - so restrict the actual keying
+        // compute to the intersection of MASK's own reported box and
+        // SOURCE's own reported box (no growth needed - key_pixels reads
+        // only the pixel it writes, no neighbors). SOURCE's box is a
+        // valid operand here: key_pixels is zero-preserving -
+        // key_pixels([0,0,0,0]) is always [0,0,0,0] for any KEY_COLOR/
+        // THRESHOLD, since RGB always passes through unchanged and alpha
+        // is either explicitly zeroed or left at its already-zero value.
+        // Only this operation's own wired MASK is in scope here - not
+        // deriving a box from CHROMA KEY's own keyed-out alpha, which is
+        // the excluded, content-derived Phase 4 (see PARKED_WORK.md).
+        let keyed = if mask.is_some() {
+            let natural_box = find_bbox(&ctx.input_bboxes, Input::Source)
+                .unwrap_or_else(|| Rect::full(source.width, source.height));
+            let mask_box = find_bbox(&ctx.input_bboxes, Input::Mask)
+                .unwrap_or_else(|| Rect::full(source.width, source.height));
+            let work_area = natural_box.intersect(&mask_box);
+
+            let width = source.width;
+            let pixels = &source.pixels;
+            let key_color = self.key_color;
+            let threshold = self.threshold;
+
+            crate::graphics::compute_within_bbox(width, source.height, work_area, pixels, |x, y| {
+                Self::key_single_pixel(pixels, key_color, threshold, x, y, width)
+            })
+        } else {
+            Self::key_pixels(&source.pixels, self.key_color, self.threshold)
+        };
+
         let keyed = crate::graphics::apply_mask(&source.pixels, keyed, mask.as_ref(), source.width, source.height)?;
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
@@ -344,5 +401,174 @@ mod tests {
             .unwrap();
 
         assert_eq!(as_u8_pixels(&values[0]), vec![0, 255, 0, 0]);
+    }
+
+    #[test]
+    fn consume_equivalence_a_real_mask_bbox_produces_the_same_output_as_a_full_frame_one() {
+        let chromakey = ChromaKey::new();
+
+        // A mix of pure green (keys out) and other colours (don't), so
+        // the restricted vs. unrestricted comparison is meaningful.
+        let source = image(
+            vec![
+                255, 0, 0, 255,  0, 255, 0, 255,
+                0, 255, 0, 255,  10, 20, 30, 255,
+                255, 255, 255, 255, 0, 0, 0, 255,
+            ],
+            6, 1,
+        );
+        let mask = image(
+            vec![
+                0, 0, 0, 0,   0, 0, 0, 0,
+                0, 0, 0, 255, 0, 0, 0, 255,
+                0, 0, 0, 0,   0, 0, 0, 0,
+            ],
+            6, 1,
+        );
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let ctx_with_real_box = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect::full(6, 1)),
+                (Input::Mask, Rect { x0: 2, y0: 0, x1: 4, y1: 1 }),
+            ],
+            ..context(6, 1)
+        };
+        let ctx_full_frame = context(6, 1);
+
+        let restricted = chromakey.execute(&ctx_with_real_box, &inputs).unwrap();
+        let unrestricted = chromakey.execute(&ctx_full_frame, &inputs).unwrap();
+
+        assert_eq!(as_u8_pixels(&restricted[0]), as_u8_pixels(&unrestricted[0]));
+    }
+
+    #[test]
+    fn consume_equivalence_holds_even_when_source_itself_reports_a_sub_frame_box() {
+        // Verifies key_pixels's zero-preservation directly: RGB always
+        // passes through unchanged and alpha is either explicitly zeroed
+        // or left at its already-zero value, so key_pixels([0,0,0,0]) is
+        // always [0,0,0,0] regardless of KEY_COLOR/THRESHOLD - SOURCE's
+        // own box is therefore a valid intersection operand here.
+        let chromakey = ChromaKey::new(); // key_color = pure green, threshold 0.3
+
+        let mut source_pixels = vec![0u8; 10 * 4];
+        // Real content inside [3,7): pure green (keys out) at x=4, red
+        // (stays) at x=5, so the restricted region itself has a mix.
+        source_pixels[3 * 4..3 * 4 + 4].copy_from_slice(&[0, 255, 0, 255]);
+        source_pixels[4 * 4..4 * 4 + 4].copy_from_slice(&[255, 0, 0, 255]);
+        source_pixels[5 * 4..5 * 4 + 4].copy_from_slice(&[10, 20, 30, 255]);
+        source_pixels[6 * 4..6 * 4 + 4].copy_from_slice(&[0, 255, 0, 255]);
+        let source = image(source_pixels, 10, 1);
+        let mask = image(vec![255; 10 * 4], 10, 1);
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let ctx_with_real_source_box = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect { x0: 3, y0: 0, x1: 7, y1: 1 }),
+                (Input::Mask, Rect::full(10, 1)),
+            ],
+            ..context(10, 1)
+        };
+        let ctx_full_frame = context(10, 1);
+
+        let restricted = chromakey.execute(&ctx_with_real_source_box, &inputs).unwrap();
+        let unrestricted = chromakey.execute(&ctx_full_frame, &inputs).unwrap();
+
+        assert_eq!(as_u8_pixels(&restricted[0]), as_u8_pixels(&unrestricted[0]));
+    }
+
+    #[test]
+    fn a_smaller_mask_bbox_computes_strictly_fewer_pixels_than_a_full_frame_one() {
+        use crate::graphics::mask::{reset_pixels_computed, take_pixels_computed};
+
+        let chromakey = ChromaKey::new();
+
+        let source = image((0..16).flat_map(|n| [n, n, n, 255]).collect(), 4, 4);
+        let mask = image(vec![255; 4 * 4 * 4], 4, 4);
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let small_box_ctx = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect::full(4, 4)),
+                (Input::Mask, Rect { x0: 1, y0: 1, x1: 2, y1: 2 }),
+            ],
+            ..context(4, 4)
+        };
+        reset_pixels_computed();
+        chromakey.execute(&small_box_ctx, &inputs).unwrap();
+        let small_box_pixels = take_pixels_computed().expect("CHROMA KEY with a wired MASK must record a pixel count");
+
+        let full_frame_ctx = context(4, 4);
+        reset_pixels_computed();
+        chromakey.execute(&full_frame_ctx, &inputs).unwrap();
+        let full_frame_pixels = take_pixels_computed().expect("CHROMA KEY with a wired MASK must record a pixel count");
+
+        assert_eq!(small_box_pixels, 1);
+        assert_eq!(full_frame_pixels, 16);
+        assert!(small_box_pixels < full_frame_pixels);
+    }
+
+    #[test]
+    fn checkerboard_resize_move_geometric_mask_end_to_end_matches_with_bbox_consumption_on_or_off() {
+        use crate::compositor::graph::Graph;
+        use crate::compositor::executors::{Execute, PreviewExecutor, RenderExecutor};
+        use crate::operations::generators::Checkerboard;
+        use crate::operations::sources::ImageSource;
+        use crate::operations::transform::{Move, Resize};
+
+        let mut graph = Graph::new(4, 4);
+
+        let mut source = ImageSource::new();
+        source.set_image(image((0..16).flat_map(|n| [n * 15, 0, 0, 255]).collect(), 4, 4));
+        let source_id = graph.add_node(Box::new(source));
+
+        let mut checkerboard = Checkerboard::new();
+        checkerboard.color_a = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+        checkerboard.color_b = checkerboard.color_a;
+        let checkerboard_id = graph.add_node(Box::new(checkerboard));
+
+        let mut resize = Resize::new();
+        resize.set_parameter("SCALE_X", Value::Number(50.0)).unwrap();
+        resize.set_parameter("SCALE_Y", Value::Number(50.0)).unwrap();
+        let resize_id = graph.add_node(Box::new(resize));
+        graph.connect(resize_id, Input::Source, checkerboard_id).unwrap();
+
+        let move_id = graph.add_node(Box::new(Move::new()));
+        graph.connect(move_id, Input::Source, resize_id).unwrap();
+
+        let chromakey_id = graph.add_node(Box::new(ChromaKey::new()));
+        graph.connect(chromakey_id, Input::Source, source_id).unwrap();
+        graph.connect(chromakey_id, Input::Mask, move_id).unwrap();
+
+        graph.validate().expect("the wired pipeline is valid");
+
+        let ctx = context(4, 4);
+
+        let on_values = RenderExecutor::new().execute(&graph, chromakey_id, &ctx).unwrap();
+        let on_pixels = as_u8_pixels(&on_values[0]);
+
+        let source_value = PreviewExecutor::default().execute(&graph, source_id, &ctx).unwrap().into_iter().next().unwrap();
+        let mask_value = PreviewExecutor::default().execute(&graph, move_id, &ctx).unwrap().into_iter().next().unwrap();
+
+        let chromakey_off = ChromaKey::new();
+        let off_values = chromakey_off.execute(&ctx, &[
+            (Input::Source, source_value),
+            (Input::Mask, mask_value),
+        ]).unwrap();
+        let off_pixels = as_u8_pixels(&off_values[0]);
+
+        assert_eq!(on_pixels, off_pixels, "bbox consumption on vs off must produce pixel-identical output");
     }
 }
