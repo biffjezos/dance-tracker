@@ -659,6 +659,7 @@ impl App {
                 ..Meta::default()
             },
             resources: self.resources.clone(),
+            ..Context::default()
         }
     }
 
