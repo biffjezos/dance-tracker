@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::compositor::{Context, Input, OperationError, Value};
+use crate::compositor::{bbox::Rect, Context, Input, OperationError, Value};
 use crate::compositor::graph::{Graph, NodeId};
 use super::Execute;
 
@@ -41,42 +41,52 @@ impl Execute for PreviewExecutor {
         ctx: &Context,
     ) -> Result<Vec<Value>, OperationError> {
         if !self.memoize {
-            return Self::evaluate_unmemoized(graph, node, ctx).map(|value| vec![value]);
+            return Self::evaluate_unmemoized(graph, node, ctx).map(|(value, _bbox)| vec![value]);
         }
 
         let mut memo = HashMap::new();
-        Self::evaluate_memoized(graph, node, ctx, &mut memo).map(|value| vec![value])
+        Self::evaluate_memoized(graph, node, ctx, &mut memo).map(|(value, _bbox)| vec![value])
     }
 }
 
 impl PreviewExecutor {
+    /// Returns the node's own output value alongside the bbox it reported
+    /// (see BBOX_CONVENTIONS.md) - threaded privately through this
+    /// recursion only; the public `Execute::execute()` above still
+    /// returns bare `Value`s.
     fn evaluate_unmemoized(
         graph: &Graph,
         node: NodeId,
         ctx: &Context,
-    ) -> Result<Value, OperationError> {
+    ) -> Result<(Value, Rect), OperationError> {
         let node_data = graph.resolve(node).ok_or(OperationError::UnknownNode)?;
 
         let mut input_values: Vec<(Input, Value)> = Vec::new();
+        let mut input_bboxes: Vec<(Input, Rect)> = Vec::new();
 
         for &(key, input_node_id) in &node_data.inputs {
-            let value = Self::evaluate_unmemoized(graph, input_node_id, ctx)?;
+            let (value, bbox) = Self::evaluate_unmemoized(graph, input_node_id, ctx)?;
             input_values.push((key, value));
+            input_bboxes.push((key, bbox));
         }
 
-        let outputs = node_data.operation.execute(ctx, &input_values)?;
+        let node_ctx = Context { input_bboxes: input_bboxes.clone(), ..ctx.clone() };
+        let outputs = node_data.operation.execute(&node_ctx, &input_values)?;
         // ok_or (not unwrap) so an operation that violates the "always
         // returns exactly one output" convention errors out this one
         // preview instead of panicking the whole WASM instance.
-        outputs.into_iter().next().ok_or(OperationError::NoOutput)
+        let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;
+        let bbox = node_data.operation.output_bbox(&node_ctx, &input_bboxes, &value);
+
+        Ok((value, bbox))
     }
 
     fn evaluate_memoized(
         graph: &Graph,
         node: NodeId,
         ctx: &Context,
-        memo: &mut HashMap<NodeId, Value>,
-    ) -> Result<Value, OperationError> {
+        memo: &mut HashMap<NodeId, (Value, Rect)>,
+    ) -> Result<(Value, Rect), OperationError> {
         if let Some(cached) = memo.get(&node) {
             return Ok(cached.clone());
         }
@@ -84,20 +94,24 @@ impl PreviewExecutor {
         let node_data = graph.resolve(node).ok_or(OperationError::UnknownNode)?;
 
         let mut input_values: Vec<(Input, Value)> = Vec::new();
+        let mut input_bboxes: Vec<(Input, Rect)> = Vec::new();
 
         for &(key, input_node_id) in &node_data.inputs {
-            let value = Self::evaluate_memoized(graph, input_node_id, ctx, memo)?;
+            let (value, bbox) = Self::evaluate_memoized(graph, input_node_id, ctx, memo)?;
             input_values.push((key, value));
+            input_bboxes.push((key, bbox));
         }
 
-        let outputs = node_data.operation.execute(ctx, &input_values)?;
+        let node_ctx = Context { input_bboxes: input_bboxes.clone(), ..ctx.clone() };
+        let outputs = node_data.operation.execute(&node_ctx, &input_values)?;
         // See evaluate_unmemoized: ok_or, not unwrap, so a no-output
         // operation errors out this preview instead of panicking.
         let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;
+        let bbox = node_data.operation.output_bbox(&node_ctx, &input_bboxes, &value);
 
-        memo.insert(node, value.clone());
+        memo.insert(node, (value.clone(), bbox));
 
-        Ok(value)
+        Ok((value, bbox))
     }
 }
 

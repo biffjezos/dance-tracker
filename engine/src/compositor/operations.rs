@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::operations::sources::PixelSource;
 use crate::compositor::{
+    bbox::Rect,
     Context,
     OperationDescriptor,
     OperationError,
@@ -82,5 +83,71 @@ pub trait Operation: Any {
     /// re-executed rather than served from that cache.
     fn is_live(&self) -> bool {
         false
+    }
+
+    /// The region of this operation's own just-computed `output` that
+    /// actually matters - see BBOX_CONVENTIONS.md. The default (full
+    /// frame) is exactly today's implicit behavior and is always safe;
+    /// overriding it to something tighter is a report-only optimization
+    /// hint for downstream nodes, never a change to this operation's own
+    /// output pixels. `output` is unused by every operation in this
+    /// round (their boxes are derivable from parameters/input boxes
+    /// alone) - it exists so a future content-derived box doesn't need a
+    /// second trait-signature change.
+    fn output_bbox(&self, ctx: &Context, _input_bboxes: &[(Input, Rect)], _output: &Value) -> Rect {
+        Rect::full(ctx.meta.width, ctx.meta.height)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compositor::metadata::{OperationCategory, OperationMetadata};
+    use crate::compositor::operation_descriptor::OperationDescriptor;
+
+    /// An operation that overrides nothing bbox-related - exactly what
+    /// every operation in the tree looked like before this round.
+    struct PlainOperation;
+
+    impl Operation for PlainOperation {
+        fn descriptor(&self) -> OperationDescriptor {
+            OperationDescriptor {
+                id: "plain",
+                menu: "TEST",
+                label: "PLAIN",
+                action: None,
+                ui_action: None,
+                create_node: None,
+                submenu: None,
+            }
+        }
+
+        fn as_any(&self) -> &dyn Any { self }
+        fn as_any_mut(&mut self) -> &mut dyn Any { self }
+
+        fn metadata(&self) -> OperationMetadata {
+            OperationMetadata {
+                display_name: "Plain",
+                category: OperationCategory::Source,
+                inputs: vec![],
+                outputs: vec![],
+            }
+        }
+
+        fn execute(&self, _ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
+            Ok(vec![])
+        }
+    }
+
+    #[test]
+    fn the_default_output_bbox_is_exactly_full_frame() {
+        let ctx = Context {
+            meta: crate::compositor::Meta { width: 640, height: 360, ..Default::default() },
+            ..Default::default()
+        };
+
+        let bbox = PlainOperation.output_bbox(&ctx, &[], &Value::Number(0.0));
+
+        assert_eq!(bbox, Rect::full(640, 360));
     }
 }

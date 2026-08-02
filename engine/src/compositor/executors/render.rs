@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::compositor::{Context, Input, Operation, OperationError, Value};
+use crate::compositor::{bbox::Rect, Context, Input, Operation, OperationError, Value};
 use crate::compositor::value::{value_ptr_eq, value_to_text};
 use crate::compositor::graph::{Graph, NodeId};
 use super::Execute;
@@ -17,6 +17,7 @@ struct CachedNode {
     param_fingerprint: Vec<(String, String)>,
     inputs: Vec<(Input, Value)>,
     value: Value,
+    bbox: Rect,
 }
 
 /// Evaluates a graph the same way every tick, reusing last tick's result
@@ -62,19 +63,23 @@ impl Execute for RenderExecutor {
         ctx: &Context,
     ) -> Result<Vec<Value>, OperationError> {
         let mut memo = HashMap::new();
-        let value = self.evaluate(graph, node, ctx, &mut memo)?;
+        let (value, _bbox) = self.evaluate(graph, node, ctx, &mut memo)?;
         Ok(vec![value])
     }
 }
 
 impl RenderExecutor {
+    /// Returns the node's own output value alongside the bbox it reported
+    /// for that output (see BBOX_CONVENTIONS.md) - threaded privately
+    /// through this recursion only; the public `Execute::execute()` above
+    /// still returns bare `Value`s.
     fn evaluate(
         &self,
         graph: &Graph,
         node: NodeId,
         ctx: &Context,
-        memo: &mut HashMap<NodeId, Value>,
-    ) -> Result<Value, OperationError> {
+        memo: &mut HashMap<NodeId, (Value, Rect)>,
+    ) -> Result<(Value, Rect), OperationError> {
         if let Some(cached) = memo.get(&node) {
             return Ok(cached.clone());
         }
@@ -82,10 +87,12 @@ impl RenderExecutor {
         let node_data = graph.resolve(node).ok_or(OperationError::UnknownNode)?;
 
         let mut input_values: Vec<(Input, Value)> = Vec::new();
+        let mut input_bboxes: Vec<(Input, Rect)> = Vec::new();
 
         for &(key, input_node_id) in &node_data.inputs {
-            let value = self.evaluate(graph, input_node_id, ctx, memo)?;
+            let (value, bbox) = self.evaluate(graph, input_node_id, ctx, memo)?;
             input_values.push((key, value));
+            input_bboxes.push((key, bbox));
         }
 
         let param_fingerprint = Self::fingerprint(node_data.operation.as_ref());
@@ -101,29 +108,37 @@ impl RenderExecutor {
                         .all(|((ck, cv), (k, v))| ck == k && value_ptr_eq(cv, v));
 
                 if inputs_match && cached.param_fingerprint == param_fingerprint {
-                    let value = cached.value.clone();
-                    memo.insert(node, value.clone());
-                    return Ok(value);
+                    let result = (cached.value.clone(), cached.bbox);
+                    memo.insert(node, result.clone());
+                    return Ok(result);
                 }
             }
         }
 
-        let outputs = node_data.operation.execute(ctx, &input_values)?;
+        // The per-node Context: a clone of the base ctx with input_bboxes
+        // overridden to this node's own resolved inputs, built immediately
+        // before execute() - see BBOX_CONVENTIONS.md on why this lives on
+        // Context rather than as a new execute() parameter.
+        let node_ctx = Context { input_bboxes: input_bboxes.clone(), ..ctx.clone() };
+
+        let outputs = node_data.operation.execute(&node_ctx, &input_values)?;
         // ok_or (not unwrap) so a no-output operation errors out this tick
         // instead of panicking the whole render loop.
         let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;
+        let bbox = node_data.operation.output_bbox(&node_ctx, &input_bboxes, &value);
 
         if !live {
             self.cache.borrow_mut().insert(node, CachedNode {
                 param_fingerprint,
                 inputs: input_values,
                 value: value.clone(),
+                bbox,
             });
         }
 
-        memo.insert(node, value.clone());
+        memo.insert(node, (value.clone(), bbox));
 
-        Ok(value)
+        Ok((value, bbox))
     }
 
     pub fn execute_profiled(
@@ -136,7 +151,7 @@ impl RenderExecutor {
         let mut entries = Vec::new();
         let (result, total_ms) =
             measure_ms(|| Self::evaluate_profiled(graph, node, ctx, &mut memo, &mut entries));
-        let value = result?;
+        let (value, _bbox) = result?;
         Ok((vec![value], Profile { entries, total_ms }))
     }
 
@@ -144,9 +159,9 @@ impl RenderExecutor {
         graph: &Graph,
         node: NodeId,
         ctx: &Context,
-        memo: &mut HashMap<NodeId, Value>,
+        memo: &mut HashMap<NodeId, (Value, Rect)>,
         entries: &mut Vec<ProfileEntry>,
-    ) -> Result<Value, OperationError> {
+    ) -> Result<(Value, Rect), OperationError> {
         if let Some(cached) = memo.get(&node) {
             return Ok(cached.clone());
         }
@@ -154,22 +169,26 @@ impl RenderExecutor {
         let node_data = graph.resolve(node).ok_or(OperationError::UnknownNode)?;
 
         let mut input_values: Vec<(Input, Value)> = Vec::new();
+        let mut input_bboxes: Vec<(Input, Rect)> = Vec::new();
 
         for &(key, input_node_id) in &node_data.inputs {
-            let value = Self::evaluate_profiled(graph, input_node_id, ctx, memo, entries)?;
+            let (value, bbox) = Self::evaluate_profiled(graph, input_node_id, ctx, memo, entries)?;
             input_values.push((key, value));
+            input_bboxes.push((key, bbox));
         }
 
         let name = node_data.operation.metadata().display_name;
-        let (outputs, duration_ms) = measure_ms(|| node_data.operation.execute(ctx, &input_values));
+        let node_ctx = Context { input_bboxes: input_bboxes.clone(), ..ctx.clone() };
+        let (outputs, duration_ms) = measure_ms(|| node_data.operation.execute(&node_ctx, &input_values));
         let outputs = outputs?;
         entries.push(ProfileEntry { name, duration_ms });
 
         // ok_or (not unwrap): see evaluate() above.
         let value = outputs.into_iter().next().ok_or(OperationError::NoOutput)?;
-        memo.insert(node, value.clone());
+        let bbox = node_data.operation.output_bbox(&node_ctx, &input_bboxes, &value);
+        memo.insert(node, (value.clone(), bbox));
 
-        Ok(value)
+        Ok((value, bbox))
     }
 }
 
@@ -550,6 +569,67 @@ mod tests {
             .get();
 
         assert_eq!(calls, 3, "a live source must never be served from the cross-tick cache");
+    }
+
+    #[test]
+    fn phase_0_bbox_threading_does_not_change_a_real_multi_node_graphs_output() {
+        // A real chromakey -> add chain, run through the actual graph and
+        // RenderExecutor - proves Phase 0's (Value, Rect) threading and
+        // per-node Context construction changed nothing observable. Every
+        // operation here still only overrides the default (full-frame)
+        // output_bbox, so this is exactly today's pixel behavior.
+        use std::sync::Arc;
+        use crate::compositor::graph::Graph;
+        use crate::graphics::{ImageFormat, U8Image};
+        use crate::operations::compose::Add;
+        use crate::operations::key::ChromaKey;
+        use crate::operations::sources::ImageSource;
+
+        let mut graph = Graph::new(1, 1);
+
+        let mut green_source = ImageSource::new();
+        green_source.set_image(Arc::new(U8Image {
+            pixels: vec![0, 255, 0, 255],
+            width: 1,
+            height: 1,
+            format: ImageFormat::Rgba8,
+        }));
+        let source_id = graph.add_node(Box::new(green_source));
+
+        let chromakey_id = graph.add_node(Box::new(ChromaKey::new()));
+        graph.connect(chromakey_id, Input::Source, source_id).unwrap();
+
+        let mut backdrop = ImageSource::new();
+        backdrop.set_image(Arc::new(U8Image {
+            pixels: vec![10, 20, 30, 255],
+            width: 1,
+            height: 1,
+            format: ImageFormat::Rgba8,
+        }));
+        let backdrop_id = graph.add_node(Box::new(backdrop));
+
+        let add_id = graph.add_node(Box::new(Add::new()));
+        graph.connect(add_id, Input::Foreground, chromakey_id).unwrap();
+        graph.connect(add_id, Input::Background, backdrop_id).unwrap();
+
+        let ctx = Context {
+            meta: crate::compositor::Meta { width: 1, height: 1, ..Default::default() },
+            ..Default::default()
+        };
+
+        let values = RenderExecutor::new().execute(&graph, add_id, &ctx).expect("should succeed");
+        let pixels = match &values[0] {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels.clone(),
+            other => panic!("expected a float image, got {:?}", other),
+        };
+
+        // Pure green is keyed to alpha=0 by chromakey's own default
+        // threshold, but its RGB (0,1,0) still passes through unchanged -
+        // ADD sums all 4 channels uniformly regardless of alpha (see
+        // add.rs's own doc comment), so the result is the backdrop's
+        // colour plus the still-present green RGB, clamped: R=10/255+0,
+        // G=20/255+1.0 (clamped to 1.0), B=30/255+0, A=1.0+0.
+        assert_eq!(pixels, vec![10, 255, 30, 255], "the graph's real output must be unchanged by Phase 0's threading");
     }
 
     #[test]
