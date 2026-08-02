@@ -8,7 +8,7 @@ use crate::compositor::{
     input::find_input,
     Operation,
     OperationDescriptor,
-    metadata::{ OperationCategory, OperationMetadata, OutputKind },
+    metadata::{ InputDescriptor, OperationCategory, OperationMetadata, OutputKind, PIXEL_KINDS },
     Value,
 };
 use crate::graphics::FloatImage;
@@ -77,9 +77,9 @@ impl Operation for Multiply {
             // Identity (MASK=0) is Foreground unmodified - see add.rs's
             // metadata() for why Foreground and not Background.
             inputs: vec![
-                 Input::Foreground,
-                 Input::Background,
-                 Input::Mask
+                InputDescriptor { kind: Input::Foreground, accepts: PIXEL_KINDS },
+                InputDescriptor { kind: Input::Background, accepts: PIXEL_KINDS },
+                InputDescriptor { kind: Input::Mask, accepts: PIXEL_KINDS },
             ],
             outputs: vec![OutputKind::FloatImage],
         }

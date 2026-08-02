@@ -9,7 +9,7 @@ use crate::compositor::{
     input::find_input,
     Operation,
     OperationDescriptor,
-    metadata::{OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor},
+    metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, PIXEL_KINDS},
     Value,
 };
 use crate::graphics::FloatImage;
@@ -63,7 +63,10 @@ impl Operation for Invert {
         OperationMetadata {
             display_name: "Invert",
             category: OperationCategory::Color,
-            inputs: vec![Input::Source, Input::Mask],
+            inputs: vec![
+                InputDescriptor { kind: Input::Source, accepts: PIXEL_KINDS },
+                InputDescriptor { kind: Input::Mask, accepts: PIXEL_KINDS },
+            ],
             outputs: vec![OutputKind::FloatImage],
         }
     }

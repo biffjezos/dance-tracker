@@ -4,8 +4,7 @@ STATUS BAR / PREVIEW PANEL TITLE
 ==================================================
 */
 import {
-    scopedEntry,
-    resolveMaskSourceLabel
+    scopedEntry
 } from "../state/registry.js";
 import {
     renderPreview
@@ -50,14 +49,6 @@ export function reportSelection(scope) {
     lastPreviewScope = scope;
     const entry = scopedEntry(scope);
     updateLayerStatusDisplay(entry);
-    window.dispatchEvent(new CustomEvent("maskSettingsChanged", {
-        detail: {
-            scope,
-            source: entry.layer.settings.maskedBy.source,
-            sourceLabel: resolveMaskSourceLabel(entry.layer.settings.maskedBy.source),
-            channel: entry.layer.settings.maskedBy.channel
-        }
-    }));
     window.dispatchEvent(new CustomEvent("layerSelectionChanged", {
         detail: {
             scope,

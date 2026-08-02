@@ -133,19 +133,81 @@ pub enum OutputKind {
     Color
 }
 
+impl OutputKind {
+    /// JS-facing tag, same convention as `OperationCategory::as_str()` -
+    /// never `#[derive(Serialize)]` on the enum itself.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OutputKind::Frame => "frame",
+            OutputKind::Mask => "mask",
+            OutputKind::Image => "image",
+            OutputKind::FloatImage => "float_image",
+            OutputKind::Video => "video",
+            OutputKind::Number => "number",
+            OutputKind::Boolean => "boolean",
+            OutputKind::Text => "text",
+            OutputKind::Color => "color",
+        }
+    }
+}
+
+/*
+Which OutputKinds may be wired into a given input slot. Empty = no
+restriction (every real node is a valid candidate) - the escape hatch
+PATCH's SOURCE needs, and exactly today's pre-typed behavior, so it's the
+correct interim state for anything not yet migrated. `accepts` lives per
+operation (not per `Input` variant) because the same `Input` slot name
+means different things on different operations - e.g. `Reference` is a
+Number source on PATCH but a pixel source on HueKey.
+*/
+#[derive(Clone, Debug)]
+pub struct InputDescriptor {
+    pub kind: Input,
+    pub accepts: &'static [OutputKind],
+}
+
+/// Every pixel-producing OutputKind - the common `accepts` list for any
+/// input slot that expects pixel data (image/mask/video-like content).
+pub const PIXEL_KINDS: &[OutputKind] = &[
+    OutputKind::Frame,
+    OutputKind::Mask,
+    OutputKind::Image,
+    OutputKind::FloatImage,
+    OutputKind::Video,
+];
+
 #[derive(Clone, Debug)]
 pub struct OperationMetadata {
     pub display_name: &'static str,
     pub category: OperationCategory,
-    /// Which inputs this operation can be wired to, in menu order. A source
-    /// operation declares none; anything the UI offers to wire comes from here,
-    /// never from a hardcoded list on the UI side.
-    pub inputs: Vec<Input>,
+    /// Which inputs this operation can be wired to, in menu order, and what
+    /// OutputKinds each accepts. A source operation declares none; anything
+    /// the UI offers to wire comes from here, never from a hardcoded list on
+    /// the UI side.
+    pub inputs: Vec<InputDescriptor>,
     pub outputs: Vec<OutputKind>,
 }
 
 impl OperationMetadata {
     pub fn input_count(&self) -> usize {
         self.inputs.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_kind_as_str_matches_the_js_facing_contract() {
+        assert_eq!(OutputKind::Frame.as_str(), "frame");
+        assert_eq!(OutputKind::Mask.as_str(), "mask");
+        assert_eq!(OutputKind::Image.as_str(), "image");
+        assert_eq!(OutputKind::FloatImage.as_str(), "float_image");
+        assert_eq!(OutputKind::Video.as_str(), "video");
+        assert_eq!(OutputKind::Number.as_str(), "number");
+        assert_eq!(OutputKind::Boolean.as_str(), "boolean");
+        assert_eq!(OutputKind::Text.as_str(), "text");
+        assert_eq!(OutputKind::Color.as_str(), "color");
     }
 }

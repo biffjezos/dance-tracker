@@ -573,9 +573,21 @@ function renderInputSteppers(menuManager, nodeEntry, nodeId) {
     if (!wasmApp) return;
 
     const inputs = wasmApp.node_inputs(nodeId);
-    const candidates = getAllRealEntries().filter(entry => entry.id !== nodeEntry.id);
+    const allCandidates = getAllRealEntries().filter(entry => entry.id !== nodeEntry.id);
 
     inputs.forEach(input => {
+        // Empty `accepts` means unrestricted (today's behavior); otherwise
+        // keep only candidates that declare at least one output whose kind
+        // is in `accepts` - never a hardcoded type list on the UI side.
+        const candidates = !input.accepts || input.accepts.length === 0
+            ? allCandidates
+            : allCandidates.filter(entry => {
+                const candidateId = resolveNodeId(entry.id);
+                if (candidateId === null) return false;
+                const outputs = wasmApp.node_outputs(candidateId);
+                return outputs.some(output => input.accepts.includes(output.kind));
+            });
+
         const options = ["NONE", ...candidates.map(entry => entry.label)];
 
         const currentEntry = candidates.find(entry => {
