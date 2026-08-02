@@ -3,10 +3,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::compositor::{
+    bbox::Rect,
     Context,
     OperationError,
     Input,
-    input::find_input,
+    input::{find_bbox, find_input},
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
@@ -214,6 +215,40 @@ impl Operation for Resize {
             height: source.height,
         }))])
     }
+
+    // Report-only (Phase 1 of BBOX_CONVENTIONS.md): remaps SOURCE's own
+    // reported box through the exact inverse of resize_pixels's own
+    // center-relative dest->src mapping - pure arithmetic, no pixel reads.
+    // Rounds outward (floor the lower edge, ceil the upper edge) so the
+    // reported box is never smaller than resize_pixels's true content
+    // extent, per BBOX_CONVENTIONS.md's "larger is safe, smaller is not"
+    // invariant. Result is clamped to the frame: at scale > 100 the
+    // unclamped remap can exceed the frame, but resize_pixels itself never
+    // writes outside it (see its own dest-bounded loop), so anything
+    // outside the frame is never real content.
+    fn output_bbox(&self, ctx: &Context, input_bboxes: &[(Input, Rect)], _output: &Value) -> Rect {
+        let source_box = find_bbox(input_bboxes, Input::Source)
+            .unwrap_or_else(|| Rect::full(ctx.meta.width, ctx.meta.height));
+
+        if source_box.is_empty() {
+            return Rect::empty();
+        }
+
+        let cx = ctx.meta.width as f64 / 2.0;
+        let cy = ctx.meta.height as f64 / 2.0;
+
+        let remap_x = |v: i32| -> f64 { cx + (v as f64 - cx) * (self.scale_x / 100.0) };
+        let remap_y = |v: i32| -> f64 { cy + (v as f64 - cy) * (self.scale_y / 100.0) };
+
+        let remapped = Rect {
+            x0: remap_x(source_box.x0).floor() as i32,
+            y0: remap_y(source_box.y0).floor() as i32,
+            x1: remap_x(source_box.x1).ceil() as i32,
+            y1: remap_y(source_box.y1).ceil() as i32,
+        };
+
+        remapped.intersect(&Rect::full(ctx.meta.width, ctx.meta.height))
+    }
 }
 
 inventory::submit! {
@@ -282,6 +317,80 @@ mod tests {
         let mut resize = Resize::new();
         let err = resize.set_parameter("ALGORITHM", Value::Text("BILINEAR".into())).unwrap_err();
         assert!(matches!(err, OperationError::InvalidParameterValue(_, _)));
+    }
+
+    #[test]
+    fn output_bbox_at_50_percent_on_a_full_frame_input_is_exactly_half_centered() {
+        let mut resize = Resize::new();
+        resize.set_parameter("SCALE_X", Value::Number(50.0)).unwrap();
+        resize.set_parameter("SCALE_Y", Value::Number(50.0)).unwrap();
+
+        let ctx = context(8, 8);
+        let full = crate::compositor::bbox::Rect::full(8, 8);
+        let bbox = resize.output_bbox(&ctx, &[(Input::Source, full)], &Value::Number(0.0));
+
+        assert_eq!(bbox, crate::compositor::bbox::Rect { x0: 2, y0: 2, x1: 6, y1: 6 });
+    }
+
+    #[test]
+    fn output_bbox_at_100_percent_on_a_full_frame_input_stays_full_frame() {
+        let resize = Resize::new();
+        let ctx = context(8, 8);
+        let full = crate::compositor::bbox::Rect::full(8, 8);
+        let bbox = resize.output_bbox(&ctx, &[(Input::Source, full)], &Value::Number(0.0));
+
+        assert_eq!(bbox, full);
+    }
+
+    #[test]
+    fn output_bbox_with_no_reported_source_box_defaults_to_full_frame() {
+        // No Input::Source entry in input_bboxes at all - same as an
+        // unwired SOURCE, or a SOURCE that never overrode output_bbox.
+        let resize = Resize::new();
+        let ctx = context(8, 8);
+        let bbox = resize.output_bbox(&ctx, &[], &Value::Number(0.0));
+
+        assert_eq!(bbox, crate::compositor::bbox::Rect::full(8, 8));
+    }
+
+    #[test]
+    fn chaining_resize_into_an_unmodified_invert_is_still_pixel_identical() {
+        // AC3: downstream operations that haven't opted into consuming
+        // boxes yet (INVERT here) must still produce today's exact pixel
+        // output - the new box being non-full-frame is metadata only.
+        use crate::compositor::graph::Graph;
+        use crate::compositor::executors::{Execute, PreviewExecutor};
+        use crate::graphics::{ImageFormat, U8Image};
+        use crate::operations::sources::ImageSource;
+        use crate::operations::transform::Invert;
+
+        let mut graph = Graph::new(2, 1);
+
+        let mut source = ImageSource::new();
+        source.set_image(Arc::new(U8Image {
+            pixels: vec![10, 20, 30, 255, 40, 50, 60, 255],
+            width: 2,
+            height: 1,
+            format: ImageFormat::Rgba8,
+        }));
+        let source_id = graph.add_node(Box::new(source));
+
+        let resize_id = graph.add_node(Box::new(Resize::new())); // scale=100, identity
+        graph.connect(resize_id, Input::Source, source_id).unwrap();
+
+        let invert_id = graph.add_node(Box::new(Invert::new()));
+        graph.connect(invert_id, Input::Source, resize_id).unwrap();
+
+        let values = PreviewExecutor::default()
+            .execute(&graph, invert_id, &context(2, 1))
+            .unwrap();
+
+        let pixels = match &values[0] {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels.clone(),
+            other => panic!("expected a float image, got {:?}", other),
+        };
+
+        assert_eq!(pixels, vec![245, 235, 225, 0, 215, 205, 195, 0], "INVERT's own unchanged execute() must still invert exactly as before");
     }
 
     #[test]

@@ -3,10 +3,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::compositor::{
+    bbox::Rect,
     Context,
     OperationError,
     Input,
-    input::find_input,
+    input::{find_bbox, find_input},
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
@@ -163,6 +164,32 @@ impl Operation for Move {
             height: source.height,
         }))])
     }
+
+    // Report-only (Phase 1 of BBOX_CONVENTIONS.md): translates SOURCE's own
+    // reported box by exactly (OFFSET_X, OFFSET_Y) - pure arithmetic, no
+    // pixel reads - then clamps to the frame. An offset that moves the
+    // whole box off-canvas correctly collapses to Rect::empty() via the
+    // intersect below, never a box with negative extent.
+    fn output_bbox(&self, ctx: &Context, input_bboxes: &[(Input, Rect)], _output: &Value) -> Rect {
+        let source_box = find_bbox(input_bboxes, Input::Source)
+            .unwrap_or_else(|| Rect::full(ctx.meta.width, ctx.meta.height));
+
+        if source_box.is_empty() {
+            return Rect::empty();
+        }
+
+        let offset_x = self.offset_x.round() as i32;
+        let offset_y = self.offset_y.round() as i32;
+
+        let translated = Rect {
+            x0: source_box.x0 + offset_x,
+            y0: source_box.y0 + offset_y,
+            x1: source_box.x1 + offset_x,
+            y1: source_box.y1 + offset_y,
+        };
+
+        translated.intersect(&Rect::full(ctx.meta.width, ctx.meta.height))
+    }
 }
 
 inventory::submit! {
@@ -222,6 +249,73 @@ mod tests {
         for chunk in out.chunks_exact(4) {
             assert_eq!(chunk, &[0, 0, 0, 0]);
         }
+    }
+
+    #[test]
+    fn output_bbox_translates_a_full_frame_input_by_exactly_the_offset_clamped_to_the_frame() {
+        let mv = Move { offset_x: 2.0, offset_y: 1.0 };
+        let ctx = context(8, 8);
+        let full = crate::compositor::bbox::Rect::full(8, 8);
+        let bbox = mv.output_bbox(&ctx, &[(Input::Source, full)], &Value::Number(0.0));
+
+        // Unclamped translation would be [2,10) x [1,9) - clamped to the
+        // frame's own [0,8) x [0,8).
+        assert_eq!(bbox, crate::compositor::bbox::Rect { x0: 2, y0: 1, x1: 8, y1: 8 });
+    }
+
+    #[test]
+    fn output_bbox_with_an_offset_larger_than_the_frame_is_empty_not_negative_extent() {
+        let mv = Move { offset_x: 100.0, offset_y: 0.0 };
+        let ctx = context(8, 8);
+        let full = crate::compositor::bbox::Rect::full(8, 8);
+        let bbox = mv.output_bbox(&ctx, &[(Input::Source, full)], &Value::Number(0.0));
+
+        assert!(bbox.is_empty(), "an offset moving the whole box off-canvas must report Rect::empty(), not a negative-extent rect");
+    }
+
+    #[test]
+    fn output_bbox_with_no_reported_source_box_defaults_to_full_frame_then_translates() {
+        let mv = Move { offset_x: 1.0, offset_y: 0.0 };
+        let ctx = context(8, 8);
+        let bbox = mv.output_bbox(&ctx, &[], &Value::Number(0.0));
+
+        assert_eq!(bbox, crate::compositor::bbox::Rect { x0: 1, y0: 0, x1: 8, y1: 8 });
+    }
+
+    #[test]
+    fn chaining_move_into_an_unmodified_invert_is_still_pixel_identical() {
+        // AC3: an unmodified downstream operation (INVERT) must still
+        // produce today's exact pixel output regardless of MOVE's now
+        // non-full-frame reported box.
+        use crate::compositor::graph::Graph;
+        use crate::compositor::executors::{Execute, PreviewExecutor};
+        use crate::operations::sources::ImageSource;
+        use crate::operations::transform::Invert;
+
+        let mut graph = Graph::new(2, 1);
+
+        let mut source = ImageSource::new();
+        source.set_image(image(vec![10, 20, 30, 255, 40, 50, 60, 255], 2, 1));
+        let source_id = graph.add_node(Box::new(source));
+
+        let mut mv = Move::new();
+        mv.set_parameter("OFFSET_X", Value::Number(1.0)).unwrap();
+        let move_id = graph.add_node(Box::new(mv));
+        graph.connect(move_id, Input::Source, source_id).unwrap();
+
+        let invert_id = graph.add_node(Box::new(Invert::new()));
+        graph.connect(invert_id, Input::Source, move_id).unwrap();
+
+        let values = PreviewExecutor::default()
+            .execute(&graph, invert_id, &context(2, 1))
+            .unwrap();
+
+        let pixels = as_u8_pixels(&values[0]);
+
+        // MOVE shifts right by 1: x=0 becomes transparent black (moved's
+        // own uncovered edge), x=1 shows the original x=0 pixel (10,20,30,255).
+        // INVERT then inverts every channel uniformly, unchanged from before.
+        assert_eq!(pixels, vec![255, 255, 255, 255, 245, 235, 225, 0]);
     }
 
     #[test]
