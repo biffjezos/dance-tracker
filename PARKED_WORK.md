@@ -285,6 +285,76 @@ flickering box size destabilizing downstream ops' own compute-region
 choices tick to tick? No evidence either way yet - worth a real
 measurement before deciding, not a guess.
 
+## Shrink pixel buffers to their bounding box (real RAM reduction)
+
+**Work:** 25h · **Complexity:** 6/6 (Opus territory - a fundamental
+change to the engine's pixel representation, not a Sonnet-default-effort
+task)
+**Depends on:** The current bounding-box mechanism (`BBOX_CONVENTIONS.md`)
+landing in full first - ideally including "Content-derived bbox
+tightening for chromakey/hue_key" above, not just the geometric/compute
+round. This item reuses the exact same `Rect` data every operation
+already reports; it does not need a separate box-tracking system. What
+it needs is time for that `Rect` data to be proven correct across real
+usage first, because this item raises the stakes of a wrong box
+considerably. Today (compute-only), an incorrectly-too-small reported box
+means an operation skips computing some pixels it shouldn't have -
+visibly wrong output, but a safe, bounded failure (the buffer still has
+room for every pixel; only the wrong ones are stale). Once buffers are
+actually sized to the box, the same bug means the buffer has **no memory
+allocated** for the pixels outside it at all - an out-of-bounds write/read
+class of bug, not just a wrong-pixel one. Do not start this until the
+compute-only mechanism has shipped across every operation category and
+held up in practice.
+**Existing non-functional code:** None - `BBOX_CONVENTIONS.md`'s own
+"Out of scope" section explicitly excludes this from the current round;
+nothing in the tree attempts it.
+
+**Why this is a genuinely bigger change than the current bbox work, not
+just "the same thing but for allocation instead of loop bounds":** every
+pixel-bearing type (`FloatImage`, `U8Image`, `Frame`, `Mask`) is
+currently always exactly `ctx.meta.width x ctx.meta.height`, implicitly
+anchored at `(0,0)` - every operation's pixel-index math
+(`(y * width + x) * 4`) and `apply_mask`'s dimension-match check assume
+this everywhere, not just in the handful of operations touched so far.
+Making a buffer's actual size and origin match its reported `Rect`
+instead means:
+
+- `FloatImage`/`U8Image`/`Frame`/`Mask` gain an offset (`x0`, `y0`) and
+  their `width`/`height` become the *local* buffer's own size, not the
+  frame's - a real struct shape change, not an additive field.
+- Every operation's own pixel loop needs to work in local-buffer
+  coordinates while still correctly reading neighboring pixels from
+  other inputs that may have a *different* size and origin (two masked
+  inputs to a COMPOSE operation, e.g. `ADD`'s `Foreground`/`Background`,
+  can easily have different boxes - combining them correctly means
+  reasoning in absolute frame coordinates while writing to/from
+  differently-offset local buffers).
+- `apply_mask` stops being "blend two same-size buffers" and becomes
+  "composite a smaller buffer onto a larger one at an offset" - a real
+  rewrite of the one shared mechanism every masked operation depends on.
+- The WASM/JS boundary and final canvas draw need to place a
+  variable-sized, offset output at the correct absolute position on a
+  fixed-size browser canvas - today every buffer that reaches the canvas
+  is already full-size and drops in directly.
+
+This is why `BBOX_CONVENTIONS.md` scoped the current round to compute
+only: the RAM win is real and matches your camera/HD-video example
+below, but it's a different, larger engineering effort than "add a bbox
+mechanism," not a follow-on phase of it.
+
+**Motivating example (from conversation):** load an HD video, key it
+(`chromakey`/`hue_key`), blur the result (masked by the key's own mask),
+run it through several more operations, then mask it down to a solid
+shape or a hard crop. Today, and even after the full compute-only bbox
+mechanism above ships, every one of those intermediate buffers - the
+decoded HD frame, the key's mask, the blur's output, everything after it
+- stays allocated at full HD resolution regardless of how aggressively
+the final crop/mask restricts what's actually visible. Only this item
+would let a pipeline like that actually hold less memory, proportional to
+how much of the frame survives to the end, rather than proportional to
+the source resolution alone.
+
 ## Constellation generator effect
 
 **Work:** 3h · **Complexity:** 2/6
