@@ -3,10 +3,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::compositor::{
+    bbox::Rect,
     Context,
     OperationError,
     Input,
-    input::find_input,
+    input::{find_bbox, find_input},
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
@@ -202,6 +203,26 @@ impl Operation for Blur {
             height: source.height,
         }))])
     }
+
+    // Report-only (Phase 2 of BBOX_CONVENTIONS.md): a box blur can spread
+    // real content up to `radius_px` pixels beyond SOURCE's own reported
+    // extent (every output pixel within `radius_px` of a real source
+    // pixel can be pulled into that pixel's own average window), so the
+    // reported box grows by exactly the kernel radius on every side, then
+    // clamps to the frame - BLUR's own output is never larger than the
+    // frame regardless of how far the grown box would otherwise extend.
+    fn output_bbox(&self, ctx: &Context, input_bboxes: &[(Input, Rect)], _output: &Value) -> Rect {
+        let source_box = find_bbox(input_bboxes, Input::Source)
+            .unwrap_or_else(|| Rect::full(ctx.meta.width, ctx.meta.height));
+
+        if source_box.is_empty() {
+            return Rect::empty();
+        }
+
+        source_box
+            .grow(self.radius_px as i32)
+            .intersect(&Rect::full(ctx.meta.width, ctx.meta.height))
+    }
 }
 
 inventory::submit! {
@@ -366,6 +387,97 @@ mod tests {
             .unwrap();
 
         assert_eq!(as_u8_pixels(&unmasked[0]), as_u8_pixels(&masked[0]));
+    }
+
+    #[test]
+    fn output_bbox_grows_a_sub_frame_box_by_exactly_the_radius_clamped_to_the_frame() {
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(2.0)).unwrap();
+
+        let ctx = context(10, 10);
+        let sub_frame = crate::compositor::bbox::Rect { x0: 3, y0: 3, x1: 7, y1: 7 };
+        let bbox = blur.output_bbox(&ctx, &[(Input::Source, sub_frame)], &Value::Number(0.0));
+
+        // Grown by 2 on every side: [1,9) x [1,9) - well within the 10x10
+        // frame, so no clamping kicks in yet.
+        assert_eq!(bbox, crate::compositor::bbox::Rect { x0: 1, y0: 1, x1: 9, y1: 9 });
+    }
+
+    #[test]
+    fn output_bbox_growth_past_the_frame_edge_is_clamped() {
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(5.0)).unwrap();
+
+        let ctx = context(10, 10);
+        let near_edge = crate::compositor::bbox::Rect { x0: 0, y0: 0, x1: 3, y1: 3 };
+        let bbox = blur.output_bbox(&ctx, &[(Input::Source, near_edge)], &Value::Number(0.0));
+
+        // Unclamped growth would be [-5,8) x [-5,8) - clamped to the
+        // frame's own [0,10) x [0,10) on the low edge.
+        assert_eq!(bbox, crate::compositor::bbox::Rect { x0: 0, y0: 0, x1: 8, y1: 8 });
+    }
+
+    #[test]
+    fn output_bbox_of_an_already_full_frame_source_stays_full_frame_after_growth() {
+        // Grow-then-clamp is a no-op at the frame edge - growing an
+        // already-full-frame box can never make it any bigger than the
+        // frame itself.
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(3.0)).unwrap();
+
+        let ctx = context(10, 10);
+        let full = crate::compositor::bbox::Rect::full(10, 10);
+        let bbox = blur.output_bbox(&ctx, &[(Input::Source, full)], &Value::Number(0.0));
+
+        assert_eq!(bbox, full);
+    }
+
+    #[test]
+    fn output_bbox_with_no_reported_source_box_defaults_to_full_frame_then_grows_and_clamps() {
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(3.0)).unwrap();
+
+        let ctx = context(10, 10);
+        let bbox = blur.output_bbox(&ctx, &[], &Value::Number(0.0));
+
+        assert_eq!(bbox, crate::compositor::bbox::Rect::full(10, 10));
+    }
+
+    #[test]
+    fn chaining_blur_into_an_unmodified_invert_is_still_pixel_identical() {
+        // Same AC3-style check Phase 1 used for RESIZE/MOVE: an unmodified
+        // downstream operation (INVERT) must produce today's exact pixel
+        // output regardless of BLUR's now-grown reported box.
+        use crate::compositor::graph::Graph;
+        use crate::compositor::executors::{Execute, PreviewExecutor};
+        use crate::operations::sources::ImageSource;
+        use crate::operations::transform::Invert;
+
+        let mut graph = Graph::new(2, 1);
+
+        let mut source = ImageSource::new();
+        source.set_image(image(vec![255, 255, 255, 255, 0, 0, 0, 255], 2, 1));
+        let source_id = graph.add_node(Box::new(source));
+
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(1.0)).unwrap();
+        let blur_id = graph.add_node(Box::new(blur));
+        graph.connect(blur_id, Input::Source, source_id).unwrap();
+
+        let invert_id = graph.add_node(Box::new(Invert::new()));
+        graph.connect(invert_id, Input::Source, blur_id).unwrap();
+
+        let values = PreviewExecutor::default()
+            .execute(&graph, invert_id, &context(2, 1))
+            .unwrap();
+
+        let pixels = as_u8_pixels(&values[0]);
+
+        // BLUR radius=1 on a 2x1 image averages both pixels together for
+        // every output pixel (each x's window covers both columns):
+        // (255+0)/2=127(.5), alpha (255+255)/2=255. INVERT then inverts
+        // every channel uniformly, unchanged from before this phase.
+        assert_eq!(pixels, vec![128, 128, 128, 0, 128, 128, 128, 0]);
     }
 
     #[test]
