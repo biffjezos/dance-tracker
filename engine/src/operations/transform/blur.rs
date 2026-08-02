@@ -149,6 +149,29 @@ impl Blur {
         let inv = 1.0 / count as f32;
         [sum[0] * inv, sum[1] * inv, sum[2] * inv, sum[3] * inv]
     }
+
+    /// BLUR's own true content-spread extent, given SOURCE's own reported
+    /// box: a box blur pulls real neighboring content up to `radius_px`
+    /// pixels beyond SOURCE's own non-default region (see `output_bbox`'s
+    /// own doc comment), so this is SOURCE's box grown by the radius and
+    /// clamped to the frame. Shared by `output_bbox()` (the reported
+    /// metadata) and `execute()`'s masked path (the actual work area) so
+    /// the two can never drift apart the way they once did - the masked
+    /// path originally intersected against SOURCE's *raw*, un-grown box,
+    /// silently skipping real blur computation in the radius-wide
+    /// penumbra just outside it (caught by evaluator review).
+    fn natural_bbox(&self, ctx: &Context, input_bboxes: &[(Input, Rect)]) -> Rect {
+        let source_box = find_bbox(input_bboxes, Input::Source)
+            .unwrap_or_else(|| Rect::full(ctx.meta.width, ctx.meta.height));
+
+        if source_box.is_empty() {
+            return Rect::empty();
+        }
+
+        source_box
+            .grow(self.radius_px as i32)
+            .intersect(&Rect::full(ctx.meta.width, ctx.meta.height))
+    }
 }
 
 impl Default for Blur {
@@ -240,14 +263,15 @@ impl Operation for Blur {
         // below blends every pixel outside the relevant region straight
         // back to `original` anyway - so restrict the actual blur compute
         // to the intersection of MASK's own reported box and this node's
-        // own natural (SOURCE's) box, skipping the rest instead of
+        // own natural bbox (SOURCE's box grown by radius - see
+        // natural_bbox()'s own doc comment for why the growth is required
+        // here, not just SOURCE's raw box), skipping the rest instead of
         // running the full two-pass blur over the whole frame
         // unconditionally. Without a MASK, there's nothing to restrict
         // against - every pixel matters - so the original full-frame path
         // is used unchanged.
         let blurred = if mask.is_some() {
-            let natural_box = find_bbox(&ctx.input_bboxes, Input::Source)
-                .unwrap_or_else(|| Rect::full(source.width, source.height));
+            let natural_box = self.natural_bbox(ctx, &ctx.input_bboxes);
             let mask_box = find_bbox(&ctx.input_bboxes, Input::Mask)
                 .unwrap_or_else(|| Rect::full(source.width, source.height));
             let work_area = natural_box.intersect(&mask_box);
@@ -281,16 +305,7 @@ impl Operation for Blur {
     // clamps to the frame - BLUR's own output is never larger than the
     // frame regardless of how far the grown box would otherwise extend.
     fn output_bbox(&self, ctx: &Context, input_bboxes: &[(Input, Rect)], _output: &Value) -> Rect {
-        let source_box = find_bbox(input_bboxes, Input::Source)
-            .unwrap_or_else(|| Rect::full(ctx.meta.width, ctx.meta.height));
-
-        if source_box.is_empty() {
-            return Rect::empty();
-        }
-
-        source_box
-            .grow(self.radius_px as i32)
-            .intersect(&Rect::full(ctx.meta.width, ctx.meta.height))
+        self.natural_bbox(ctx, input_bboxes)
     }
 }
 
@@ -609,6 +624,61 @@ mod tests {
         let unrestricted = blur.execute(&ctx_full_frame, &inputs).unwrap();
 
         assert_eq!(as_u8_pixels(&restricted[0]), as_u8_pixels(&unrestricted[0]));
+    }
+
+    #[test]
+    fn consume_equivalence_holds_even_when_source_itself_reports_a_sub_frame_box() {
+        // Regression (evaluator-caught): the masked work_area must be
+        // intersected against SOURCE's box *grown by radius*, not
+        // SOURCE's raw reported box - a box blur pulls real content from
+        // up to `radius_px` beyond SOURCE's own non-default region. Using
+        // the raw box silently skipped real computation in that
+        // radius-wide penumbra whenever SOURCE itself reported a
+        // sub-frame box (e.g. fed from a RESIZE/MOVE chain).
+        //
+        // 10x1 frame: SOURCE is genuinely [0,0,0,0] outside [3,7), real
+        // content [100,100,100,255] inside it (a valid precondition -
+        // SOURCE's reported box actually matches where its real content
+        // is). RADIUS=2, MASK fully opaque everywhere - so every pixel's
+        // blur must actually be computed, including x=1, which sits in
+        // the radius-2 penumbra just outside [3,7) and must show real
+        // blurred content pulled in from x=3's neighborhood, not be left
+        // as raw transparent.
+        let mut blur = Blur::new();
+        blur.set_parameter("RADIUS", Value::Number(2.0)).unwrap();
+
+        let mut source_pixels = vec![0u8; 10 * 4];
+        for x in 3..7 {
+            source_pixels[x * 4..x * 4 + 4].copy_from_slice(&[100, 100, 100, 255]);
+        }
+        let source = image(source_pixels, 10, 1);
+        let mask = image(vec![255; 10 * 4], 10, 1);
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let ctx_with_real_source_box = Context {
+            input_bboxes: vec![
+                (Input::Source, crate::compositor::bbox::Rect { x0: 3, y0: 0, x1: 7, y1: 1 }),
+                (Input::Mask, crate::compositor::bbox::Rect::full(10, 1)),
+            ],
+            ..context(10, 1)
+        };
+        let ctx_full_frame = context(10, 1); // input_bboxes empty -> full-frame fallback, ground truth
+
+        let restricted = blur.execute(&ctx_with_real_source_box, &inputs).unwrap();
+        let unrestricted = blur.execute(&ctx_full_frame, &inputs).unwrap();
+
+        assert_eq!(
+            as_u8_pixels(&restricted[0]), as_u8_pixels(&unrestricted[0]),
+            "SOURCE's radius-wide penumbra must still be computed, not left as raw transparent"
+        );
+
+        // Directly pin down the specific pixel the bug used to get wrong.
+        let restricted_pixels = as_u8_pixels(&restricted[0]);
+        assert_ne!(&restricted_pixels[4..8], &[0, 0, 0, 0], "x=1 sits in the radius-2 penumbra and must show real blurred content, not raw transparent");
     }
 
     #[test]
