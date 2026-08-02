@@ -170,6 +170,13 @@ impl Operation for Move {
     // pixel reads - then clamps to the frame. An offset that moves the
     // whole box off-canvas correctly collapses to Rect::empty() via the
     // intersect below, never a box with negative extent.
+    //
+    // Rounds the *translated continuous bound* outward (floor the lower
+    // edge, ceil the upper edge), not the offset itself - rounding the
+    // offset first (e.g. offset_x=0.4 -> 0) can disagree with move_pixels's
+    // own exact, unrounded, truncating-sample math and undershoot the true
+    // content extent (a real regression, caught by evaluator review: see
+    // the fractional-offset regression test below).
     fn output_bbox(&self, ctx: &Context, input_bboxes: &[(Input, Rect)], _output: &Value) -> Rect {
         let source_box = find_bbox(input_bboxes, Input::Source)
             .unwrap_or_else(|| Rect::full(ctx.meta.width, ctx.meta.height));
@@ -178,14 +185,11 @@ impl Operation for Move {
             return Rect::empty();
         }
 
-        let offset_x = self.offset_x.round() as i32;
-        let offset_y = self.offset_y.round() as i32;
-
         let translated = Rect {
-            x0: source_box.x0 + offset_x,
-            y0: source_box.y0 + offset_y,
-            x1: source_box.x1 + offset_x,
-            y1: source_box.y1 + offset_y,
+            x0: (source_box.x0 as f64 + self.offset_x).floor() as i32,
+            y0: (source_box.y0 as f64 + self.offset_y).floor() as i32,
+            x1: (source_box.x1 as f64 + self.offset_x).ceil() as i32,
+            y1: (source_box.y1 as f64 + self.offset_y).ceil() as i32,
         };
 
         translated.intersect(&Rect::full(ctx.meta.width, ctx.meta.height))
@@ -271,6 +275,44 @@ mod tests {
         let bbox = mv.output_bbox(&ctx, &[(Input::Source, full)], &Value::Number(0.0));
 
         assert!(bbox.is_empty(), "an offset moving the whole box off-canvas must report Rect::empty(), not a negative-extent rect");
+    }
+
+    #[test]
+    fn output_bbox_with_a_fractional_offset_never_undershoots_move_pixels_real_content() {
+        // Regression (evaluator-caught): rounding OFFSET_X/Y before
+        // translating the box could disagree with move_pixels's own exact,
+        // truncating-sample math and report a box smaller than the true
+        // content extent. width=4, SOURCE box [0,1) (only source pixel 0 is
+        // real content), offset_x=0.4: move_pixels puts real content at
+        // dest_x=1 (src_x = 1 - 0.4 = 0.6, truncates to source pixel 0,
+        // which is inside the box) - the reported box must cover dest_x=1.
+        let mv = Move { offset_x: 0.4, offset_y: 0.0 };
+        let ctx = context(4, 1);
+        let source_box = crate::compositor::bbox::Rect { x0: 0, y0: 0, x1: 1, y1: 1 };
+
+        let bbox = mv.output_bbox(&ctx, &[(Input::Source, source_box)], &Value::Number(0.0));
+
+        assert!(
+            bbox.x0 <= 1 && bbox.x1 > 1,
+            "reported box {:?} must cover dest_x=1, where move_pixels actually writes real content for offset_x=0.4",
+            bbox
+        );
+
+        // Cross-check directly against move_pixels itself: the only
+        // opaque source pixel is x=0; confirm which dest pixels actually
+        // receive real content, and assert the box covers all of them.
+        let source_pixels = vec![10u8, 20, 30, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let moved = Move::move_pixels(&source_pixels, 4, 1, 0.4, 0.0);
+        for x in 0..4u32 {
+            let px = &moved[(x * 4) as usize..(x * 4 + 4) as usize];
+            if px != [0, 0, 0, 0] {
+                assert!(
+                    bbox.x0 <= x as i32 && bbox.x1 > x as i32,
+                    "move_pixels wrote real content at x={} but reported box {:?} doesn't cover it",
+                    x, bbox
+                );
+            }
+        }
     }
 
     #[test]
