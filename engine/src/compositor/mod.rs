@@ -9,6 +9,7 @@ pub mod input;
 pub mod metadata;
 pub mod operations;
 pub mod operation_descriptor;
+pub mod system_inventory;
 pub mod registry;
 pub mod system;
 pub mod value;

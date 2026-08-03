@@ -1,12 +1,5 @@
 // engine/menu.js
 
-/** 
-==================================================
-DANCE TRACKER 5000
-AMIGA TWO ROW MENU SYSTEM
-==================================================
-*/
-
 import { nodeSelectionState } from "./nodeSelection.js";
 import { nodeEditContextRegistry, renderGroupContext, renderPatchPropertiesPane } from "./nodeEditContexts.js";
 import { getAllRealEntries, addNodeLayer, removeLayer } from "../state/registry.js";
@@ -62,6 +55,8 @@ const CONTEXT_HANDLERS = {
     patch_properties: "renderPatchPropertiesContext",
     create_node: "renderCreateNodeContext",
 };
+
+
 
 // Only the states that mean something is actually broken get a tooltip -
 // "missing_input" is the normal in-progress state of a node the user
