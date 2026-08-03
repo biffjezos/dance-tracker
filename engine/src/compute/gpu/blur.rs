@@ -72,12 +72,11 @@ impl GpuBlur {
                 }
             );
 
-        let pipeline_layout = gpu.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let pipeline_layout = gpu.device.create_pipeline_layout(
+            &wgpu::PipelineLayoutDescriptor {
                 label: Some("blur pipeline layout"),
-                bind_group_layouts: &[
-                    Some(&bind_group_layout)
-                ],
-                immediate_size: 0,
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
             }
         );
 
@@ -88,9 +87,8 @@ impl GpuBlur {
                     layout: Some(&pipeline_layout),
                     module: &shader,
                     entry_point: Some("main"),
+                    compilation_options: Default::default(),
                     cache: None,
-                    compilation_options:
-                        wgpu::PipelineCompilationOptions::default(),
                 }
             );
 
@@ -148,19 +146,29 @@ impl ComputeBackend for GpuBlur {
             );
 
 
-        let output_buffer =
-            self.gpu.device.create_buffer(
-                &wgpu::BufferDescriptor {
-                    label: Some("blur output"),
-                    size:
-                        (pixels.len() * 4) as u64,
-                    usage:
-                        wgpu::BufferUsages::STORAGE
-                        | wgpu::BufferUsages::COPY_SRC
-                        | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                }
-            );
+        let output_buffer = self.gpu.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("blur output"),
+                size:
+                    (pixels.len() * 4) as u64,
+                usage:
+                    wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }
+        );
+
+        let readback_buffer = self.gpu.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("blur readback"),
+                size: (pixels.len() * std::mem::size_of::<f32>()) as u64,
+                usage:
+                    wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            }
+        );
 
         let params = BlurParams {
             width,
@@ -219,6 +227,7 @@ impl ComputeBackend for GpuBlur {
                         label: Some("blur pass"),
                         timestamp_writes: None,
                     }
+                    
                 );
 
             pass.set_pipeline(
