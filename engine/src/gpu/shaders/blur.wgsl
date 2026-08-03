@@ -2,6 +2,12 @@ struct Pixels {
     data: array<f32>,
 };
 
+struct Params {
+    width: u32,
+    height: u32,
+    radius: u32,
+};
+
 @group(0)
 @binding(0)
 var<storage, read> input: Pixels;
@@ -10,16 +16,35 @@ var<storage, read> input: Pixels;
 @binding(1)
 var<storage, read_write> output: Pixels;
 
+@group(0)
+@binding(2)
+var<uniform> params: Params;
+
+
 @compute
 @workgroup_size(16,16)
 
 fn main(
     @builtin(global_invocation_id) id: vec3<u32>
 ) {
-    let index = (id.y * 1280u + id.x) * 4u;
+    if (id.x >= params.width || id.y >= params.height) {
+        return;
+    }
 
-    output.data[index] = input.data[index];
-    output.data[index + 1u] = input.data[index + 1u];
-    output.data[index + 2u] = input.data[index + 2u];
-    output.data[index + 3u] = input.data[index + 3u];
+    let width = params.width;
+
+    let index =
+        (id.y * width + id.x) * 4u;
+
+    output.data[index] =
+        input.data[index];
+
+    output.data[index + 1u] =
+        input.data[index + 1u];
+
+    output.data[index + 2u] =
+        input.data[index + 2u];
+
+    output.data[index + 3u] =
+        input.data[index + 3u];
 }

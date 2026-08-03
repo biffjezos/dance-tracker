@@ -13,6 +13,14 @@ struct GpuOutput {
     buffer: wgpu::Buffer,
     size: usize,
 }
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct BlurParams {
+    width: u32,
+    height: u32,
+    radius: u32,
+    _padding: u32,
+}
 
 impl GpuBlur {
     pub fn new(gpu: GpuContext) -> Self {
@@ -42,6 +50,16 @@ impl GpuBlur {
                                 ty: wgpu::BufferBindingType::Storage {
                                     read_only: false,
                                 },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
                                 has_dynamic_offset: false,
                                 min_binding_size: None,
                             },
@@ -82,7 +100,7 @@ impl GpuBlur {
     fn read_buffer(&self, buffer: &wgpu::Buffer, size: usize, ) -> Vec<f32> {
 
         let slice = buffer.slice(..);
-        let (sender, receiver) =vstd::sync::mpsc::channel();
+        let (sender, receiver) = std::sync::mpsc::channel();
 
         slice.map_async(
             wgpu::MapMode::Read,
@@ -141,7 +159,21 @@ impl ComputeBackend for GpuBlur {
                 }
             );
 
+        let params = BlurParams {
+            width,
+            height,
+            radius: _radius,
+            _padding: 0,
+        };
 
+        let params_buffer =
+            self.gpu.device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("blur params"),
+                    contents: bytemuck::bytes_of(&params),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                }
+            );
         let bind_group =
             self.gpu.device.create_bind_group(
                 &wgpu::BindGroupDescriptor {
@@ -158,6 +190,11 @@ impl ComputeBackend for GpuBlur {
                             binding: 1,
                             resource:
                                 output_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource:
+                                params_buffer.as_entire_binding(),
                         },
                     ],
                 }
@@ -199,10 +236,7 @@ impl ComputeBackend for GpuBlur {
         }
 
 
-        self.gpu.queue.submit(
-            Some(encoder.finish())
-        );
-
+        self.gpu.queue.submit( Some(encoder.finish()) );
 
         self.read_buffer(&output_buffer, pixels.len(), )
     }
