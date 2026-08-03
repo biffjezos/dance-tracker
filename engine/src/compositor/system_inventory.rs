@@ -1,12 +1,11 @@
 use std::sync::OnceLock;
 
-use crate::compositor::system::{SystemMenu, SystemMenuDescriptor};
+use crate::compositor::system::SystemMenuDescriptor;
 
 inventory::collect!(SystemMenuInfo);
 
 static MENUS: OnceLock<Vec<SystemMenuDescriptor>> = OnceLock::new();
 
-#[derive(Debug)]
 pub struct SystemMenuInfo {
     pub constructor: fn() -> SystemMenuDescriptor,
 }

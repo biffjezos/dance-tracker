@@ -1,10 +1,15 @@
-// src/compositor/system.rs
 use serde::Serialize;
 
 use crate::compositor::{
     OperationDescriptor,
     metadata::{ParameterDescriptor, ParameterKind},
 };
+
+#[derive(Serialize, Clone)]
+pub struct SystemMenuDescriptor {
+    pub descriptor: OperationDescriptor,
+    pub parameters: Vec<ParameterDescriptor>,
+}
 
 pub struct SystemMenu;
 

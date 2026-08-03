@@ -265,7 +265,7 @@ impl App {
     }
 
     pub fn get_system_menus(&self) -> Result<JsValue, JsValue> {
-        serde_wasm_bindgen::to_value(&crate::compositor::system::SystemMenu::descriptors()  )
+        serde_wasm_bindgen::to_value(&crate::compositor::system::SystemMenu::descriptors()
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
     }
     // Returns Result (not JsValue directly) so a serialization failure

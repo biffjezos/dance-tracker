@@ -135,6 +135,26 @@ async function boot() {
 
     const operations = getOperations();
 
+    const wasmApp = getWasmApp();
+
+    let systemMenus = [];
+
+    if (wasmApp) {
+        systemMenus = wasmApp.get_system_menus();
+    }
+
+    window.dispatchEvent(
+        new CustomEvent(
+            "operationsLoaded",
+            {
+                detail: [
+                    ...systemMenus,
+                    ...operations
+                ]
+            }
+        )
+    );
+
 
     window.dispatchEvent(
         new CustomEvent(
