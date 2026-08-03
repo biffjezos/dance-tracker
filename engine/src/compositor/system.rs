@@ -1,8 +1,10 @@
+use serde::Serialize;
+
 use crate::compositor::{
     OperationDescriptor,
     metadata::{ParameterDescriptor, ParameterKind},
 };
-use serde::Serialize;
+
 pub struct SystemMenu;
 
 #[derive(Serialize)]

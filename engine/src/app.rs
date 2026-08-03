@@ -4,12 +4,14 @@
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
+
 use crate::compute::{
     backend::ComputeBackend,
     cpu::CpuBackend,
-    compute::gpu::GpuBlur
-}
+    gpu::blur::GpuBlur,
+};
 use crate::compositor::{
+    ComputeMode
     Context,
     executors::{
         Execute,
@@ -22,6 +24,7 @@ use crate::compositor::{
     metadata::ParameterKind,
     OperationError,
     OperationRegistry,
+    system::SystemRegistry,
     Value,
     value_to_text
 };
@@ -209,6 +212,7 @@ pub struct App {
     output_out_of_gamut: bool,
     compute: Arc<dyn ComputeBackend>,
     system_menus: Vec<OperationDescriptor>,
+    system_registry: SystemRegistry,
 }
 
 
@@ -218,6 +222,16 @@ impl App {
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32) -> App {
         let mut registry = OperationRegistry::new();
+
+        let mut system_registry = SystemRegistry::new();
+
+        system_registry.register(
+            "compute_mode",
+            |app, value| {
+                app.set_compute_mode(value)
+                    .map_err(|e| format!("{:?}", e))
+            },
+        );
         let system_menus = crate::compositor::system::SystemMenu::descriptors();
         crate::operations::register::register_operations(&mut registry);
 

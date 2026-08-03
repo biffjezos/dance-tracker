@@ -44,7 +44,7 @@ pub struct Context {
     pub compute: Arc<dyn ComputeBackend>,
 }
 
-#[derive(Clone, Copy, Sequence)]
+#[derive(Clone, Copy)]
 pub enum ComputeMode {
     Cpu,
     Gpu,

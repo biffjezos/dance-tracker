@@ -12,10 +12,10 @@ pub mod operation_descriptor;
 pub mod registry;
 pub mod value;
 
-pub mod system_menu;
+pub mod system;
 
 pub use bbox::Rect;
-pub use context::{ Context, Meta };
+pub use context::{ Context, ComputeMode, Meta };
 pub use error::OperationError;
 pub use input::Input;
 pub use operations::Operation;
