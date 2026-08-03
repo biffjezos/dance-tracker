@@ -1,3 +1,4 @@
+// src/gpu/pipeline.rs
 use crate::gpu::context::GpuContext;
 use crate::gpu::BLUR_SHADER;
 

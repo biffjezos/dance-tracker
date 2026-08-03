@@ -1,3 +1,5 @@
+// src/compute/gpu/blur.rs
+
 use crate::compute::backend::ComputeBackend;
 use crate::gpu::context::GpuContext;
 use crate::gpu::BLUR_SHADER;
@@ -13,6 +15,7 @@ struct GpuOutput {
     buffer: wgpu::Buffer,
     size: usize,
 }
+
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct BlurParams {
