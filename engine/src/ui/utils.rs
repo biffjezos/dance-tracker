@@ -1,5 +1,6 @@
 
 use compositor::graph::{ Graph, NodeId, PatchMode };
+use wasm_bindgen::prelude::*;
 
 fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))

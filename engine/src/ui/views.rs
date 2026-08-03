@@ -1,9 +1,11 @@
-use serde::Serialize;
 use compositor::{
     error::{ OperationError },
     graph::{ NodeValidation }
 };
-    /*
+use serde::Serialize;
+use wasm_bindgen::prelude::*;
+
+/*
 What the UI is told about one registered operation: its own descriptor
 fields plus the category its metadata() declares - carried as a plain
 string (not the enum) since this is the JS boundary, and added ahead of
