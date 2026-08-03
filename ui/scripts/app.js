@@ -126,36 +126,30 @@ document.getElementById("camera-preview").height = HEIGHT;
 
 
 async function boot() {
-
-    await initWasm();
-
+    const wasmApp = await initWasm();
     applyOutputSize();
-
     reportSelection("video");
 
 
     const operations = getOperations();
-
-    const wasmApp = getWasmApp();
+    window.dispatchEvent(
+            new CustomEvent("operationsLoaded", {
+                detail: operations
+            })
+        );
+    startRenderLoop();
 
     let systemMenus = [];
-
     if (wasmApp) {
-        systemMenus = wasmApp.get_system_menus();
+        let systemMenus = wasmApp.get_system_menus();
+            window.dispatchEvent(
+            new CustomEvent("systemMenusLoaded", {
+                detail: systemMenus
+            })
+        );
     }
+    
 
-    window.dispatchEvent(
-        new CustomEvent("systemMenusLoaded", {
-            detail: systemMenus
-        })
-    );
-
-    window.dispatchEvent(
-        new CustomEvent("operationsLoaded", {
-            detail: operations
-        })
-    );
-    startRenderLoop();
 }
 
 

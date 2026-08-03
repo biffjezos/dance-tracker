@@ -211,11 +211,9 @@ pub struct App {
     system_menus: Vec<SystemMenuDescriptor>,
 }
 
-
 #[wasm_bindgen]
 impl App {
 
-    #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32) -> App {
         let mut registry = OperationRegistry::new();
         let system_menus = crate::compositor::system::SystemMenu::descriptors();
