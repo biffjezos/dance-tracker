@@ -567,7 +567,8 @@ export class MenuManager {
             ...this.operations
         ];
         const filteredOps = menuEntries.filter(op => {
-            const opMenu = (op.menu || op.Menu || "").toUpperCase();
+            const descriptor = op.descriptor || op;
+            const opMenu = (descriptor.menu || descriptor.Menu || "").toUpperCase();
             const category = (this.category || "").toUpperCase();
             return opMenu === category;
         });
