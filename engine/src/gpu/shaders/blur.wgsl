@@ -8,6 +8,7 @@ struct Params {
     width: u32,
     height: u32,
     radius: u32,
+    _padding: u32,
 };
 
 @group(0)
@@ -34,19 +35,33 @@ fn main(
     }
 
     let width = params.width;
+    let height = params.height;
+    let radius = params.radius;
 
-    let index =
-        (id.y * width + id.x) * 4u;
+    var sum_r = 0.0;
+    var sum_g = 0.0;
+    var sum_b = 0.0;
+    var sum_a = 0.0;
 
-    output.data[index] =
-        input.data[index];
+    var count = 0.0;
 
-    output.data[index + 1u] =
-        input.data[index + 1u];
+    for (var y = -i32(radius); y <= i32(radius); y++) {
+        for (var x = -i32(radius); x <= i32(radius); x++) {
 
-    output.data[index + 2u] =
-        input.data[index + 2u];
+            let px = clamp( i32(id.x) + x, 0, i32(width) - 1 );
+            let py = clamp( i32(id.y) + y, 0, i32(height) - 1  );
+            let index = (u32(py) * width + u32(px)) * 4u;
+            sum_r += input.data[index];
+            sum_g += input.data[index + 1u];
+            sum_b += input.data[index + 2u];
+            sum_a += input.data[index + 3u];
+            count += 1.0;
+        }
+    }
 
-    output.data[index + 3u] =
-        input.data[index + 3u];
+    let output_index = (id.y * width + id.x) * 4u;
+    output.data[output_index] = sum_r / count;
+    output.data[output_index + 1u] = sum_g / count;
+    output.data[output_index + 2u] = sum_b / count;
+    output.data[output_index + 3u] = sum_a / count;
 }
