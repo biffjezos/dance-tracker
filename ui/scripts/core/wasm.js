@@ -12,7 +12,7 @@ export async function initWasm() {
 
     console.log("Creating WASM App");
 
-    wasmApp = new App(WIDTH, HEIGHT);
+    wasmApp = App.new(WIDTH, HEIGHT);
 
     console.log("Created WASM App:", wasmApp);
 
