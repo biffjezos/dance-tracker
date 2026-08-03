@@ -14,8 +14,8 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
-jobs:
 
+jobs:
   changes:
     runs-on: ubuntu-latest
 
@@ -24,18 +24,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
             wasm:
-              - 'engine/src/operations/**'
-              - 'engine/src/app.rs'
-              - 'engine/src/dom.rs'
+              - 'engine/src/**'
               - 'engine/Cargo.toml'
               - 'engine/Cargo.lock'
-              - 'ui/core/**'
+              - 'engine/build.rs'
 
 
   deploy:
@@ -43,9 +40,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - uses: actions/checkout@v4
-
       - name: Cache Rust
         uses: actions/cache@v4
         with:
@@ -56,12 +51,13 @@ jobs:
           restore-keys: |
             rust-${{ runner.os }}-
 
+
       - name: Restore WASM package
         id: wasm-cache
         uses: actions/cache@v4
         with:
           path: engine/pkg
-          key: wasm-${{ runner.os }}-${{ hashFiles('engine/src/operations/**', 'engine/src/app.rs', 'engine/src/dom.rs', 'engine/Cargo.toml', 'engine/Cargo.lock') }}
+          key: wasm-${{ runner.os }}-${{ hashFiles('engine/src/**', 'engine/Cargo.toml', 'engine/Cargo.lock', 'engine/build.rs') }}
           restore-keys: |
             wasm-${{ runner.os }}-
 
@@ -78,20 +74,22 @@ jobs:
         if: needs.changes.outputs.wasm == 'true' || steps.wasm-check.outputs.exists != 'true'
         run: cargo install wasm-pack
 
-
       - name: Build WASM
         if: needs.changes.outputs.wasm == 'true' || steps.wasm-check.outputs.exists != 'true'
         run: wasm-pack build engine --target web
 
+      - name: Verify WASM exports
+        run: |
+          grep -R "get_system_menus" engine/pkg || true
 
       - name: Save WASM cache
         if: needs.changes.outputs.wasm == 'true' || steps.wasm-check.outputs.exists != 'true'
         uses: actions/cache@v4
         with:
           path: engine/pkg
-          key: wasm-${{ runner.os }}-${{ hashFiles('engine/src/operations/**', 'engine/src/app.rs', 'engine/src/dom.rs', 'engine/Cargo.toml', 'engine/Cargo.lock') }}
+          key: wasm-${{ runner.os }}-${{ hashFiles('engine/src/**', 'engine/Cargo.toml', 'engine/Cargo.lock', 'engine/build.rs') }}
 
-      - name: Verify WASM
+      - name: Verify WASM package
         run: |
           test -f engine/pkg/dance_tracker_engine.js
           test -f engine/pkg/dance_tracker_engine_bg.wasm
@@ -117,7 +115,6 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
-
   cleanup:
     needs: deploy
     runs-on: ubuntu-latest
@@ -130,6 +127,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+
         run: |
           set -e
 

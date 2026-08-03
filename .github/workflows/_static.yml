@@ -1,0 +1,147 @@
+name: Deploy static content to Pages
+
+on:
+  push:
+    branches: ["dev"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+
+  changes:
+    runs-on: ubuntu-latest
+
+    outputs:
+      wasm: ${{ steps.filter.outputs.wasm }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            wasm:
+              - 'engine/src/operations/**'
+              - 'engine/src/app.rs'
+              - 'engine/src/dom.rs'
+              - 'engine/Cargo.toml'
+              - 'engine/Cargo.lock'
+              - 'ui/core/**'
+
+
+  deploy:
+    needs: changes
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            engine/target
+          key: rust-${{ runner.os }}-${{ hashFiles('engine/Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Restore WASM package
+        id: wasm-cache
+        uses: actions/cache@v4
+        with:
+          path: engine/pkg
+          key: wasm-${{ runner.os }}-${{ hashFiles('engine/src/operations/**', 'engine/src/app.rs', 'engine/src/dom.rs', 'engine/Cargo.toml', 'engine/Cargo.lock') }}
+          restore-keys: |
+            wasm-${{ runner.os }}-
+
+      - name: Check WASM package
+        id: wasm-check
+        run: |
+          if [ -f "engine/pkg/dance_tracker_engine.js" ] && [ -f "engine/pkg/dance_tracker_engine_bg.wasm" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install wasm-pack
+        if: needs.changes.outputs.wasm == 'true' || steps.wasm-check.outputs.exists != 'true'
+        run: cargo install wasm-pack
+
+
+      - name: Build WASM
+        if: needs.changes.outputs.wasm == 'true' || steps.wasm-check.outputs.exists != 'true'
+        run: wasm-pack build engine --target web
+
+
+      - name: Save WASM cache
+        if: needs.changes.outputs.wasm == 'true' || steps.wasm-check.outputs.exists != 'true'
+        uses: actions/cache@v4
+        with:
+          path: engine/pkg
+          key: wasm-${{ runner.os }}-${{ hashFiles('engine/src/operations/**', 'engine/src/app.rs', 'engine/src/dom.rs', 'engine/Cargo.toml', 'engine/Cargo.lock') }}
+
+      - name: Verify WASM
+        run: |
+          test -f engine/pkg/dance_tracker_engine.js
+          test -f engine/pkg/dance_tracker_engine_bg.wasm
+
+      - name: Copy WASM package
+        run: |
+          mkdir -p ui/engine/pkg
+          rm -rf ui/engine/pkg/*
+          cp -a engine/pkg/. ui/engine/pkg/
+
+      - name: Write build metadata
+        run: echo "${GITHUB_SHA}" > ui/build-version.txt
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./ui
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+
+  cleanup:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: write
+
+    steps:
+      - name: Delete workflow runs older than 4 hours
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+
+          CUTOFF=$(date -u -d "4 hours ago" +"%Y-%m-%dT%H:%M:%SZ")
+
+          gh api repos/$REPO/actions/runs \
+            --paginate \
+            --jq '.workflow_runs[]
+              | select(.status == "completed")
+              | select(.created_at < "'"$CUTOFF"'")
+              | .id' |
+          while read RUN_ID; do
+            echo "Deleting run $RUN_ID"
+            gh api -X DELETE repos/$REPO/actions/runs/$RUN_ID || true
+          done
