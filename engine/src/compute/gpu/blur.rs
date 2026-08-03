@@ -34,14 +34,7 @@ impl GpuBlur {
 }
 
 impl ComputeBackend for GpuBlur {
-
-    fn blur(
-        &self,
-        pixels: &[f32],
-        _width: u32,
-        _height: u32,
-        _radius: u32,
-    ) -> Vec<f32> {
+    fn blur( &self, pixels: &[f32], _width: u32, _height: u32, _radius: u32, ) -> Vec<f32> {
         pixels.to_vec()
     }
 }
