@@ -1,9 +1,7 @@
 use crate::compositor::{
-    error::{ OperationError },
     graph::{ NodeValidation }
 };
 use serde::Serialize;
-use wasm_bindgen::prelude::*;
 
 /*
 What the UI is told about one registered operation: its own descriptor

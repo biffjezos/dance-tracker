@@ -1,7 +1,6 @@
 // src/app.rs
 #![deny(unused_imports)]
 #![cfg(target_arch = "wasm32")]
-use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
 
@@ -16,7 +15,7 @@ use crate::{
         ComputeMode,
         Context,
         executors::{ Execute, PreviewExecutor, RenderExecutor },
-        graph::{ Graph, NodeId, NodeValidation },
+        graph::{ Graph, NodeValidation },
         Input,
         Meta,
         metadata::ParameterKind,
