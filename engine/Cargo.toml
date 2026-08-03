@@ -14,5 +14,5 @@ web-sys = { version = "0.3.103", features = ["CanvasRenderingContext2d", "HtmlCa
 serde = { version = "1.0.229", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
 inventory = "0.3"
-wgpu = "0.30"
+wgpu = "30.0.0"
 pollster = "1.0.1"
