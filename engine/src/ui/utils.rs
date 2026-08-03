@@ -1,4 +1,6 @@
 
+use compositor::graph::{ Graph, NodeId, PatchMode };
+
 fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
 }

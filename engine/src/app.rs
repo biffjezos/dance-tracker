@@ -10,24 +10,22 @@ use crate::{
             OperationView, ParameterView, InputView, OutputView, PatchMappingView, NodeValidationView
         },
         utils::*,
-    }
+    },
     compositor::{
         ComputeMode,
         Context,
         executors::{ Execute, PreviewExecutor, RenderExecutor },
-        graph::{ Graph, NodeId, NodeValidation, PatchMode },
+        graph::{ Graph, NodeId, NodeValidation },
         Input,
         Meta,
         OperationDescriptor,
         metadata::ParameterKind,
-        OperationError,
         OperationRegistry,
         system::{ SystemMenuDescriptor },
         Value,
         value_to_text
     }
 };
-use crate::compute::
 use crate::graphics::{ Color, U8Image, ImageFormat };
 use crate::dom::{ VideoElementPixelSource, write_frame_to_canvas};
 use crate::operations::sources::ImageSource;

@@ -15,7 +15,7 @@ use crate::compute::gpu::GpuBackend;
 pub async fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
     match mode {
         ComputeMode::Cpu => {
-            Arc::new(CpuBackend)
+            Arc::new(CpuBackend).await
         }
 
         ComputeMode::Gpu => {
@@ -26,9 +26,9 @@ pub async fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
         }
 
         ComputeMode::Auto => {
-            match GpuBackend::new() {
-                Ok(gpu) => Arc::new(gpu),
-                Err(_) => Arc::new(CpuBackend),
+            match GpuBackend::new().await {
+                Ok(gpu) => Arc::new(gpu).await,
+                Err(_) => Arc::new(CpuBackend).await,
             }
         }
     }
