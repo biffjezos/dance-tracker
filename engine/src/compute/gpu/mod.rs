@@ -1,4 +1,5 @@
 // src/compute/gpu/mod.rs
+
 pub mod blur;
 
 use crate::compute::backend::ComputeBackend;
@@ -8,7 +9,6 @@ pub struct GpuBackend {
 }
 
 impl ComputeBackend for GpuBackend {
-
     fn blur(
         &self,
         pixels: &[f32],
