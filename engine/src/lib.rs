@@ -4,6 +4,8 @@ pub mod operations;
 pub mod profiling;
 pub mod renderer;
 pub mod resources;
+pub mod gpu;
+pub mod compute;
 
 #[cfg(target_arch = "wasm32")]
 pub mod dom;
