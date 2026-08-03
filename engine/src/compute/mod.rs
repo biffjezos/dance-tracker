@@ -11,7 +11,7 @@ use crate::compute::cpu::CpuBackend;
 use crate::compute::gpu::GpuBackend;
 
 
-pub async fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
+pub fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
     match mode {
         ComputeMode::Cpu => {
             Arc::new(CpuBackend)
