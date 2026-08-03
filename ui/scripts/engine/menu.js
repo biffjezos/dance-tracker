@@ -79,8 +79,14 @@ export class MenuManager {
         this.subMenu = document.getElementById("sub-menu");
         this.operations = [];
         this.category = null;
+        this.systemMenus = [];
         this.currentContext = null;
-
+        
+        window.addEventListener("systemMenusLoaded", e => {
+            logger.debug("System menus loaded:", e.detail);
+            this.systemMenus = e.detail;
+            this.renderCategoryButtons();
+        });
         window.addEventListener("operationsLoaded", e => {
             logger.debug("Operations loaded:", e.detail);
             this.operations = e.detail;
@@ -557,7 +563,7 @@ export class MenuManager {
         // Filter operations by the selected category (menu field)
 
         const menuEntries = [
-            ...systemMenus,
+            ...rhis.systemMenus,
             ...this.operations
         ];
         const filteredOps = menuEntries.filter(op => {
