@@ -1,3 +1,5 @@
+// src/comput/mod.rs
+
 pub mod backend;
 pub mod cpu;
 pub mod gpu;
@@ -10,7 +12,7 @@ use crate::compute::backend::ComputeBackend;
 use crate::compute::cpu::CpuBackend;
 use crate::compute::gpu::GpuBackend;
 
-pub fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
+pub async fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
     match mode {
         ComputeMode::Cpu => {
             Arc::new(CpuBackend)
@@ -18,7 +20,7 @@ pub fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
 
         ComputeMode::Gpu => {
             Arc::new(
-                GpuBackend::new()
+                GpuBackend::new().await
                     .expect("Failed to initialize GPU backend")
             )
         }

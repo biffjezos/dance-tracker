@@ -1,6 +1,5 @@
 // src/app.rs
 #![cfg(target_arch = "wasm32")]
-
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
@@ -32,157 +31,6 @@ use crate::operations::sources::ImageSource;
 use crate::renderer::to_render_frame;
 use crate::resources::manager::ResourceManager;
 use std::sync::Arc;
-
-fn js_err(err: OperationError) -> JsValue {
-    JsValue::from_str(&format!("{:?}", err))
-}
-
-// Milliseconds since the page's time origin - falls back to 0.0 rather than
-// panicking if window/performance is ever unavailable, since losing the
-// playback clock should never take down rendering.
-fn now_ms() -> f64 {
-    web_sys::window()
-        .and_then(|w| w.performance())
-        .map(|p| p.now())
-        .unwrap_or(0.0)
-}
-
-/*
-Resolve a bare JS-supplied slot index into the current, generation-checked
-NodeId for whatever node actually occupies that slot right now. JS only ever
-holds a `u32` index (never a generation), so after a node has been removed
-and its slot reused, reconstructing a NodeId with a stale/assumed generation
-would silently fail to resolve the live node - this looks up the real
-current generation via Graph::current_id instead.
-*/
-fn resolve_id(graph: &Graph, index: u32) -> Result<NodeId, JsValue> {
-    graph.current_id(index)
-        .ok_or_else(|| JsValue::from_str(&format!("Node {} not found", index)))
-}
-
-/*
-What the UI is told about one registered operation: its own descriptor
-fields plus the category its metadata() declares - carried as a plain
-string (not the enum) since this is the JS boundary, and added ahead of
-any UI code reading it yet so a future generic menu/list grouping (Phase 4)
-has it available without another engine change.
-*/
-#[derive(Serialize)]
-struct OperationView {
-    id: &'static str,
-    menu: &'static str,
-    label: &'static str,
-    action: Option<&'static str>,
-    ui_action: Option<&'static str>,
-    create_node: Option<&'static str>,
-    category: &'static str,
-    submenu: Option<&'static str>,
-}
-
-/*
-What the UI is told about one editable parameter of a node. The options list
-comes from the operation, so a selector can never offer a value the operation
-does not accept.
-*/
-#[derive(Serialize)]
-struct ParameterView {
-    name: &'static str,
-    kind: &'static str,
-    options: &'static [&'static str],
-    step: Option<f64>,
-    min: Option<f64>,
-    max: Option<f64>,
-    group: Option<&'static str>,
-    value: String,
-}
-
-/*
-What the UI is told about one input of a node: the wire name the operation
-declares, and the node currently feeding it, if any.
-*/
-#[derive(Serialize)]
-struct InputView {
-    name: &'static str,
-    source: Option<u32>,
-    // Which OutputKind tags (see OutputKind::as_str()) may be wired into
-    // this input - empty means unrestricted (every real node is a valid
-    // candidate).
-    accepts: Vec<&'static str>,
-}
-
-/*
-What the UI is told about one declared output of a node: its index (what
-`set_patch_mapping` addresses it by), its human-readable label (see
-`Operation::output_names`), and its OutputKind tag (see OutputKind::as_str()).
-*/
-#[derive(Serialize)]
-struct OutputView {
-    index: u32,
-    name: String,
-    kind: String,
-}
-
-/*
-What the UI is told about one PATCH property's current mapping - which
-REFERENCE output drives it, and how (REPLACE/ADD/SUBTRACT). `patch_mapping`
-returns this (or nothing at all) per property.
-*/
-#[derive(Serialize)]
-struct PatchMappingView {
-    output_index: u32,
-    mode: &'static str,
-}
-
-fn patch_mode_name(mode: PatchMode) -> &'static str {
-    match mode {
-        PatchMode::Replace => "REPLACE",
-        PatchMode::Add => "ADD",
-        PatchMode::Subtract => "SUBTRACT",
-    }
-}
-
-fn parse_patch_mode(mode: &str) -> Result<PatchMode, JsValue> {
-    match mode {
-        "REPLACE" => Ok(PatchMode::Replace),
-        "ADD" => Ok(PatchMode::Add),
-        "SUBTRACT" => Ok(PatchMode::Subtract),
-        other => Err(JsValue::from_str(&format!("Unknown PATCH mode: {}", other))),
-    }
-}
-
-/*
-Whether a node is safe to evaluate, translated from the engine's internal
-NodeValidation (which carries NodeId, not JS-safe on its own) into a tag the
-UI can match on plus a human-readable detail string - e.g. so the NODES
-list can badge a node with a dangling or cyclic wire instead of the user
-only finding out when the whole graph refuses to render.
-*/
-#[derive(Serialize)]
-struct NodeValidationView {
-    state: &'static str,
-    detail: Option<String>,
-}
-
-impl From<NodeValidation> for NodeValidationView {
-    fn from(state: NodeValidation) -> Self {
-        match state {
-            NodeValidation::Valid => Self { state: "valid", detail: None },
-            NodeValidation::MissingInput(input) => Self {
-                state: "missing_input",
-                detail: Some(input.name().to_string()),
-            },
-            NodeValidation::UnknownInput(id) => Self {
-                state: "unknown_input",
-                detail: Some(id.index().to_string()),
-            },
-            NodeValidation::InvalidDependency(id) => Self {
-                state: "invalid_dependency",
-                detail: Some(id.index().to_string()),
-            },
-            NodeValidation::Cycle => Self { state: "cycle", detail: None },
-        }
-    }
-}
 
 #[wasm_bindgen]
 pub struct App {
@@ -221,8 +69,7 @@ impl App {
 
         let compute_mode = ComputeMode::Auto;
 
-        let compute: Arc<dyn ComputeBackend> = crate::compute::create_backend(compute_mode);
-
+        let compute: Arc<dyn ComputeBackend> = Arc::new(crate::compute::cpu::CpuBackend);
         App {
             graph: Graph::new(width, height),
             resources: ResourceManager::new(),
@@ -594,11 +441,7 @@ impl App {
     it accepts a pixel source; this boundary does not know or care which one
     it is talking to.
     */
-    pub fn set_pixel_source_on_node(
-        &mut self,
-        node_id: u32,
-        video: HtmlVideoElement,
-        scratch_canvas: HtmlCanvasElement,
+    pub fn set_pixel_source_on_node( &mut self, node_id: u32, video: HtmlVideoElement, scratch_canvas: HtmlCanvasElement,
     ) -> Result<(), JsValue> {
 
         let node_id = resolve_id(&self.graph, node_id)?;
@@ -717,11 +560,7 @@ impl App {
         self.graph.apply_patch_nodes(&ctx);
 
         let values = self.render_executor
-            .execute(
-                &self.graph,
-                output_node,
-                &ctx,
-            )
+            .execute( &self.graph,  output_node, &ctx,  )
             .map_err(js_err)?;
 
         // Get the first value and convert to Frame at the renderer boundary
@@ -749,36 +588,18 @@ impl App {
         self.output_out_of_gamut
     }
 
-
-    pub fn preview_tick(
-        &mut self,
-        node: usize,
-        canvas: HtmlCanvasElement,
-    ) -> Result<(), JsValue> {
-
+    pub fn preview_tick(  &mut self, node: usize, canvas: HtmlCanvasElement, ) -> Result<(), JsValue> {
         self.graph.validate().map_err(js_err)?;
-
         let node = resolve_id(&self.graph, node as u32)?;
-
         let ctx = self.context(true);
-
         // Same pre-pass as render_tick - PREVIEW should show mapped
         // properties too, not just LIVE OUTPUT.
         self.graph.apply_patch_nodes(&ctx);
-
         let executor = PreviewExecutor::default();
-
-        let values = executor
-            .execute(
-                &self.graph,
-                node,
-                &ctx,
-            )
-            .map_err(js_err)?;
+        let values = executor.execute(&self.graph, node, &ctx, ) .map_err(js_err)?;
 
         // Get the first value and convert to Frame at the renderer boundary
-        let first_value = values.first()
-            .ok_or_else(|| JsValue::from_str("No output value"))?;
+        let first_value = values.first() .ok_or_else(|| JsValue::from_str("No output value"))?;
 
         // Renderer boundary dispatch: convert any renderable Value to Frame
         let frame = to_render_frame(first_value)
