@@ -2,11 +2,16 @@ use crate::compute::backend::ComputeBackend;
 use crate::gpu::context::GpuContext;
 use crate::gpu::BLUR_SHADER;
 use wgpu::util::DeviceExt;
+use bytemuck;
 
 pub struct GpuBlur {
     pub gpu: GpuContext,
     pub pipeline: wgpu::ComputePipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
+}
+struct GpuOutput {
+    buffer: wgpu::Buffer,
+    size: usize,
 }
 
 impl GpuBlur {
@@ -74,12 +79,36 @@ impl GpuBlur {
             bind_group_layout,
         }
     }
+    fn read_buffer(&self, buffer: &wgpu::Buffer, size: usize, ) -> Vec<f32> {
+
+        let slice = buffer.slice(..);
+        let (sender, receiver) =vstd::sync::mpsc::channel();
+
+        slice.map_async(
+            wgpu::MapMode::Read,
+            move |result| {
+                sender.send(result).unwrap();
+            },
+        );
+
+        self.gpu.device.poll(
+            wgpu::PollType::Wait
+        ).unwrap();
+
+        receiver.recv().unwrap().unwrap();
+
+        let data = slice.get_mapped_range();
+
+        let result = bytemuck::cast_slice(&data).to_vec();
+        drop(data);
+        buffer.unmap();
+        result[..size].to_vec()
+    }
 }
 
 impl ComputeBackend for GpuBlur {
 
-    fn blur(
-        &self,
+    fn blur(&self,
         pixels: &[f32],
         width: u32,
         height: u32,
@@ -175,6 +204,6 @@ impl ComputeBackend for GpuBlur {
         );
 
 
-        pixels.to_vec()
+        self.read_buffer(&output_buffer, pixels.len(), )
     }
 }
