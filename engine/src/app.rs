@@ -5,11 +5,6 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
 
-use crate::compute::{
-    backend::ComputeBackend,
-    cpu::CpuBackend,
-    gpu::blur::GpuBlur,
-};
 use crate::compositor::{
     ComputeMode,
     Context,
@@ -29,6 +24,7 @@ use crate::compositor::{
     Value,
     value_to_text
 };
+use crate::compute::backend::ComputeBackend;
 use crate::graphics::{ Color, U8Image, ImageFormat };
 use crate::dom::{ VideoElementPixelSource, write_frame_to_canvas};
 use crate::operations::sources::ImageSource;
@@ -238,18 +234,7 @@ impl App {
 
         let compute_mode = ComputeMode::Auto;
 
-        let compute: Arc<dyn ComputeBackend> = match compute_mode {
-            ComputeMode::Cpu => Arc::new(CpuBackend),
-            ComputeMode::Gpu => Arc::new(
-                GpuBlur::new().expect("GPU initialization failed")
-            ),
-            ComputeMode::Auto => {
-                match GpuBlur::new() {
-                    Ok(gpu) => Arc::new(gpu),
-                    Err(_) => Arc::new(CpuBackend),
-                }
-            }
-        };
+        let compute: Arc<dyn ComputeBackend> = crate::compute::create_backend(compute_mode);
 
         App {
             graph: Graph::new(width, height),
@@ -266,28 +251,15 @@ impl App {
         }
     }
     pub fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
-        self.compute_mode = match mode.as_str() {
+        let new_mode = match mode.as_str() {
             "CPU" => ComputeMode::Cpu,
             "GPU" => ComputeMode::Gpu,
             "AUTO" => ComputeMode::Auto,
             _ => return Err(JsValue::from_str("Unknown compute mode")),
         };
 
-        self.compute = match self.compute_mode {
-            ComputeMode::Cpu => Arc::new(CpuBackend),
-
-            ComputeMode::Gpu => Arc::new(
-                GpuBlur::new(gpu_context)
-                    .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?
-            ),
-
-            ComputeMode::Auto => {
-                match GpuBlur::new() {
-                    Ok(gpu) => Arc::new(gpu),
-                    Err(_) => Arc::new(CpuBackend),
-                }
-            }
-        };
+        self.compute = crate::compute::create_backend(new_mode);
+        self.compute_mode = new_mode;
 
         Ok(())
     }
