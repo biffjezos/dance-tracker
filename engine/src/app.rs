@@ -4,7 +4,11 @@
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, HtmlVideoElement};
-
+use crate::compute::{
+    backend::ComputeBackend,
+    cpu::CpuBackend,
+    compute::gpu::GpuBlur
+}
 use crate::compositor::{
     Context,
     executors::{
@@ -202,6 +206,7 @@ pub struct App {
     // as an explicit CLAMP, so the out-of-range data isn't silently lost
     // on the user just because something is still visible.
     output_out_of_gamut: bool,
+    compute: Arc<dyn ComputeBackend>,
 }
 
 
@@ -212,6 +217,8 @@ impl App {
     pub fn new(width: u32, height: u32) -> App {
         let mut registry = OperationRegistry::new();
         crate::operations::register::register_operations(&mut registry);
+
+        let compute: Arc<dyn ComputeBackend> = Arc::new(CpuBackend);
         App {
             graph: Graph::new(width, height),
             resources: ResourceManager::new(),
@@ -220,6 +227,7 @@ impl App {
             render_executor: RenderExecutor::new(),
             start_time_ms: now_ms(),
             output_out_of_gamut: false,
+            compute
         }
     }
     // Returns Result (not JsValue directly) so a serialization failure
@@ -659,7 +667,8 @@ impl App {
                 ..Meta::default()
             },
             resources: self.resources.clone(),
-            ..Context::default()
+            input_bboxes: Vec::new(),
+            compute: self.compute.clone(),
         }
     }
 

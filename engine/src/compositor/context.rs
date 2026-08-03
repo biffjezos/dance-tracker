@@ -3,6 +3,8 @@
 use crate::compositor::bbox::Rect;
 use crate::compositor::input::Input;
 use crate::resources::manager::ResourceManager;
+use crate::compute::backend::ComputeBackend;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderQuality {
@@ -27,7 +29,6 @@ pub struct Meta {
     pub height: u32,
 }
 
-#[derive(Clone)]
 pub struct Context {
     pub meta: Meta,
     pub resources: ResourceManager,

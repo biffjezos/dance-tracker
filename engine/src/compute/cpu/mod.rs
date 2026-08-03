@@ -1,5 +1,3 @@
-// src/compute/cpu/mod.rs
-
 use crate::compute::backend::ComputeBackend;
 
 pub struct CpuBackend;
@@ -13,7 +11,7 @@ impl ComputeBackend for CpuBackend {
         radius: u32,
     ) -> Vec<f32> {
 
-        crate::operations::transform::blur::blur_pixels_static(
+        crate::operations::transform::blur::Blur::blur_pixels_static(
             pixels,
             width,
             height,
