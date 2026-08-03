@@ -564,7 +564,12 @@ export class MenuManager {
         }
 
         // Filter operations by the selected category (menu field)
-        const filteredOps = this.operations.filter(op => {
+
+        const menuEntries = [
+            ...systemMenus,
+            ...this.operations
+        ];
+        const filteredOps = menuEntries.filter(op => {
             const opMenu = (op.menu || op.Menu || "").toUpperCase();
             const category = (this.category || "").toUpperCase();
             return opMenu === category;
