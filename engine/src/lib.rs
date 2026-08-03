@@ -6,6 +6,7 @@ pub mod renderer;
 pub mod resources;
 pub mod gpu;
 pub mod compute;
+pub mod ui;
 
 #[cfg(target_arch = "wasm32")]
 pub mod dom;
