@@ -115,7 +115,6 @@ window.addEventListener("updateNodeParameter", e => {
     );
 });
 
-
 document.getElementById("master-layer").width = WIDTH;
 document.getElementById("master-layer").height = HEIGHT;
 
@@ -147,7 +146,7 @@ async function boot() {
             })
         );
     }
-    console.log(app.debug_operation_count());
+    console.log(wasmApp.debug_operation_count());
 
 }
 

@@ -89,8 +89,18 @@ impl App {
 
     // debug: temp
     #[wasm_bindgen]
-    pub fn debug_operation_count(&self) -> usize {
-        self.registry.describe_all().len()
+    pub fn debug_operations(&self) -> Result<JsValue, JsValue> {
+        let inventory_count =
+            crate::operations::inventory::initialize_inventory().len();
+
+        let registry: Vec<String> = self.registry
+            .describe_all()
+            .into_iter()
+            .map(|(descriptor, _)| descriptor.id)
+            .collect();
+
+        serde_wasm_bindgen::to_value(&(inventory_count, registry))
+            .map_err(|e| JsValue::from_str(&e.to_string()))
     }
     pub fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
         let new_mode = match mode.as_str() {
