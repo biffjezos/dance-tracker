@@ -95,7 +95,7 @@ impl App {
         let registry: Vec<String> = self.registry
             .describe_all()
             .into_iter()
-            .map(|(descriptor, _)| descriptor.id)
+            .map(|(descriptor, _)| descriptor.id.to_string())
             .collect();
 
         serde_wasm_bindgen::to_value(&(inventory_count, registry))
