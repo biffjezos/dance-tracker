@@ -101,7 +101,8 @@ impl App {
         serde_wasm_bindgen::to_value(&(inventory_count, registry))
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
-    pub fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
+    #[wasm_bindgen]
+    pub async fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
         let new_mode = match mode.as_str() {
             "CPU" => ComputeMode::Cpu,
             "GPU" => ComputeMode::Gpu,
@@ -109,7 +110,7 @@ impl App {
             _ => return Err(JsValue::from_str("Unknown compute mode")),
         };
 
-        self.compute = crate::compute::create_backend(new_mode);
+        self.compute = crate::compute::create_backend(new_mode).await;
         self.compute_mode = new_mode;
 
         Ok(())
