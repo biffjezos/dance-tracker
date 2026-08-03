@@ -11,10 +11,6 @@ pub struct GpuBlur {
     pub pipeline: wgpu::ComputePipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
 }
-struct GpuOutput {
-    buffer: wgpu::Buffer,
-    size: usize,
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -149,8 +145,7 @@ impl ComputeBackend for GpuBlur {
         let output_buffer = self.gpu.device.create_buffer(
             &wgpu::BufferDescriptor {
                 label: Some("blur output"),
-                size:
-                    (pixels.len() * 4) as u64,
+                size: (pixels.len() * std::mem::size_of::<f32>()) as u64,
                 usage:
                     wgpu::BufferUsages::STORAGE
                     | wgpu::BufferUsages::COPY_SRC
@@ -249,7 +244,13 @@ impl ComputeBackend for GpuBlur {
 
 
         self.gpu.queue.submit( Some(encoder.finish()) );
-
-        self.read_buffer(&output_buffer, pixels.len(), )
+        encoder.copy_buffer_to_buffer(
+            &output_buffer,
+            0,
+            &readback_buffer,
+            0,
+            (pixels.len() * std::mem::size_of::<f32>()) as u64,
+        );
+        self.read_buffer(&readback_buffer, pixels.len())
     }
 }
