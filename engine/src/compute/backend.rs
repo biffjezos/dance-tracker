@@ -1,3 +1,5 @@
+// src/compute/backend.rs
+
 pub trait ComputeBackend {
     fn blur(
         &self,

@@ -1,3 +1,5 @@
+// src/gpu/shaders/blur.wgsl
+
 struct Pixels {
     data: array<f32>,
 };
