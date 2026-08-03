@@ -563,7 +563,7 @@ export class MenuManager {
         // Filter operations by the selected category (menu field)
 
         const menuEntries = [
-            ...rhis.systemMenus,
+            ...this.systemMenus,
             ...this.operations
         ];
         const filteredOps = menuEntries.filter(op => {
