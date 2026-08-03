@@ -11,17 +11,22 @@ use crate::compute::cpu::CpuBackend;
 use crate::compute::gpu::GpuBackend;
 
 
-pub fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
+pub async fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
     match mode {
-        ComputeMode::Cpu => Arc::new(CpuBackend),
+        ComputeMode::Cpu => {
+            Arc::new(CpuBackend)
+        }
 
-        ComputeMode::Gpu => Arc::new(
-            GpuBackend::new()
-                .expect("Failed to initialize GPU backend")
-        ),
+        ComputeMode::Gpu => {
+            Arc::new(
+                GpuBackend::new()
+                    .await
+                    .expect("Failed to initialize GPU backend")
+            )
+        }
 
         ComputeMode::Auto => {
-            match GpuBackend::new() {
+            match GpuBackend::new().await {
                 Ok(gpu) => Arc::new(gpu),
                 Err(_) => Arc::new(CpuBackend),
             }

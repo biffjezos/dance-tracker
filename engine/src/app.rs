@@ -238,6 +238,7 @@ impl App {
             system_menus
         }
     }
+
     pub fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
         let new_mode = match mode.as_str() {
             "CPU" => ComputeMode::Cpu,
