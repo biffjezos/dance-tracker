@@ -29,6 +29,7 @@ pub struct Meta {
     pub height: u32,
 }
 
+#[derive(Clone)]
 pub struct Context {
     pub meta: Meta,
     pub resources: ResourceManager,

@@ -10,9 +10,8 @@ pub mod metadata;
 pub mod operations;
 pub mod operation_descriptor;
 pub mod registry;
-pub mod value;
-
 pub mod system;
+pub mod value;
 
 pub use bbox::Rect;
 pub use context::{ Context, ComputeMode, Meta };

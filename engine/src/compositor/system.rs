@@ -1,5 +1,4 @@
 // src/compositor/system.rs
-
 use serde::Serialize;
 
 use crate::compositor::{
