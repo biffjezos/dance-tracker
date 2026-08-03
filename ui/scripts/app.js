@@ -150,8 +150,7 @@ async function boot() {
             })
         );
     }
-    console.log(wasmApp.debug_operation_count());
-
+     console.log(wasmApp.debug_operations());
 }
 
 
