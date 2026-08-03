@@ -218,7 +218,7 @@ impl App {
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32) -> App {
         let mut registry = OperationRegistry::new();
-       let system_menus = crate::compositor::system::SystemMenu::descriptors();
+        let system_menus = crate::compositor::system::SystemMenu::descriptors();
         crate::operations::register::register_operations(&mut registry);
 
         let compute_mode = ComputeMode::Auto;
@@ -245,6 +245,7 @@ impl App {
             start_time_ms: now_ms(),
             output_out_of_gamut: false,
             compute,
+            compute_mode,
             system_menus
         }
     }

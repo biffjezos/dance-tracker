@@ -98,12 +98,18 @@ impl GpuBlur {
         );
 
         self.gpu.device.poll(
-            wgpu::PollType::Wait
+            wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            }
         ).unwrap();
 
         receiver.recv().unwrap().unwrap();
 
-        let data = slice.get_mapped_range();
+        let data = buffer
+            .slice(..)
+            .get_mapped_range()
+            .map_err(|e| ...)?;
 
         let result = bytemuck::cast_slice(&data).to_vec();
         drop(data);

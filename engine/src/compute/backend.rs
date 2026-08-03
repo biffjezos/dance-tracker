@@ -1,4 +1,4 @@
-pub trait ComputeBackend: Send + Sync {
+pub trait ComputeBackend {
     fn blur(
         &self,
         pixels: &[f32],
