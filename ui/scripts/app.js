@@ -145,15 +145,15 @@ async function boot() {
     }
 
     window.dispatchEvent(
-        new CustomEvent(
-            "operationsLoaded",
-            {
-                detail: [
-                    ...systemMenus,
-                    ...operations
-                ]
-            }
-        )
+        new CustomEvent("systemMenusLoaded", {
+            detail: systemMenus
+        })
+    );
+
+    window.dispatchEvent(
+        new CustomEvent("operationsLoaded", {
+            detail: operations
+        })
     );
     startRenderLoop();
 }
