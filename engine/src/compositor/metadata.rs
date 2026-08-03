@@ -1,6 +1,6 @@
 
 use crate::compositor::input::Input;
-
+use serde::Serialize;
 /*
 Only the scalar Value variants make sense as something a UI would show
 a control for - Frame/Mask/Image are graph-wired inputs, never a
@@ -65,7 +65,7 @@ impl ParameterKind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ParameterDescriptor {
     pub name: &'static str,
     pub kind: ParameterKind,

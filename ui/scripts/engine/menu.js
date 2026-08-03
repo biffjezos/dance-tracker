@@ -20,7 +20,6 @@ import {
 } from "./graph.js";
 import { getLiveNodeId } from "./render.js";
 import { nextNumber } from "./state.js";
-import { systemMenus } from "./system_menu.js";
 // MenuContext: Represents a menu in the hierarchy
 class MenuContext {
     constructor(id, parent = null) {
@@ -106,9 +105,6 @@ export class MenuManager {
 
         const categories = new Set(["NODES"]);
 
-        systemMenus.forEach(menu => {
-            categories.add(menu.menu);
-        });
         this.operations.forEach(op => {
             const menu = (op.menu || op.Menu || "").toUpperCase();
             if (menu) categories.add(menu);

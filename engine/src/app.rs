@@ -33,13 +33,6 @@ use crate::renderer::to_render_frame;
 use crate::resources::manager::ResourceManager;
 use std::sync::Arc;
 
-#[derive(Clone, Copy)]
-pub enum ComputeMode {
-    Cpu,
-    Gpu,
-    Auto,
-}
-
 fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
 }
@@ -215,6 +208,7 @@ pub struct App {
     // on the user just because something is still visible.
     output_out_of_gamut: bool,
     compute: Arc<dyn ComputeBackend>,
+    system_menus: Vec<OperationDescriptor>,
 }
 
 
@@ -224,7 +218,7 @@ impl App {
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32) -> App {
         let mut registry = OperationRegistry::new();
-        compute_mode,
+       let system_menus = crate::compositor::system::SystemMenu::descriptors();
         crate::operations::register::register_operations(&mut registry);
 
         let compute_mode = ComputeMode::Auto;
@@ -250,7 +244,8 @@ impl App {
             render_executor: RenderExecutor::new(),
             start_time_ms: now_ms(),
             output_out_of_gamut: false,
-            compute
+            compute,
+            system_menus
         }
     }
     pub fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
@@ -278,6 +273,11 @@ impl App {
         };
 
         Ok(())
+    }
+
+    pub fn get_system_menus(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&crate::compositor::system::SystemMenu::descriptors()  )
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
     }
     // Returns Result (not JsValue directly) so a serialization failure
     // becomes a catchable JS error instead of panicking the WASM instance,

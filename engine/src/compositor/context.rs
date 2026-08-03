@@ -43,3 +43,10 @@ pub struct Context {
     pub input_bboxes: Vec<(Input, Rect)>,
     pub compute: Arc<dyn ComputeBackend>,
 }
+
+#[derive(Clone, Copy, Sequence)]
+pub enum ComputeMode {
+    Cpu,
+    Gpu,
+    Auto,
+}

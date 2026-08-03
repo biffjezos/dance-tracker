@@ -1,3 +1,9 @@
+mod preview;
+mod render;
+
+pub use preview::PreviewExecutor;
+pub use render::RenderExecutor;
+
 use crate::compositor::{
     Context,
     OperationError,
@@ -5,11 +11,8 @@ use crate::compositor::{
     graph::{Graph, NodeId},
 };
 
-mod preview;
-mod render;
 
-pub use preview::PreviewExecutor;
-pub use render::RenderExecutor;
+
 
 pub trait Execute {
     fn execute(

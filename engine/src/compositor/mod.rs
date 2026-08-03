@@ -12,6 +12,8 @@ pub mod operation_descriptor;
 pub mod registry;
 pub mod value;
 
+pub mod system_menu;
+
 pub use bbox::Rect;
 pub use context::{ Context, Meta };
 pub use error::OperationError;
