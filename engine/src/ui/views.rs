@@ -1,4 +1,4 @@
-use compositor::{
+use crate::compositor::{
     error::{ OperationError },
     graph::{ NodeValidation }
 };
