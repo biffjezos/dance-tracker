@@ -1,5 +1,8 @@
 
-use crate::compositor::graph::{ Graph, NodeId, PatchMode };
+use crate::compositor::{
+    error::OperationError,
+    graph::{ Graph, NodeId, PatchMode }
+};
 use wasm_bindgen::prelude::*;
 
 pub fn js_err(err: OperationError) -> JsValue {

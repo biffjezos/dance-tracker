@@ -1,4 +1,5 @@
 // src/app.rs
+#![deny(unused_imports)]
 #![cfg(target_arch = "wasm32")]
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -18,13 +19,13 @@ use crate::{
         graph::{ Graph, NodeId, NodeValidation },
         Input,
         Meta,
-        OperationDescriptor,
         metadata::ParameterKind,
         OperationRegistry,
         system::{ SystemMenuDescriptor },
         Value,
         value_to_text
-    }
+    },
+    compute::ComputeBackend
 };
 use crate::graphics::{ Color, U8Image, ImageFormat };
 use crate::dom::{ VideoElementPixelSource, write_frame_to_canvas};
