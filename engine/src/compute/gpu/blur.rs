@@ -1,5 +1,5 @@
 // src/compute/gpu/blur.rs
-
+use crate::compute::params::BlurParams;
 use crate::compute::backend::ComputeBackend;
 use crate::gpu::context::GpuContext;
 use crate::gpu::BLUR_SHADER;
@@ -10,15 +10,6 @@ pub struct GpuBlur {
     pub gpu: GpuContext,
     pub pipeline: wgpu::ComputePipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct BlurParams {
-    width: u32,
-    height: u32,
-    radius: u32,
-    _padding: u32,
 }
 
 impl GpuBlur {

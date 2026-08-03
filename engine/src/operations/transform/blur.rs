@@ -1,4 +1,4 @@
-// src/operations/filter/blur.rs
+// src/operations/transform/blur.rs
 use std::any::Any;
 use std::sync::Arc;
 
@@ -38,8 +38,8 @@ impl Blur {
     /// This is a very basic implementation:
     /// - Horizontal pass, then vertical pass.
     /// - Clamps at edges (no special border modes).
-    pub fn blur_pixels(&self, pixels: &[f32], width: u32, height: u32) -> Vec<f32> {
-        if self.radius_px == 0 {
+    pub fn blur_pixels_static(&self, pixels: &[f32], width: u32, height: u32) -> Vec<f32> {
+        if self.radius == 0 {
             return pixels.to_vec();
         }
 
@@ -285,7 +285,12 @@ impl Operation for Blur {
                 Self::blur_single_pixel(pixels, width, height, radius, x, y)
             })
         } else {
-            self.blur_pixels(&source.pixels, source.width, source.height)
+            ctx.compute.blur(
+                &source.pixels,
+                source.width,
+                source.height,
+                self.radius_px,
+            )
         };
 
         let blurred = crate::graphics::apply_mask(&source.pixels, blurred, mask.as_ref(), source.width, source.height)?;
