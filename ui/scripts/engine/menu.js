@@ -110,7 +110,11 @@ export class MenuManager {
             const menu = (op.menu || op.Menu || "").toUpperCase();
             if (menu) categories.add(menu);
         });
-
+        this.systemMenus.forEach(entry => {
+            const descriptor = entry.descriptor;
+            const menu = (descriptor.menu || descriptor.Menu || "").toUpperCase();
+            if (menu) categories.add(menu);
+        });
         const known = CATEGORY_ORDER.filter(c => categories.has(c));
         const rest = [...categories].filter(c => !CATEGORY_ORDER.includes(c)).sort();
 
