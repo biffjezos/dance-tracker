@@ -6,7 +6,7 @@ Only the scalar Value variants make sense as something a UI would show
 a control for - Frame/Mask/Image are graph-wired inputs, never a
 setting on the node that produces them.
 */
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum ParameterKind {
     /// A stepper's increment and, optionally, its bounds - the operation
     /// owns them, so a UI stepper moves by exactly this amount and cannot
