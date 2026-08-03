@@ -10,7 +10,6 @@ use crate::compute::backend::ComputeBackend;
 use crate::compute::cpu::CpuBackend;
 use crate::compute::gpu::GpuBackend;
 
-
 pub fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
     match mode {
         ComputeMode::Cpu => {
