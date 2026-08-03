@@ -15,10 +15,7 @@ impl GpuContext {
             .unwrap();
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor::default(),
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor::default())
             .await
             .unwrap();
 
@@ -26,5 +23,21 @@ impl GpuContext {
             device,
             queue,
         }
+    }
+}
+
+impl GpuContext {
+    pub fn create_shader(
+        &self,
+        source: &str,
+    ) -> wgpu::ShaderModule {
+        self.device.create_shader_module(
+            wgpu::ShaderModuleDescriptor {
+                label: Some("compute shader"),
+                source: wgpu::ShaderSource::Wgsl(
+                    source.into()
+                ),
+            }
+        )
     }
 }
