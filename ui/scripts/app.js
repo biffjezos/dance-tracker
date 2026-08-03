@@ -126,32 +126,31 @@ document.getElementById("camera-preview").height = HEIGHT;
 
 async function boot() {
     const wasmApp = await initWasm();
-
     console.log("WASM APP:", wasmApp);
     console.log("WASM PTR:", wasmApp?.__wbg_ptr);
-
     applyOutputSize();
     reportSelection("video");
-    
     const operations = getOperations();
     window.dispatchEvent(
-            new CustomEvent("operationsLoaded", {
-                detail: operations
-            })
-        );
+        new CustomEvent("operationsLoaded", {
+            detail: operations
+        })
+    );
     startRenderLoop();
-
-    let systemMenus = [];
     if (wasmApp) {
-        let systemMenus = wasmApp.get_system_menus();
-            window.dispatchEvent(
+        const systemMenus = wasmApp.get_system_menus();
+        window.dispatchEvent(
             new CustomEvent("systemMenusLoaded", {
                 detail: systemMenus
             })
         );
+        console.log("SYSTEM MENUS:", systemMenus);
     }
-     console.log(wasmApp.debug_operations());
+    console.log(wasmApp.debug_operations());
 }
+
+
+boot();
 
 
 boot();
