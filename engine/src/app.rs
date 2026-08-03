@@ -11,7 +11,7 @@ use crate::compute::{
     gpu::blur::GpuBlur,
 };
 use crate::compositor::{
-    ComputeMode
+    ComputeMode,
     Context,
     executors::{
         Execute,
@@ -21,6 +21,7 @@ use crate::compositor::{
     graph::{ Graph, NodeId, NodeValidation, PatchMode },
     Input,
     Meta,
+    OperationDescriptor,
     metadata::ParameterKind,
     OperationError,
     OperationRegistry,
@@ -260,7 +261,8 @@ impl App {
             output_out_of_gamut: false,
             compute,
             compute_mode,
-            system_menus
+            system_menus,
+            system_registry,
         }
     }
     pub fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
@@ -275,7 +277,7 @@ impl App {
             ComputeMode::Cpu => Arc::new(CpuBackend),
 
             ComputeMode::Gpu => Arc::new(
-                GpuBlur::new()
+                GpuBlur::new(gpu_context)
                     .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?
             ),
 

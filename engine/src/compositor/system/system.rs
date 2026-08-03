@@ -1,3 +1,5 @@
+// src/compositor/system.rs
+
 use serde::Serialize;
 
 use crate::compositor::{
@@ -26,7 +28,6 @@ impl SystemMenu {
                     create_node: None,
                     submenu: Some("SETTINGS"),
                 },
-
                 parameters: vec![
                     ParameterDescriptor {
                         name: "MODE",
