@@ -627,6 +627,7 @@ export class MenuManager {
     // renderOperationList() and its submenu drill-in.
     renderOperationButtons(ops) {
         ops.forEach(op => {
+            const descriptor = op.descriptor || op;
             const button = document.createElement("button");
             button.innerText = op.label || op.name || op;
 
