@@ -46,16 +46,14 @@ impl GpuBlur {
                 }
             );
 
-        let pipeline_layout =
-            gpu.device.create_pipeline_layout(
-                &wgpu::PipelineLayoutDescriptor {
-                    label: Some("blur pipeline layout"),
-                    bind_group_layouts: &[
-                        &bind_group_layout
-                    ],
-                    push_constant_ranges: &[],
-                }
-            );
+        let pipeline_layout = gpu.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("blur pipeline layout"),
+                bind_group_layouts: &[
+                    Some(&bind_group_layout)
+                ],
+                immediate_size: 0,
+            }
+        );
 
         let pipeline =
             gpu.device.create_compute_pipeline(
