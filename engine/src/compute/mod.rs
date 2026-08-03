@@ -8,7 +8,7 @@ pub mod params;
 use std::sync::Arc;
 
 use crate::compositor::ComputeMode;
-use crate::compute::backend::ComputeBackend;
+pub use crate::compute::backend::ComputeBackend;
 use crate::compute::cpu::CpuBackend;
 use crate::compute::gpu::GpuBackend;
 
