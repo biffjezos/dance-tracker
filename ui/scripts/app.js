@@ -1,3 +1,4 @@
+// ui/scripts/app.js
 import { getOperations, executeOperation } from "./core/operations.js";
 import { initWasm, getWasmApp } from "./core/wasm.js";
 import { logger } from "./core/log.js";
@@ -154,18 +155,6 @@ async function boot() {
             }
         )
     );
-
-
-    window.dispatchEvent(
-        new CustomEvent(
-            "operationsLoaded",
-            {
-                detail: operations
-            }
-        )
-    );
-
-
     startRenderLoop();
 }
 

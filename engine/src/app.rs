@@ -218,9 +218,6 @@ impl App {
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32) -> App {
         let mut registry = OperationRegistry::new();
-
-        let mut system_registry = SystemRegistry::new();
-
         let system_menus = crate::compositor::system::SystemMenu::descriptors();
         crate::operations::register::register_operations(&mut registry);
 

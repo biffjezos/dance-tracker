@@ -3,6 +3,7 @@ pub mod backend;
 pub mod cpu;
 pub mod gpu;
 pub mod params;
+pub use gpu::create_backend;
 
 pub fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
     match mode {
