@@ -13,15 +13,15 @@ any UI code reading it yet so a future generic menu/list grouping (Phase 4)
 has it available without another engine change.
 */
 #[derive(Serialize)]
-struct OperationView {
-    id: &'static str,
-    menu: &'static str,
-    label: &'static str,
-    action: Option<&'static str>,
-    ui_action: Option<&'static str>,
-    create_node: Option<&'static str>,
-    category: &'static str,
-    submenu: Option<&'static str>,
+pub struct OperationView {
+    pub id: &'static str,
+    pub menu: &'static str,
+    pub label: &'static str,
+    pub action: Option<&'static str>,
+    pub ui_action: Option<&'static str>,
+    pub create_node: Option<&'static str>,
+    pub category: &'static str,
+    pub submenu: Option<&'static str>,
 }
 
 /*
@@ -30,15 +30,15 @@ comes from the operation, so a selector can never offer a value the operation
 does not accept.
 */
 #[derive(Serialize)]
-struct ParameterView {
-    name: &'static str,
-    kind: &'static str,
-    options: &'static [&'static str],
-    step: Option<f64>,
-    min: Option<f64>,
-    max: Option<f64>,
-    group: Option<&'static str>,
-    value: String,
+pub struct ParameterView {
+    pub name: &'static str,
+    pub kind: &'static str,
+    pub options: &'static [&'static str],
+    pub step: Option<f64>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub group: Option<&'static str>,
+    pub value: String,
 }
 
 /*
@@ -46,13 +46,13 @@ What the UI is told about one input of a node: the wire name the operation
 declares, and the node currently feeding it, if any.
 */
 #[derive(Serialize)]
-struct InputView {
-    name: &'static str,
-    source: Option<u32>,
+pub struct InputView {
+    pub name: &'static str,
+    pub source: Option<u32>,
     // Which OutputKind tags (see OutputKind::as_str()) may be wired into
     // this input - empty means unrestricted (every real node is a valid
     // candidate).
-    accepts: Vec<&'static str>,
+    pub accepts: Vec<&'static str>,
 }
 
 /*
@@ -61,10 +61,10 @@ What the UI is told about one declared output of a node: its index (what
 `Operation::output_names`), and its OutputKind tag (see OutputKind::as_str()).
 */
 #[derive(Serialize)]
-struct OutputView {
-    index: u32,
-    name: String,
-    kind: String,
+pub struct OutputView {
+    pub index: u32,
+    pub name: String,
+    pub kind: String,
 }
 
 /*
@@ -73,9 +73,9 @@ REFERENCE output drives it, and how (REPLACE/ADD/SUBTRACT). `patch_mapping`
 returns this (or nothing at all) per property.
 */
 #[derive(Serialize)]
-struct PatchMappingView {
-    output_index: u32,
-    mode: &'static str,
+pub struct PatchMappingView {
+    pub output_index: u32,
+    pub mode: &'static str,
 }
 /*
 Whether a node is safe to evaluate, translated from the engine's internal
@@ -85,9 +85,9 @@ list can badge a node with a dangling or cyclic wire instead of the user
 only finding out when the whole graph refuses to render.
 */
 #[derive(Serialize)]
-struct NodeValidationView {
-    state: &'static str,
-    detail: Option<String>,
+pub struct NodeValidationView {
+    pub state: &'static str,
+    pub detail: Option<String>,
 }
 
 impl From<NodeValidation> for NodeValidationView {

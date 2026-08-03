@@ -1,7 +1,8 @@
 [package]
 name = "dance-tracker-core"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+homepage = "https://github.com/biffjezos/dance-tracker/"
 
 [lib]
 name = "dance_tracker_engine"
