@@ -41,7 +41,7 @@ const nodesMenu = new MenuContext("nodes", rootMenu);
 // actually reports, plus the always-present NODES browser). A category
 // this list doesn't know about still gets a button, just appended
 // alphabetically after the known ones.
-const CATEGORY_ORDER = ["INPUT", "NODES", "KEY", "GENERATE", "ANIMATE", "COMPOSE", "TRANSFORM", "OUTPUT"];
+const CATEGORY_ORDER = ["PROJECT", "INPUT", "NODES", "KEY", "GENERATE", "ANIMATE", "COMPOSE", "TRANSFORM", "OUTPUT"];
 
 const VISIBILITY_MODE_LABELS = {
     on: "ON",
@@ -61,7 +61,7 @@ const CONTEXT_HANDLERS = {
     node_edit: "renderNodeEditContext",
     param_group: "renderParamGroupContext",
     patch_properties: "renderPatchPropertiesContext",
-    create_node: "renderCreateNodeContext"
+    create_node: "renderCreateNodeContext",
 };
 
 // Only the states that mean something is actually broken get a tooltip -

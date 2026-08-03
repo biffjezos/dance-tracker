@@ -38,10 +38,10 @@ impl Blur {
     /// This is a very basic implementation:
     /// - Horizontal pass, then vertical pass.
     /// - Clamps at edges (no special border modes).
-    pub fn (crate)blur_pixels_static( pixels: &[f32], width: u32, height: u32, radius: u32,) -> Vec<f32>
-        if radius == 0 {
-            return pixels.to_vec();
-        }
+        pub(crate) fn blur_pixels_static(  pixels: &[f32], width: u32, height: u32, radius: u32, ) -> Vec<f32> {
+            if radius == 0 {
+                return pixels.to_vec();
+            }
 
         let w = width as usize;
         let h = height as usize;
@@ -104,7 +104,6 @@ impl Blur {
                 out[out_idx + 3] = sum[3] * inv;
             }
         }
-
         out
     }
 

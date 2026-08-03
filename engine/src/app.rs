@@ -33,6 +33,13 @@ use crate::renderer::to_render_frame;
 use crate::resources::manager::ResourceManager;
 use std::sync::Arc;
 
+#[derive(Clone, Copy)]
+pub enum ComputeMode {
+    Cpu,
+    Gpu,
+    Auto,
+}
+
 fn js_err(err: OperationError) -> JsValue {
     JsValue::from_str(&format!("{:?}", err))
 }
@@ -189,6 +196,7 @@ pub struct App {
     graph: Graph,
     resources: ResourceManager,
     registry: OperationRegistry,
+    compute_mode: ComputeMode,
     frame_counter: u64,
     // Persists across ticks so its frame-to-frame cache actually helps -
     // a fresh RenderExecutor per tick would never see a "last tick" to
@@ -216,9 +224,24 @@ impl App {
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32) -> App {
         let mut registry = OperationRegistry::new();
+        compute_mode,
         crate::operations::register::register_operations(&mut registry);
 
-        let compute: Arc<dyn ComputeBackend> = Arc::new(CpuBackend);
+        let compute_mode = ComputeMode::Auto;
+
+        let compute: Arc<dyn ComputeBackend> = match compute_mode {
+            ComputeMode::Cpu => Arc::new(CpuBackend),
+            ComputeMode::Gpu => Arc::new(
+                GpuBlur::new().expect("GPU initialization failed")
+            ),
+            ComputeMode::Auto => {
+                match GpuBlur::new() {
+                    Ok(gpu) => Arc::new(gpu),
+                    Err(_) => Arc::new(CpuBackend),
+                }
+            }
+        };
+
         App {
             graph: Graph::new(width, height),
             resources: ResourceManager::new(),
@@ -229,6 +252,32 @@ impl App {
             output_out_of_gamut: false,
             compute
         }
+    }
+    pub fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
+        self.compute_mode = match mode.as_str() {
+            "CPU" => ComputeMode::Cpu,
+            "GPU" => ComputeMode::Gpu,
+            "AUTO" => ComputeMode::Auto,
+            _ => return Err(JsValue::from_str("Unknown compute mode")),
+        };
+
+        self.compute = match self.compute_mode {
+            ComputeMode::Cpu => Arc::new(CpuBackend),
+
+            ComputeMode::Gpu => Arc::new(
+                GpuBlur::new()
+                    .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?
+            ),
+
+            ComputeMode::Auto => {
+                match GpuBlur::new() {
+                    Ok(gpu) => Arc::new(gpu),
+                    Err(_) => Arc::new(CpuBackend),
+                }
+            }
+        };
+
+        Ok(())
     }
     // Returns Result (not JsValue directly) so a serialization failure
     // becomes a catchable JS error instead of panicking the WASM instance,
@@ -672,7 +721,6 @@ impl App {
         }
     }
 
-
     pub fn render_tick(
         &mut self,
         output_node: usize,
@@ -680,11 +728,9 @@ impl App {
     ) -> Result<(), JsValue> {
 
         self.graph.validate().map_err(js_err)?;
-
         self.frame_counter += 1;
 
         let output_node = resolve_id(&self.graph, output_node as u32)?;
-
         let ctx = self.context(false);
 
         // Push every PATCH node's current mapped values in - into a real
