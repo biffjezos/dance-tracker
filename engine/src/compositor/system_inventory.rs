@@ -6,6 +6,7 @@ inventory::collect!(SystemMenuInfo);
 
 static MENUS: OnceLock<Vec<SystemMenuDescriptor>> = OnceLock::new();
 
+#[derive(Debug)]
 pub struct SystemMenuInfo {
     pub constructor: fn() -> SystemMenuDescriptor,
 }
@@ -13,6 +14,7 @@ pub struct SystemMenuInfo {
 pub fn initialize_inventory() -> &'static Vec<SystemMenuDescriptor> {
     MENUS.get_or_init(|| {
         inventory::iter::<SystemMenuInfo>
+            .into_iter()
             .map(|m| (m.constructor)())
             .collect()
     })

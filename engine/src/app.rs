@@ -20,7 +20,7 @@ use crate::compositor::{
     metadata::ParameterKind,
     OperationError,
     OperationRegistry,
-    system::SystemRegistry,
+    system::{ SystemMenuDescriptor,  SystemRegistry },
     Value,
     value_to_text
 };
@@ -265,7 +265,8 @@ impl App {
     }
 
     pub fn get_system_menus(&self) -> Result<JsValue, JsValue> {
-        serde_wasm_bindgen::to_value( ) .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
+        serde_wasm_bindgen::to_value(&crate::compositor::system::SystemMenu::descriptors())
+        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
     }
     // Returns Result (not JsValue directly) so a serialization failure
     // becomes a catchable JS error instead of panicking the WASM instance,

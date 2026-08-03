@@ -141,8 +141,12 @@ impl GpuBlur {
         }
 
 
-        let data =
-            slice.get_mapped_range();
+        let data = buffer
+            .slice(..)
+            .get_mapped_range()
+            .map_err(|e| format!("{:?}", e))?;
+
+        let result: &[f32] = bytemuck::cast_slice(&data);
 
 
         let result =
