@@ -20,7 +20,6 @@ pub fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
         ComputeMode::Gpu => {
             Arc::new(
                 GpuBackend::new()
-                    .await
                     .expect("Failed to initialize GPU backend")
             )
         }

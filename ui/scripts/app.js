@@ -129,8 +129,7 @@ async function boot() {
     const wasmApp = await initWasm();
     applyOutputSize();
     reportSelection("video");
-
-
+    
     const operations = getOperations();
     window.dispatchEvent(
             new CustomEvent("operationsLoaded", {
