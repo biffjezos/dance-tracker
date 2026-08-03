@@ -24,7 +24,7 @@ pub fn create_backend(mode: ComputeMode) -> Arc<dyn ComputeBackend> {
         }
 
         ComputeMode::Auto => {
-            match GpuBackend::new().await {
+            match GpuBackend::new() {
                 Ok(gpu) => Arc::new(gpu),
                 Err(_) => Arc::new(CpuBackend),
             }
