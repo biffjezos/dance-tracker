@@ -20,7 +20,7 @@ use crate::compositor::{
     metadata::ParameterKind,
     OperationError,
     OperationRegistry,
-    system::{ SystemMenuDescriptor,  SystemRegistry },
+    system::{ SystemMenuDescriptor },
     Value,
     value_to_text
 };
@@ -208,8 +208,7 @@ pub struct App {
     // on the user just because something is still visible.
     output_out_of_gamut: bool,
     compute: Arc<dyn ComputeBackend>,
-    system_menus: Vec<OperationDescriptor>,
-    system_registry: SystemRegistry,
+    system_menus: Vec<SystemMenuDescriptor>,
 }
 
 
@@ -222,13 +221,6 @@ impl App {
 
         let mut system_registry = SystemRegistry::new();
 
-        system_registry.register(
-            "compute_mode",
-            |app, value| {
-                app.set_compute_mode(value)
-                    .map_err(|e| format!("{:?}", e))
-            },
-        );
         let system_menus = crate::compositor::system::SystemMenu::descriptors();
         crate::operations::register::register_operations(&mut registry);
 
@@ -246,8 +238,7 @@ impl App {
             output_out_of_gamut: false,
             compute,
             compute_mode,
-            system_menus,
-            system_registry,
+            system_menus
         }
     }
     pub fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
