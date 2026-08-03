@@ -87,6 +87,11 @@ impl App {
         }
     }
 
+    // debug: temp
+    #[wasm_bindgen]
+    pub fn debug_operation_count(&self) -> usize {
+        self.registry.describe_all().len()
+    }
     pub fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
         let new_mode = match mode.as_str() {
             "CPU" => ComputeMode::Cpu,

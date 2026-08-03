@@ -147,7 +147,7 @@ async function boot() {
             })
         );
     }
-    
+    console.log(app.debug_operation_count());
 
 }
 
