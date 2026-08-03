@@ -1,5 +1,3 @@
-// src/compute/gpu/mod.rs
-
 pub mod blur;
 
 use crate::compute::backend::ComputeBackend;
@@ -10,16 +8,16 @@ pub struct GpuBackend {
 }
 
 impl GpuBackend {
-    pub fn new() -> Result<Self, String> {
-        let gpu = GpuContext::new().map_err(|e| format!("{:?}", e))?;
+    pub async fn new() -> Result<Self, String> {
+        let gpu = GpuContext::new().await?;
 
         Ok(Self {
             blur: blur::GpuBlur::new(gpu),
         })
     }
 }
+
 impl ComputeBackend for GpuBackend {
-    
     fn blur(
         &self,
         pixels: &[f32],
@@ -27,7 +25,6 @@ impl ComputeBackend for GpuBackend {
         height: u32,
         radius: u32,
     ) -> Vec<f32> {
-
         self.blur.blur(
             pixels,
             width,
