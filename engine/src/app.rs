@@ -69,9 +69,8 @@ impl App {
         let system_menus = crate::compositor::system::SystemMenu::descriptors();
         crate::operations::register::register_operations(&mut registry);
 
-        let compute_mode = ComputeMode::Auto;
-
-        let compute: Arc<dyn ComputeBackend> = Arc::new(crate::compute::cpu::CpuBackend);
+        let compute_mode = ComputeMode::Gpu;
+        let compute: Arc<dyn ComputeBackend> = Arc::new(crate::compute::gpu::GpuBackend);
         App {
             graph: Graph::new(width, height),
             resources: ResourceManager::new(),

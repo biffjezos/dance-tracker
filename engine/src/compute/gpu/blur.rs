@@ -141,26 +141,11 @@ impl GpuBlur {
         }
 
         let data = slice.get_mapped_range().expect("Failed to map GPU buffer");
-/** chat gpt attempts
-
-        let data = buffer
-            .slice(..)
-            .get_mapped_range()
-            .map_err(|e| format!("{:?}", e))?;
-*/
         let result: &[f32] = bytemuck::cast_slice(&data);
-
-
-        let result =
-            bytemuck::cast_slice(&data)
-                .to_vec();
-
+        let result = bytemuck::cast_slice(&data).to_vec();
 
         drop(data);
-
         buffer.unmap();
-
-
         result[..size].to_vec()
     }
 }
