@@ -284,11 +284,15 @@ impl Operation for Blur {
                 Self::blur_single_pixel(pixels, width, height, radius, x, y)
             })
         } else {
-            ctx.compute
-                .as_ref()
+            ctx.compute.as_ref()
                 .expect("Compute backend not initialized")
-                .blur(  &pixels, width, height, radius,);
-            /** pre- cpu/gpu backend
+                .blur(
+                    &pixels,
+                    width,
+                    height,
+                    radius,
+                );
+            /**
             ctx.compute.blur(
                 &source.pixels,
                 source.width,

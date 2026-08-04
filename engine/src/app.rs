@@ -562,7 +562,7 @@ impl App {
             },
             resources: self.resources.clone(),
             input_bboxes: Vec::new(),
-            compute: self.compute.clone(),
+            compute: self.compute.clone().expect("Compute backend not initialized"),
         }
     }
 
