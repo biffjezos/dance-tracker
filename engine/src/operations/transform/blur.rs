@@ -284,7 +284,7 @@ impl Operation for Blur {
                 Self::blur_single_pixel(pixels, width, height, radius, x, y)
             })
         } else {
-            ctx.compute.blur(pixels, width, height, radius, )
+            ctx.compute.blur( &source.pixels, source.width, source.height, self.radius_px, )
         };
 
         let blurred = crate::graphics::apply_mask(&source.pixels, blurred, mask.as_ref(), source.width, source.height)?;
