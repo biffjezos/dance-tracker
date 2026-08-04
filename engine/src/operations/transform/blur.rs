@@ -284,14 +284,7 @@ impl Operation for Blur {
                 Self::blur_single_pixel(pixels, width, height, radius, x, y)
             })
         } else {
-            ctx.compute.as_ref()
-                .expect("Compute backend not initialized")
-                .blur(
-                    &pixels,
-                    width,
-                    height,
-                    radius,
-                );
+            ctx.compute.blur(pixels, width, height, radius, )
         };
 
         let blurred = crate::graphics::apply_mask(&source.pixels, blurred, mask.as_ref(), source.width, source.height)?;
