@@ -1,3 +1,5 @@
+---
+---
 # Implementation Report: Phase 3 — BLUR consumes bboxes (first operation)
 
 **Branch:** `claude/bbox-phase-3-blur` (pushed, PR not yet opened — awaiting evaluator re-review)

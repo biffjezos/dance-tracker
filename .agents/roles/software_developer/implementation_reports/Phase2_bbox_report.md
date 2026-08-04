@@ -1,3 +1,5 @@
+---
+---
 # Implementation Report: Phase 2 — BLUR grows (report-only)
 
 **Branch:** `claude/bbox-phase-2` (pushed, PR not yet opened — awaiting evaluator per the phased cycle)

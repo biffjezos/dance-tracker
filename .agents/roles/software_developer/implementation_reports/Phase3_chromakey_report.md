@@ -1,3 +1,5 @@
+---
+---
 # Implementation Report: Phase 3 — CHROMA KEY consumes bboxes (fourth operation)
 
 **Branch:** `claude/bbox-phase-3-chromakey` (pushed, PR not yet opened — awaiting evaluator per the phased cycle)

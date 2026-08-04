@@ -1,3 +1,5 @@
+---
+---
 # Implementation Report: Phase 3 — INVERT consumes bboxes (second operation)
 
 **Branch:** `claude/bbox-phase-3-invert` (pushed, PR not yet opened — awaiting evaluator per the phased cycle)

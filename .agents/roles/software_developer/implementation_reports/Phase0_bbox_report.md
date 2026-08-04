@@ -1,3 +1,5 @@
+---
+---
 # Implementation Report: Phase 0 — Bounding-box awareness foundation
 
 **Branch:** `claude/bbox-phase-0` (pushed, PR not yet opened — awaiting evaluator per the phased cycle)

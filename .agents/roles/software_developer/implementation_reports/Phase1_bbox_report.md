@@ -1,3 +1,5 @@
+---
+---
 # Implementation Report: Phase 1 — Geometric producers report (RESIZE, MOVE)
 
 **Branch:** `claude/bbox-phase-1` (pushed, PR not yet opened — awaiting evaluator re-review)

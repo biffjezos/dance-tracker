@@ -1,3 +1,5 @@
+---
+---
 # Implementation Report: Phase 3 — SHUFFLE consumes bboxes (third operation)
 
 **Branch:** `claude/bbox-phase-3-shuffle` (pushed, PR not yet opened — awaiting evaluator per the phased cycle)
