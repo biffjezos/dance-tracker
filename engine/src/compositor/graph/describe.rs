@@ -49,14 +49,8 @@ impl NodeDescription {
 
 
 impl Graph {
-
-    pub fn describe(
-        &self,
-        id: NodeId,
-    ) -> Option<NodeDescription> {
-
+    pub fn describe(  &self, id: NodeId, ) -> Option<NodeDescription> {
         let node = self.resolve(id)?;
-
         Some(NodeDescription::from_node(id, node))
     }
 }

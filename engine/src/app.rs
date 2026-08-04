@@ -118,7 +118,7 @@ impl App {
             _ => return Err(JsValue::from_str("Unknown compute mode")),
         };
 
-        self.compute = crate::compute::create_backend(new_mode).await;
+        self.compute = Some(crate::compute::create_backend(new_mode).await);
         self.compute_mode = new_mode;
 
         Ok(())

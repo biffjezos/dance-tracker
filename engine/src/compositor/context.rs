@@ -42,7 +42,7 @@ pub struct Context {
     /// contexts) - `find_bbox` returning `None` is exactly equivalent to
     /// "no box was reported," so nothing breaks by omission.
     pub input_bboxes: Vec<(Input, Rect)>,
-    pub compute: Arc<dyn ComputeBackend>,
+    pub compute: Option<Arc<dyn ComputeBackend>>,
 }
 
 #[derive(Clone, Copy)]
