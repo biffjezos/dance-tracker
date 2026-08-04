@@ -13,6 +13,14 @@ This project is being developed in a multi-role and multi-agent environment.
 This document applies to all agents and agent roles.
 Do not change this document without explicit permission.
 
+## Do always
+
+Read the code.
+Understand it.
+Ask questions if needed.
+Don't guess.
+Run tests.
+
 ## Your Role and role_directory
 
 ### Identifying your role
