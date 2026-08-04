@@ -1,4 +1,4 @@
-// src/comput/mod.rs
+// src/compute/mod.rs
 
 pub mod backend;
 pub mod cpu;

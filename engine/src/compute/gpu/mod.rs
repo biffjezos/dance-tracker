@@ -1,3 +1,4 @@
+// src/compute/gpu/mod.rs
 pub mod blur;
 
 use crate::compute::backend::ComputeBackend;

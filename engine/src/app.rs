@@ -39,7 +39,6 @@ pub struct App {
     graph: Graph,
     resources: ResourceManager,
     registry: OperationRegistry,
-    compute_mode: ComputeMode,
     frame_counter: u64,
     // Persists across ticks so its frame-to-frame cache actually helps -
     // a fresh RenderExecutor per tick would never see a "last tick" to
@@ -57,7 +56,8 @@ pub struct App {
     // as an explicit CLAMP, so the out-of-range data isn't silently lost
     // on the user just because something is still visible.
     output_out_of_gamut: bool,
-    compute: Arc<dyn ComputeBackend>,
+    compute: Option<Arc<dyn ComputeBackend>>,
+    compute_mode: ComputeMode,
     system_menus: Vec<SystemMenuDescriptor>,
 }
 
@@ -69,8 +69,6 @@ impl App {
         let system_menus = crate::compositor::system::SystemMenu::descriptors();
         crate::operations::register::register_operations(&mut registry);
 
-        let compute_mode = ComputeMode::Gpu;
-        let compute: Arc<dyn ComputeBackend> = Arc::new(crate::compute::gpu::GpuBackend);
         App {
             graph: Graph::new(width, height),
             resources: ResourceManager::new(),
@@ -79,12 +77,22 @@ impl App {
             render_executor: RenderExecutor::new(),
             start_time_ms: now_ms(),
             output_out_of_gamut: false,
-            compute,
-            compute_mode,
+            compute: None,
+            compute_mode: ComputeMode::Cpu,
             system_menus
         }
     }
 
+    pub async fn init_gpu(&mut self) -> Result<(), JsValue> {
+        let gpu = crate::compute::gpu::GpuBackend::new()
+            .await
+            .map_err(|e| JsValue::from_str(&e))?;
+
+        self.compute = Some(Arc::new(gpu));
+        self.compute_mode = ComputeMode::Gpu;
+
+        Ok(())
+    }
     // debug: temp
     #[wasm_bindgen]
     pub fn debug_operations(&self) -> Result<JsValue, JsValue> {
