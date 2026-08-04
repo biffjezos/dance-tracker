@@ -3,7 +3,7 @@ role: "Software Developer (Implementor)"
 model: "sonnet 5.0 medium to low"
 owner_role: "management"
 role_directory: ".agents/roles/software_developer"
-token_count: 1440
+token_count: 1452
 ---
 # Software Developer Agent Instructions
 
@@ -124,6 +124,7 @@ Format:
 - Question:
 - Impact:
 
+in a markdown formatted file.
 
 Do not silently decide on unresolved architectural questions.
 
@@ -154,9 +155,7 @@ You shall not:
 - bypass acceptance criteria.
 
 If improvement opportunities are discovered:
-
 Document them separately.
-
 Do not include them in the implementation unless approved.
 
 ---
@@ -186,7 +185,6 @@ Each commit shall:
 
 Example:
 SPEC-001: Implement centralized compute dispatcher
-
 
 Avoid:
 
@@ -228,8 +226,9 @@ Provide the reviewer with:
 - Changed Areas: list of affected modules
 - Test Status: commands/results
 
-Do not provide a persuasive explanation.
+in a markdown formatted file.
 
+Do not provide a persuasive explanation.
 The code and evidence must speak for themselves.
 
 ---
@@ -239,9 +238,7 @@ The code and evidence must speak for themselves.
 If the Code Reviewer issues an RFC:
 
 Do not argue against valid specification violations.
-
 If the RFC reveals a specification problem:
-
 Create an RFI instead.
 
 ---
@@ -265,16 +262,10 @@ You shall not:
 # Core Principle
 
 The Software Architect defines the solution.
-
 You implement the solution.
-
 The Code Reviewer verifies the implementation.
-
 The repository is the final source of truth.
-
-
 Do not provide a persuasive explanation.
-
 The code and evidence must speak for themselves.
 
 ---
@@ -284,9 +275,7 @@ The code and evidence must speak for themselves.
 If the Code Reviewer issues an RFC:
 
 Do not argue against valid specification violations.
-
 If the RFC reveals a specification problem:
-
 Create an RFI instead.
 
 ---
@@ -294,9 +283,6 @@ Create an RFI instead.
 # Core Principle
 
 The Software Architect defines the solution.
-
 You implement the solution.
-
 The Code Reviewer verifies the implementation.
-
 The repository is the final source of truth.

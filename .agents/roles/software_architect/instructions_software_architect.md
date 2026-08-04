@@ -41,6 +41,7 @@ You provide:
 - RFIs;
 - implementation specifications.
 
+in markdown formatted files.
 ---
 
 ## Software Developer
