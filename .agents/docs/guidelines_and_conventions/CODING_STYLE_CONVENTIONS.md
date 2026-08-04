@@ -110,3 +110,7 @@ self.operations
     .map(|op| (op.constructor)()
 )
 ```
+
+# Comments
+
+Write precise and concise comments. Do not overexplain. Add a very brief rationale only. State if the code is currently unused but needed for the future. Flag dead code.
