@@ -8,9 +8,10 @@ waiting_for:
   event: implementation_feedback
   role: software_developer
 
+parked_work:
+  - .agents/roles/software_architect/docs/parked_work/PARKED_WORK.md
 plans:
   - .agents/roles/software_architect/docs/plans/ANIMATION_IMPLEMENTATION_PLAN.md
-
 conventions:
   - .agents/roles/software_architect/docs/conventions/HARD_RULES.md
   - .agents/roles/software_architect/docs/conventions/PIXEL_CONVENTIONS.md
