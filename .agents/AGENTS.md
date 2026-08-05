@@ -52,6 +52,7 @@ Each role has defined responsibilities and permissions.
 
 All agents shall:
 
+- identify their role during session start or ask for assignment of a role;
 - read relevant documentation before acting;
 - understand existing code before modifying it;
 - follow approved specifications;
