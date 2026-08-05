@@ -20,6 +20,7 @@ VFX Composer written in:
 
 - Governance + Organization: .agents/docs/governance_and_organization.md
 - Guidelines + Conventions: .agents/docs/guidelines_and_conventions/*
+- Role Instructions: .agents/roles/<your_role>/instructions/<your_role>.md
 - State Definitions: .agents/docs/state_definition_<your_role>.yaml
 - Working State:  .agents/roles/<your_role>/state_<your_role>.yaml
 - Role Directory: .agents/roles/<your_role>/*
