@@ -1,0 +1,27 @@
+active_specification:
+  id: spec_bounding_box_awarness.md
+  version: 1
+
+status: implementing
+
+current_task:
+  name: phase 3, ghost.rs
+  description: Management has changed the order. generators: 1) ghost.rs`; compose: 2) screen.rs, 3) add.rs, 4) subtract.rs
+
+progress:
+  completed: ["phase 0", "phase 1", "phase 2"]
+  remaining: ["phase 3", "phase 4"]
+
+modified_files: []
+
+tests:
+  executed: []
+  results: []
+
+blockers: []
+
+rfis: []
+
+handoff:
+  target_role: null
+  status: null
