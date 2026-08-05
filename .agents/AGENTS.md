@@ -1,5 +1,5 @@
 ---
-title: CLAUDE.md
+title: AGENTS.md
 owner_role: "management"
 version: 1
 ---
