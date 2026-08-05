@@ -1,0 +1,238 @@
+# .github/workflows/state-transitions.yml
+name: State Transitions
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  architect-transition:
+    name: Architect State Transition
+    if: startsWith(github.event.comment.body, '/arch:')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse requested status
+        id: parse
+        run: |
+          STATUS=$(echo "${{ github.event.comment.body }}" | sed 's|^/arch:||' | tr -d '[:space:]')
+          echo "next=$STATUS" >> $GITHUB_OUTPUT
+
+      - name: Get current architect label
+        id: current
+        run: |
+          CURRENT=$(gh issue view ${{ github.event.issue.number }} --json labels \
+            -q '[.labels[].name | select(startswith("arch:"))][0] // ""' \
+            | sed 's/^arch://')
+          echo "current=${CURRENT:-idle}" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate transition
+        id: validate
+        run: |
+          python3 << 'EOF'
+          import yaml
+          import sys
+
+          current = "${{ steps.current.outputs.current }}"
+          next_status = "${{ steps.parse.outputs.next }}"
+
+          with open('.agents/docs/state_definitions/state_definition_software_architect.yaml') as f:
+              state_def = yaml.safe_load(f)
+
+          transitions = state_def['state_definition']['state_transitions']
+
+          if current not in transitions:
+              print(f"ERROR: Current state '{current}' not found")
+              sys.exit(1)
+
+          allowed = transitions[current]['allowed']
+
+          if next_status not in allowed:
+              print(f"INVALID: {current} -> {next_status}")
+              print(f"Allowed: {', '.join(allowed)}")
+              sys.exit(0)
+
+          print(f"VALID: {current} -> {next_status}")
+          sys.exit(0)
+          EOF
+
+      - name: Apply valid transition
+        if: failure() == false
+        run: |
+          OLD="arch:${{ steps.current.outputs.current }}"
+          NEW="arch:${{ steps.parse.outputs.next }}"
+          gh issue edit ${{ github.event.issue.number }} --remove-label "$OLD" --add-label "$NEW"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post success comment
+        if: failure() == false
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "✅ Architect: `${{ steps.current.outputs.current }}` → `${{ steps.parse.outputs.next }}`"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reject invalid transition
+        if: failure() == true
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "❌ Invalid transition: `${{ steps.current.outputs.current }}` → `${{ steps.parse.outputs.next }}`. Check `.agents/docs/state_definitions/state_definition_software_architect.yaml`."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  developer-transition:
+    name: Developer State Transition
+    if: startsWith(github.event.comment.body, '/dev:')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse requested status
+        id: parse
+        run: |
+          STATUS=$(echo "${{ github.event.comment.body }}" | sed 's|^/dev:||' | tr -d '[:space:]')
+          echo "next=$STATUS" >> $GITHUB_OUTPUT
+
+      - name: Get current developer label
+        id: current
+        run: |
+          CURRENT=$(gh issue view ${{ github.event.issue.number }} --json labels \
+            -q '[.labels[].name | select(startswith("dev:"))][0] // ""' \
+            | sed 's/^dev://')
+          echo "current=${CURRENT:-idle}" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate transition
+        id: validate
+        run: |
+          python3 << 'EOF'
+          import yaml
+          import sys
+
+          current = "${{ steps.current.outputs.current }}"
+          next_status = "${{ steps.parse.outputs.next }}"
+
+          with open('.agents/docs/state_definitions/state_definition_software_developer.yaml') as f:
+              state_def = yaml.safe_load(f)
+
+          transitions = state_def['state_definition']['state_transitions']
+
+          if current not in transitions:
+              print(f"ERROR: Current state '{current}' not found")
+              sys.exit(1)
+
+          allowed = transitions[current]['allowed']
+
+          if next_status not in allowed:
+              print(f"INVALID: {current} -> {next_status}")
+              sys.exit(0)
+
+          print(f"VALID: {current} -> {next_status}")
+          sys.exit(0)
+          EOF
+
+      - name: Apply valid transition
+        if: failure() == false
+        run: |
+          OLD="dev:${{ steps.current.outputs.current }}"
+          NEW="dev:${{ steps.parse.outputs.next }}"
+          gh issue edit ${{ github.event.issue.number }} --remove-label "$OLD" --add-label "$NEW"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post success comment
+        if: failure() == false
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "✅ Developer: `${{ steps.current.outputs.current }}` → `${{ steps.parse.outputs.next }}`"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reject invalid transition
+        if: failure() == true
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "❌ Invalid transition: `${{ steps.current.outputs.current }}` → `${{ steps.parse.outputs.next }}`. Check `.agents/docs/state_definitions/state_definition_software_developer.yaml`."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  reviewer-transition:
+    name: Reviewer State Transition
+    if: startsWith(github.event.comment.body, '/rev:')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse requested status
+        id: parse
+        run: |
+          STATUS=$(echo "${{ github.event.comment.body }}" | sed 's|^/rev:||' | tr -d '[:space:]')
+          echo "next=$STATUS" >> $GITHUB_OUTPUT
+
+      - name: Get current reviewer label
+        id: current
+        run: |
+          CURRENT=$(gh issue view ${{ github.event.issue.number }} --json labels \
+            -q '[.labels[].name | select(startswith("rev:"))][0] // ""' \
+            | sed 's/^rev://')
+          echo "current=${CURRENT:-idle}" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate transition
+        id: validate
+        run: |
+          python3 << 'EOF'
+          import yaml
+          import sys
+
+          current = "${{ steps.current.outputs.current }}"
+          next_status = "${{ steps.parse.outputs.next }}"
+
+          with open('.agents/docs/state_definitions/state_definition_code_reviewer.yaml') as f:
+              state_def = yaml.safe_load(f)
+
+          transitions = state_def['state_definition']['state_transitions']
+
+          if current not in transitions:
+              print(f"ERROR: Current state '{current}' not found")
+              sys.exit(1)
+
+          allowed = transitions[current]['allowed']
+
+          if next_status not in allowed:
+              print(f"INVALID: {current} -> {next_status}")
+              sys.exit(0)
+
+          print(f"VALID: {current} -> {next_status}")
+          sys.exit(0)
+          EOF
+
+      - name: Apply valid transition
+        if: failure() == false
+        run: |
+          OLD="rev:${{ steps.current.outputs.current }}"
+          NEW="rev:${{ steps.parse.outputs.next }}"
+          gh issue edit ${{ github.event.issue.number }} --remove-label "$OLD" --add-label "$NEW"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post success comment
+        if: failure() == false
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "✅ Reviewer: `${{ steps.current.outputs.current }}` → `${{ steps.parse.outputs.next }}`"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reject invalid transition
+        if: failure() == true
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "❌ Invalid transition: `${{ steps.current.outputs.current }}` → `${{ steps.parse.outputs.next }}`. Check `.agents/docs/state_definitions/state_definition_code_reviewer.yaml`."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

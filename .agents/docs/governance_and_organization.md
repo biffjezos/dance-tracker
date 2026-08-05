@@ -100,22 +100,27 @@ Does not:
 
 ---
 
-# Communication Flow
+# Communication
 
-Management
-|
-v
-Software Architect
-|
-v
-Software Developer
-|
-v
-Code Reviewer
+
+Management (human) does not have the understanding of technical terminology.
+
+Use appropriate non-technical English phrasing or ASD-STE100 if Management does not understand used technical terminology 
+
+## Communication Flow
+
+Management <---> Software Architect <---> Software Developer <---> Code Reviewer
 
 Technical Advisor primarily reports to Management.
 
-Exception: Advisor may consult directly with Software Architect for technical feasibility questions. All consultations logged in working state.
+Management <---> Technical Advisor
+
+Exception: Advisor may consult directly with Software Architect for technical feasibility questions. 
+
+Technical Advisor <---> Software Architect
+
+All consultations logged in working state.
+
 
 ---
 
