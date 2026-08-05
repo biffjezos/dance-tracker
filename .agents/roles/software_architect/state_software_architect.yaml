@@ -9,13 +9,13 @@ waiting_for:
   role: software_developer
 
 plans:
-  - ANIMATION_IMPLEMENTATION_PLAN.md
+  - .agents/roles/software_architect/docs/plans/ANIMATION_IMPLEMENTATION_PLAN.md
 
 conventions:
-  - HARD_RULES.md
-  - PIXEL_CONVENTIONS.md
-  - BBOX_CONVENTIONS.md
-  - ANIMATION_CONVENTIONS.md
+  - .agents/roles/software_architect/docs/conventions/HARD_RULES.md
+  - .agents/roles/software_architect/docs/conventions/PIXEL_CONVENTIONS.md
+  - .agents/roles/software_architect/docs/conventions/BBOX_CONVENTIONS.md
+  - .agents/roles/software_architect/docs/conventions/ANIMATION_CONVENTIONS.md
 
 rfis: []
 
