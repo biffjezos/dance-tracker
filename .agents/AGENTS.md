@@ -16,6 +16,13 @@ VFX Composer written in:
 
 ---
 
+# Files
+
+- Governance + Organization: .agents/docs/governance_and_organization.md
+- Guidelines + Conventions: .agents/docs/guidelines_and_conventions/*
+- State Definitions: .agents/docs/state_definition_<your_role>.md
+- Roles: .agents/roles/<your_role>/*
+
 # Multi-Agent Environment
 
 This project is developed using multiple specialized AI roles.
