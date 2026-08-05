@@ -1,4 +1,5 @@
----
+# .agents/docs/state_definitions/state_definition_software_architect.yaml
+
 state_definition:
   name: state_definition_software_architect
   version: 1
@@ -7,26 +8,36 @@ state_definition:
 description:
   purpose: >
     Defines the operational state model for the Software Architect role.
-    The state records architectural ownership, active specifications,
-    implementation coordination, design decisions, and handoff information.
+    The state records architectural analysis, specification ownership,
+    clarification requests, implementation coordination, and implementation
+    review activities.
 
 fields:
 
   active_specification:
-    required: true
-    type: object
-    properties:
-      id:
-        type: string
-        required: true
-        description: >
-          Identifier of the specification currently owned by the architect.
+  required: true
+  type: object
+  description: >
+    The specification currently owned by the architect.
+    This represents the architect's responsibility for this specification
+    only. A status of waiting_for_implementation means the specification
+    has been handed to the Software Developer and no further architect
+    action is required unless implementation feedback, clarification, or
+    review is requested.
 
-      version:
-        type: integer
-        required: true
-        description: >
-          Version of the active specification.
+  properties:
+
+    id:
+      type: string
+      required: true
+      description: >
+        Identifier of the specification currently owned by the architect.
+
+    version:
+      type: integer
+      required: true
+      description: >
+        Version of the active specification.
 
   status:
     required: true
@@ -39,34 +50,84 @@ fields:
 
       assigned:
         meaning: >
-          A new feature or change request has been assigned for analysis.
+          A work request has been assigned and requires architectural analysis.
 
       analyzing:
         meaning: >
-          Requirements, existing architecture, and implementation impact
+          Requirements, existing implementation, architecture, and constraints
           are being analyzed.
+
+      waiting_for_management_clarification:
+        meaning: >
+          Architectural work cannot continue because Management clarification
+          or a product decision is required.
 
       specifying:
         meaning: >
-          Specification and implementation plan are being written.
+          The architect is creating or updating the technical specification.
 
       waiting_for_implementation:
         meaning: >
-          Specification has been approved and implementation has been
-          delegated to the Software Developer.
+          The current specification has been completed and handed to the Software
+          Developer for implementation. The architect has no active work remaining
+          on this specification unless implementation feedback or a completed
+          implementation review is received. The architect may receive and process
+          new architectural assignments independently.
+
+      waiting_for_developer_feedback:
+        meaning: >
+          The Software Developer has raised an implementation question or
+          clarification request requiring architectural input.
 
       reviewing_implementation:
         meaning: >
-          Implementation feedback is being reviewed against the specification.
-
-      blocked:
-        meaning: >
-          Architectural work cannot continue because information,
-          decisions, or dependencies are missing.
+          Completed implementation is being evaluated against the specification.
 
       completed:
         meaning: >
-          Architectural work for the current specification has completed.
+          Architectural responsibilities for the current specification are
+          complete.
+
+      blocked:
+        meaning: >
+          Architectural work cannot continue because required information,
+          decisions, or dependencies are unavailable.
+
+  waiting_for:
+    required: false
+    type: object
+    description: >
+      Records the external event and responsible role preventing progress.
+
+    properties:
+
+      event:
+        required: true
+        type: enum
+        values:
+
+          management_clarification:
+            meaning: >
+              Waiting for Management to provide requirements, priorities,
+              or product decisions.
+
+          developer_feedback:
+            meaning: >
+              Waiting for Software Developer implementation questions or
+              clarification requests.
+
+      role:
+        required: true
+        type: enum
+        values:
+
+          management:
+            meaning: >
+              Management.
+
+          software_developer:
+            meaning: >
+              Software Developer.
 
   plans:
     required: true
@@ -80,7 +141,7 @@ fields:
     required: true
     type: list
     description: >
-      Conventions governing the implementation.
+      Conventions governing architectural and implementation decisions.
     item_type:
       type: string
 
@@ -96,7 +157,7 @@ fields:
     required: true
     type: list
     description: >
-      Architecture Decision Records created during the specification.
+      Architecture Decision Records created during architectural work.
     item_type:
       type: string
 
@@ -104,7 +165,7 @@ fields:
     required: true
     type: list
     description: >
-      Requests For Information raised during architectural work.
+      Requests For Information raised by or received by the architect.
     item_type:
       type: string
 
@@ -132,11 +193,11 @@ fields:
 
           software_developer:
             meaning: >
-              Specification is being handed to Software Developer.
+              Specification is handed to the Software Developer.
 
           management:
             meaning: >
-              Management review or approval is required.
+              Decision or approval is handed to Management.
 
       status:
         required: true
@@ -172,23 +233,36 @@ state_transitions:
 
   analyzing:
     allowed:
+      - waiting_for_management_clarification
+      - specifying
+      - blocked
+
+  waiting_for_management_clarification:
+    allowed:
+      - analyzing
       - specifying
       - blocked
 
   specifying:
     allowed:
       - waiting_for_implementation
-      - analyzing
+      - waiting_for_management_clarification
       - blocked
 
   waiting_for_implementation:
     allowed:
+      - waiting_for_developer_feedback
       - reviewing_implementation
+      - blocked
+
+  waiting_for_developer_feedback:
+    allowed:
+      - specifying
+      - waiting_for_implementation
       - blocked
 
   reviewing_implementation:
     allowed:
-      - specifying
       - completed
       - blocked
 
@@ -197,6 +271,7 @@ state_transitions:
       - assigned
       - analyzing
       - specifying
+      - waiting_for_management_clarification
 
   completed:
     allowed:

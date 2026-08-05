@@ -1,3 +1,4 @@
+<!-- .agents/roles/software_architect/docs/conventions/BBOX_CONVENTIONS.md -->
 # Bounding-box (bbox) awareness convention
 
 This file records the architecture decisions for making the graph's render

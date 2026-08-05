@@ -1,3 +1,6 @@
+# AGENTS.md
+
+```markdown
 ---
 title: AGENTS.md
 owner_role: "management"
@@ -22,7 +25,7 @@ VFX Composer written in:
 - Guidelines + Conventions: .agents/docs/guidelines_and_conventions/*
 - Role Instructions: .agents/roles/<your_role>/instructions/<your_role>.md
 - State Definitions: .agents/docs/state_definition_<your_role>.yaml
-- Working State:  .agents/roles/<your_role>/state_<your_role>.yaml
+- Working State: .agents/roles/<your_role>/state_<your_role>.yaml
 - Role Directory: .agents/roles/<your_role>/*
 
 # Multi-Agent Environment
@@ -44,7 +47,7 @@ Each role has:
 - working state;
 - state definition.
 
-Roles are independent.
+Roles have independent responsibilities and communicate only through the defined workflow and handoff process.
 
 Each role has defined responsibilities and permissions.
 
@@ -54,8 +57,8 @@ Each role has defined responsibilities and permissions.
 
 All agents shall:
 
-- identify their role during session start or ask for assignment of a role;
-- read relevant documentation before acting;
+- operate only after an explicit role assignment from Management or the user;
+- read only the documentation required for their assigned role and current task before acting;
 - understand existing code before modifying it;
 - follow approved specifications;
 - follow role permissions;
@@ -82,7 +85,6 @@ state definition
 |
 v
 working state
-
 
 ## Role Instructions
 
@@ -130,23 +132,33 @@ Working states contain:
 
 Working states must follow their state definition.
 
+### Initial Working State
+
+If a working state file does not exist for an assigned role:
+
+- the role shall not invent workflow progress;
+- the role shall create an initial working state only if permitted by its role permissions;
+- the initial working state shall conform to the role state definition;
+- the initial status shall represent that no active work is assigned.
+
+If the role does not have permission to create its working state, it shall request Management initialization.
 ---
 
 # Session Protocol
 
 For every session:
 
-1. Identify assigned role.
-2. Read role instructions.
-3. Read state definition.
-4. Read working state.
-5. Validate current state.
-6. Resume assigned work.
-7. Update working state after meaningful progress.
+1. Receive explicit role assignment.
+2. Read the role instructions, state definition, and working state associated with the assigned role.
+3. Validate current state.
+4. Resume assigned work.
+5. Update working state after meaningful progress.
 
 ---
 
 # File Access Rules
+
+Agents may read only files relevant to their assigned role and current task.
 
 Agents may only modify files permitted by their role.
 
@@ -193,16 +205,25 @@ Never mix:
 - implementation changes;
 - review changes.
 
-Each type of change must remain independently traceable.
+Each change set shall contain only one category of work.
+
+Architectural documentation, implementation, and review artifacts shall remain independently traceable.
 
 ---
 
 # Completion Principle
 
-A task is complete only when:
+A role task is complete only when:
+
+- all responsibilities assigned to that role have been completed;
+- required documentation owned by that role is updated;
+- the role working state is updated.
+
+Overall feature completion additionally requires:
 
 - intended behavior exists;
 - implementation matches specification;
-- validation is complete;
-- required documentation is updated;
-- responsible role state is updated.
+- required validation is complete.
+
+
+---

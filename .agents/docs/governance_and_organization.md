@@ -1,5 +1,6 @@
 ---
 title: Governance and Organization
+path: ".agents/docs/governance_and_organization.md"
 ---
 # Governance and Organization
 

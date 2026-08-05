@@ -1,3 +1,4 @@
+<!-- .agents/roles/software_architect/docs/conventions/HARD_RULES.md -->
 ## Hard rules (repeatedly violated, repeatedly reported - do not reintroduce)
 
 ### 1. No default anything - ever

@@ -1,3 +1,5 @@
+<!-- .agents/roles/software_architect/docs/conventions/PIXEL_CONVENTIONS.md -->
+
 # Pixel conventions (colorspace & alpha)
 
 This file records two core decisions about how pixel data is represented

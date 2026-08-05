@@ -1,3 +1,4 @@
+<!-- .agents/roles/software_developer/instructions_software_developer.md -->
 ---
 role: "Software Developer"
 model: "haiku 5.0"
@@ -242,10 +243,29 @@ Never create undefined state fields or values.
 
 # Completion Criteria
 
-Implementation is complete only when:
+## Implementation Handoff Criteria
 
-- specification acceptance criteria are satisfied;
+The Software Developer implementation phase is complete when:
+
+- specification acceptance criteria are addressed;
 - validation is completed;
 - implementation report exists;
 - working state is updated;
 - work is ready for Code Review.
+
+## Delivery Completion Criteria
+
+The implementation lifecycle is complete only after Code Reviewer approval.
+
+After Code Reviewer approval:
+
+The Software Developer shall:
+
+1. Verify that the approved review references the implemented specification.
+2. Push the reviewed implementation to the remote development ('dev') branch.
+3. Merge the approved implementation according to repository workflow rules.
+4. Record:
+   - merge commit hash;
+   - target branch;
+   - validation status after merge.
+5. Update working state after successful delivery.

@@ -1,5 +1,6 @@
 ---
 role: "Software Architect"
+path: ".agents/roles/instructions_software_architect.md"
 model: "sonnet 5.0"
 thinking_effort: "extra"
 owner_role: "management"

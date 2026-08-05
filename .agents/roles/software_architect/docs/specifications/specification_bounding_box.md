@@ -1,3 +1,4 @@
+<!-- .agents/roles/software_architect/specifications/specification_bounding_box.md -->
 # Spec: Bounding-box awareness (this round: crop/resize/move/blur/geometric masks)
 
 ## Inputs to this spec

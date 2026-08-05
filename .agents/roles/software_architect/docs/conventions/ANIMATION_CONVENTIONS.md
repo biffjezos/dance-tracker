@@ -1,3 +1,4 @@
+<!-- .agents/roles/software_architect/docs/conventions/ANIMATION_CONVENTIONS.md -->
 # Animation conventions (keyframing)
 
 This file records one core decision: how time-based parameter animation

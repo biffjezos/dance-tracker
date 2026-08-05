@@ -1,179 +1,294 @@
----
 state_definition:
   name: state_definition_software_developer
-  version: 1
+  version: 3
   owner_role: management
+
 description:
   purpose: >
     Defines the operational state model for the Software Developer role.
-    The state records active implementation work, progress, validation,
-    blockers, and handoff information.
+    The state records implementation work based on approved specifications,
+    clarification requests, validation, review handoff, post-review delivery,
+    and completion.
+
 fields:
+
   active_specification:
     required: true
     type: object
     properties:
+
       id:
         type: string
         required: true
-        description: >
-          Identifier of the approved specification currently being implemented.
+
       version:
         type: integer
         required: true
-        description: >
-          Version of the active specification.
+
   status:
     required: true
     type: enum
     values:
+
       idle:
         meaning: >
           No implementation assignment is currently active.
+
       assigned:
         meaning: >
-          A specification has been assigned and implementation analysis
-          has started.
+          An approved specification has been assigned and implementation
+          preparation is being performed.
+
+      analyzing:
+        meaning:
+          The Software Developer is analyzing the specification,
+          existing implementation, dependencies, conventions,
+          and implementation constraints before modifying code.
+
       implementing:
         meaning: >
-          Code changes are actively being performed.
-      testing:
+          Code changes are actively being implemented according to the
+          approved specification.
+
+      waiting_for_architect_clarification:
         meaning: >
-          Implementation is complete and validation is being executed.
-      blocked:
+          Implementation cannot continue because clarification from the
+          Software Architect is required.
+
+      waiting_for_management_decision:
         meaning: >
-          Implementation cannot continue due to unresolved dependencies,
-          missing information, or external decisions.
+          Implementation cannot continue because a Management decision
+          is required.
+
+      validating:
+        meaning: >
+          Implementation is complete and the Software Developer is executing
+          required tests and validation.
+
       ready_for_review:
         meaning: >
-          Implementation is complete and ready for Code Reviewer evaluation.
+          Implementation and validation are complete and the changes are
+          ready for Code Reviewer evaluation.
+
+      addressing_review_feedback:
+        meaning: >
+          Code Reviewer has identified issues and the Software Developer
+          is applying required corrections.
+
+      waiting_for_review_approval:
+        meaning: >
+          The implementation has been submitted to the Code Reviewer and the
+          Software Developer is waiting for the review result.
+
+      preparing_delivery:
+        meaning: >
+          Code Reviewer has approved the implementation and the Software
+          Developer is preparing the approved implementation for delivery.
+
+      delivering:
+        meaning: >
+          The Software Developer is pushing and merging the reviewed
+          implementation according to repository workflow rules.
+
       completed:
         meaning: >
-          Implementation and review workflow is complete.
+          The reviewed implementation has been delivered successfully and
+          developer responsibilities for the specification are complete.
+
+      blocked:
+        meaning: >
+          Implementation cannot continue because required information,
+          decisions, dependencies, or delivery requirements are unavailable.
+
   current_task:
     required: false
     type: object
     properties:
+
       name:
         type: string
         required: true
-        description: >
-          Short identifier of the current implementation task.
+
       description:
         type: string
         required: true
-        description: >
-          Detailed explanation of the current work being performed.
+
   progress:
     required: true
     type: object
     properties:
+
       completed:
         type: list
         required: true
-        description: >
-          Completed implementation phases or tasks.
+        item_type:
+          type: string
+
       remaining:
         type: list
         required: true
-        description: >
-          Remaining implementation phases or tasks.
+        item_type:
+          type: string
+
   modified_files:
     required: true
     type: list
-    description: >
-      Files modified during the current implementation task.
     item_type:
       type: string
+
   tests:
     required: true
     type: object
     properties:
+
       executed:
         type: list
         required: true
-        description: >
-          Tests or validation commands that have been executed.
+        item_type:
+          type: string
+
       results:
         type: list
         required: true
-        description: >
-          Results of executed tests and validation.
+        item_type:
+          type: string
+
   blockers:
     required: true
     type: list
-    description: >
-      Current issues preventing implementation progress.
     item_type:
       type: string
+
   rfis:
     required: true
     type: list
-    description: >
-      References to Requests For Information created during implementation.
     item_type:
       type: string
+
   handoff:
     required: true
     type: object
     properties:
+
       target_role:
         required: true
         type: enum
         values:
+
           null:
             meaning: >
               No handoff is currently planned.
-          code_reviewer:
-            meaning: >
-              Implementation is being handed to Code Reviewer.
+
           software_architect:
             meaning: >
-              Architectural clarification is required.
+              Architectural clarification or specification feedback is
+              being requested.
+
           management:
             meaning: >
               Management decision is required.
+
+          code_reviewer:
+            meaning: >
+              Completed implementation is being handed to Code Reviewer.
+
       status:
         required: true
         type: enum
         values:
+
           null:
             meaning: >
               No handoff exists.
+
           pending:
             meaning: >
               Handoff preparation has started.
+
           sent:
             meaning: >
               Handoff has been submitted.
+
           accepted:
             meaning: >
               Receiving role has accepted the handoff.
+
 state_transitions:
+
   idle:
     allowed:
       - assigned
+
   assigned:
     allowed:
       - implementing
       - blocked
+
+  analyzing:
+    allowed:
+      - implementing
+      - waiting_for_architect_clarification
+      - blocked
+
   implementing:
     allowed:
-      - testing
+      - waiting_for_architect_clarification
+      - waiting_for_management_decision
+      - validating
       - blocked
-  testing:
+
+  waiting_for_architect_clarification:
+    allowed:
+      - implementing
+      - blocked
+
+  waiting_for_management_decision:
+    allowed:
+      - implementing
+      - blocked
+
+  validating:
     allowed:
       - ready_for_review
       - implementing
       - blocked
+
   ready_for_review:
     allowed:
-      - completed
+      - waiting_for_review_approval
+      - blocked
+
+  addressing_review_feedback:
+    allowed:
+      - validating
       - implementing
+      - blocked
+
+  waiting_for_review_approval:
+    allowed:
+      - addressing_review_feedback
+      - preparing_delivery
+      - blocked
+
+  preparing_delivery:
+    allowed:
+      - delivering
+      - blocked
+
+  delivering:
+    allowed:
+      - completed
+      - blocked
+
   blocked:
     allowed:
       - assigned
       - implementing
+      - waiting_for_architect_clarification
+      - waiting_for_management_decision
+      - preparing_delivery
+      - delivering
+
   completed:
     allowed:
       - idle
