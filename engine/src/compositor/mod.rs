@@ -15,7 +15,7 @@ pub mod system;
 pub mod value;
 
 pub use bbox::Rect;
-pub use context::{ Context, ComputeMode, Meta };
+pub use context::{ Context, Meta };
 pub use error::OperationError;
 pub use input::Input;
 pub use operations::Operation;

@@ -12,7 +12,6 @@ use crate::{
         utils::*,
     },
     compositor::{
-        ComputeMode,
         Context,
         executors::{ Execute, PreviewExecutor, RenderExecutor },
         graph::{ Graph, NodeValidation },
@@ -24,7 +23,6 @@ use crate::{
         Value,
         value_to_text
     },
-    compute::ComputeBackend
 };
 use crate::graphics::{ Color, U8Image, ImageFormat };
 use crate::dom::{ VideoElementPixelSource, write_frame_to_canvas};
@@ -56,8 +54,6 @@ pub struct App {
     // as an explicit CLAMP, so the out-of-range data isn't silently lost
     // on the user just because something is still visible.
     output_out_of_gamut: bool,
-    compute: Option<Arc<dyn ComputeBackend>>,
-    compute_mode: ComputeMode,
     system_menus: Vec<SystemMenuDescriptor>,
 }
 
@@ -77,22 +73,10 @@ impl App {
             render_executor: RenderExecutor::new(),
             start_time_ms: now_ms(),
             output_out_of_gamut: false,
-            compute: None,
-            compute_mode: ComputeMode::Cpu,
             system_menus
         }
     }
 
-    pub async fn init_gpu(&mut self) -> Result<(), JsValue> {
-        let gpu = crate::compute::gpu::GpuBackend::new()
-            .await
-            .map_err(|e| JsValue::from_str(&e))?;
-
-        self.compute = Some(Arc::new(gpu));
-        self.compute_mode = ComputeMode::Gpu;
-
-        Ok(())
-    }
     // debug: temp
     #[wasm_bindgen]
     pub fn debug_operations(&self) -> Result<JsValue, JsValue> {
@@ -109,21 +93,6 @@ impl App {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
     
-    #[wasm_bindgen]
-    pub async fn set_compute_mode(&mut self, mode: String) -> Result<(), JsValue> {
-        let new_mode = match mode.as_str() {
-            "CPU" => ComputeMode::Cpu,
-            "GPU" => ComputeMode::Gpu,
-            "AUTO" => ComputeMode::Auto,
-            _ => return Err(JsValue::from_str("Unknown compute mode")),
-        };
-
-        self.compute = Some(crate::compute::create_backend(new_mode).await);
-        self.compute_mode = new_mode;
-
-        Ok(())
-    }
-
     pub fn get_system_menus(&self) -> Result<JsValue, JsValue> {
         serde_wasm_bindgen::to_value(&crate::compositor::system::SystemMenu::descriptors())
         .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
@@ -562,7 +531,6 @@ impl App {
             },
             resources: self.resources.clone(),
             input_bboxes: Vec::new(),
-            compute: self.compute.clone().expect("Compute backend not initialized"),
         }
     }
 

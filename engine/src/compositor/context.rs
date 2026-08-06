@@ -3,8 +3,6 @@
 use crate::compositor::bbox::Rect;
 use crate::compositor::input::Input;
 use crate::resources::manager::ResourceManager;
-use crate::compute::backend::ComputeBackend;
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderQuality {
@@ -29,7 +27,7 @@ pub struct Meta {
     pub height: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Context {
     pub meta: Meta,
     pub resources: ResourceManager,
@@ -42,12 +40,4 @@ pub struct Context {
     /// contexts) - `find_bbox` returning `None` is exactly equivalent to
     /// "no box was reported," so nothing breaks by omission.
     pub input_bboxes: Vec<(Input, Rect)>,
-    pub compute: Arc<dyn ComputeBackend>,
-}
-
-#[derive(Clone, Copy)]
-pub enum ComputeMode {
-    Cpu,
-    Gpu,
-    Auto,
 }
