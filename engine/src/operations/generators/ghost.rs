@@ -5,12 +5,13 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use crate::compositor::{
+    bbox::Rect,
     Context,
     Operation,
     OperationDescriptor,
     OperationError,
     Input,
-    input::find_input,
+    input::{find_bbox, find_input},
     Value,
     metadata::{
         InputDescriptor,
@@ -187,6 +188,17 @@ impl Ghost {
             }
         };
         let cutout = Self::cutout_pixels(source, mask);
+        self.render_with_cutout(cutout, width, height)
+    }
+
+    /// The composite step of `render()`, given an already-computed cutout
+    /// (post-mask, pre-translate) - factored out so `execute()`'s
+    /// bbox-restricted path (Phase 3 of BBOX_CONVENTIONS.md) can supply a
+    /// cutout computed only within the relevant region, without
+    /// duplicating this history/translate/composite logic. `render()`
+    /// itself is unchanged - still always computes an unrestricted
+    /// cutout first, same as before this phase.
+    fn render_with_cutout(&self, cutout: Vec<f32>, width: u32, height: u32) -> Vec<f32> {
         self.record_history(&cutout);
 
         let mut result = vec![0f32; cutout.len()];
@@ -209,6 +221,14 @@ impl Ghost {
         } else {
             result
         }
+    }
+
+    /// The cutout value of a single pixel, computed directly from
+    /// `source`/`mask` - identical math to `cutout_pixels`'s own loop
+    /// body for that index. Used by `execute()`'s bbox-restricted path.
+    fn cutout_single_pixel(source: &[f32], mask: &[f32], x: u32, y: u32, width: u32) -> [f32; 4] {
+        let idx = ((y * width + x) * 4) as usize;
+        [source[idx], source[idx + 1], source[idx + 2], source[idx + 3] * mask[idx + 3]]
     }
 
     /// Push this tick's cutout onto the history buffer, then trim it
@@ -406,12 +426,64 @@ impl Operation for Ghost {
             None => None,
         };
 
-        let pixels = self.render(&source_image.pixels, mask_pixels.as_deref(), source_image.width, source_image.height);
+        let width = source_image.width;
+        let height = source_image.height;
+
+        // Phase 3 of BBOX_CONVENTIONS.md: with a MASK wired, restrict the
+        // cutout computation - GHOST's own equivalent of the "processed
+        // vs. original" split every other migrated operation expresses
+        // via apply_mask - to the intersection of MASK's own reported box
+        // and SOURCE's own reported box (no growth: cutout reads only the
+        // pixel it writes, no neighbors). SOURCE's box is a valid operand:
+        // cutout_pixels is zero-preserving (RGB always copies SOURCE
+        // unconditionally, alpha multiplies by MASK's alpha, so a zero
+        // SOURCE pixel always yields a zero cutout regardless of MASK).
+        //
+        // Unlike every other migrated operation, the correct pass-through
+        // value outside the work area is literal [0,0,0,0] - NOT SOURCE's
+        // own raw pixel. GHOST has no apply_mask call; its cutout's own
+        // "untouched" state is fully transparent, not an identity copy.
+        // This substitution is still safe: a zero-alpha cutout pixel is
+        // always visually inert downstream regardless of its RGB -
+        // composite_over's own formula divides by (and thus discards a
+        // foreground's RGB contribution entirely whenever) its alpha is
+        // 0 - so [0,0,0,0] and "SOURCE's raw pixel with alpha zeroed"
+        // produce identical final output.
+        //
+        // This only restricts the cutout step - the translate/composite
+        // loop below still runs over the full frame regardless. Real
+        // ghost content can appear anywhere up to
+        // GHOST_COUNT * DISTANCE * (SPATIAL_X, SPATIAL_Y) pixels away
+        // from MASK's own box, so restricting that loop's own region
+        // would require unioning every ghost's own translated box first -
+        // a separate, larger change not attempted in this round.
+        let cutout = match &mask_pixels {
+            Some(mask) => {
+                let natural_box = find_bbox(&ctx.input_bboxes, Input::Source)
+                    .unwrap_or_else(|| Rect::full(width, height));
+                let mask_box = find_bbox(&ctx.input_bboxes, Input::Mask)
+                    .unwrap_or_else(|| Rect::full(width, height));
+                let work_area = natural_box.intersect(&mask_box);
+
+                let transparent = vec![0f32; source_image.pixels.len()];
+                let source_pixels = &source_image.pixels;
+
+                crate::graphics::compute_within_bbox(width, height, work_area, &transparent, |x, y| {
+                    Self::cutout_single_pixel(source_pixels, mask, x, y, width)
+                })
+            }
+            None => {
+                let opaque_mask = vec![1.0f32; source_image.pixels.len()];
+                Self::cutout_pixels(&source_image.pixels, &opaque_mask)
+            }
+        };
+
+        let pixels = self.render_with_cutout(cutout, width, height);
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels,
-            width: source_image.width,
-            height: source_image.height,
+            width,
+            height,
         }))])
     }
 }
@@ -668,5 +740,228 @@ mod tests {
         assert_eq!(&out[0..4], &[0.0, 0.0, 0.0, 0.0]);
         // x=1 (where the ghost landed) still shows the ghost's red.
         assert!((out[4] - 1.0).abs() < 1e-6);
+    }
+
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<crate::graphics::U8Image> {
+        Arc::new(crate::graphics::U8Image { pixels, width, height, format: crate::graphics::ImageFormat::Rgba8 })
+    }
+
+    fn as_u8_pixels(value: &Value) -> Vec<u8> {
+        match value {
+            Value::FloatImage(out) => out.to_image_clamped(0.0, 1.0).pixels,
+            other => panic!("expected a float image, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn consume_equivalence_a_real_mask_bbox_produces_the_same_output_as_a_full_frame_one() {
+        // GHOST_COUNT=0, SHOW_SOURCE=true: render_with_cutout reduces to
+        // exactly the cutout itself (composited over an empty result),
+        // isolating the cutout-restriction logic from the translate/
+        // composite loop for this test.
+        let ghost = Ghost { ghost_count: 0, show_source: true, ..Ghost::new() };
+
+        let source = image((0..6).flat_map(|n| [n * 10, n * 10 + 1, n * 10 + 2, 255]).collect(), 6, 1);
+        let mask = image(
+            vec![
+                0, 0, 0, 0,   0, 0, 0, 0,
+                0, 0, 0, 255, 0, 0, 0, 255,
+                0, 0, 0, 0,   0, 0, 0, 0,
+            ],
+            6, 1,
+        );
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let ctx_with_real_box = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect::full(6, 1)),
+                (Input::Mask, Rect { x0: 2, y0: 0, x1: 4, y1: 1 }),
+            ],
+            ..context(6, 1)
+        };
+        let ctx_full_frame = context(6, 1);
+
+        let restricted = ghost.execute(&ctx_with_real_box, &inputs).unwrap();
+        let unrestricted = ghost.execute(&ctx_full_frame, &inputs).unwrap();
+
+        assert_eq!(as_u8_pixels(&restricted[0]), as_u8_pixels(&unrestricted[0]));
+    }
+
+    #[test]
+    fn consume_equivalence_holds_even_when_source_itself_reports_a_sub_frame_box() {
+        // Verifies cutout_pixels's zero-preservation directly: RGB always
+        // copies SOURCE unconditionally and alpha multiplies by MASK's
+        // alpha, so cutout([0,0,0,0], mask) is always [0,0,0,0] regardless
+        // of MASK - SOURCE's own box is therefore a valid intersection
+        // operand here.
+        let ghost = Ghost { ghost_count: 0, show_source: true, ..Ghost::new() };
+
+        let mut source_pixels = vec![0u8; 10 * 4];
+        for x in 3..7 {
+            source_pixels[x * 4..x * 4 + 4].copy_from_slice(&[100, 150, 200, 255]);
+        }
+        let source = image(source_pixels, 10, 1);
+        let mask = image(vec![255; 10 * 4], 10, 1);
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let ctx_with_real_source_box = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect { x0: 3, y0: 0, x1: 7, y1: 1 }),
+                (Input::Mask, Rect::full(10, 1)),
+            ],
+            ..context(10, 1)
+        };
+        let ctx_full_frame = context(10, 1);
+
+        let restricted = ghost.execute(&ctx_with_real_source_box, &inputs).unwrap();
+        let unrestricted = ghost.execute(&ctx_full_frame, &inputs).unwrap();
+
+        assert_eq!(as_u8_pixels(&restricted[0]), as_u8_pixels(&unrestricted[0]));
+    }
+
+    #[test]
+    fn a_ghost_translated_outside_masks_own_box_still_renders_correctly() {
+        // The load-bearing test for GHOST specifically: only the cutout
+        // step is restricted to MASK's own box - the translate/composite
+        // loop still runs full-frame, so a ghost translated well outside
+        // MASK's own reported box must still show up correctly. This is
+        // the exact risk the cutout-only restriction must not introduce.
+        let ghost = Ghost {
+            ghost_count: 1,
+            distance: 5.0,
+            spatial_x: 1.0,
+            spatial_y: 0.0,
+            opacity_multiplier: 1.0,
+            delay: 0,
+            show_source: false,
+            ..Ghost::new()
+        };
+
+        // Opaque red at x=0 only; MASK is opaque exactly there too, and
+        // MASK's own reported box is a tight [0,1) around it - nowhere
+        // near where the ghost (offset +5) will land.
+        let mut source_pixels = vec![0u8; 10 * 4];
+        source_pixels[0..4].copy_from_slice(&[255, 0, 0, 255]);
+        let source = image(source_pixels, 10, 1);
+        let mut mask_pixels = vec![0u8; 10 * 4];
+        mask_pixels[3] = 255;
+        let mask = image(mask_pixels, 10, 1);
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let ctx_with_tight_mask_box = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect::full(10, 1)),
+                (Input::Mask, Rect { x0: 0, y0: 0, x1: 1, y1: 1 }),
+            ],
+            ..context(10, 1)
+        };
+
+        let values = ghost.execute(&ctx_with_tight_mask_box, &inputs).unwrap();
+        let pixels = as_u8_pixels(&values[0]);
+
+        // The ghost must land at x=5 (0 + 1*5*1), well outside MASK's own
+        // [0,1) box - real, opaque red content, not skipped/transparent.
+        assert_eq!(&pixels[5 * 4..5 * 4 + 4], &[255, 0, 0, 255], "the translated ghost must still render outside MASK's own reported box");
+    }
+
+    #[test]
+    fn a_smaller_mask_bbox_computes_strictly_fewer_pixels_than_a_full_frame_one() {
+        use crate::graphics::mask::{reset_pixels_computed, take_pixels_computed};
+
+        let ghost = Ghost { ghost_count: 0, show_source: true, ..Ghost::new() };
+
+        let source = image((0..16).flat_map(|n| [n, n, n, 255]).collect(), 4, 4);
+        let mask = image(vec![255; 4 * 4 * 4], 4, 4);
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let small_box_ctx = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect::full(4, 4)),
+                (Input::Mask, Rect { x0: 1, y0: 1, x1: 2, y1: 2 }),
+            ],
+            ..context(4, 4)
+        };
+        reset_pixels_computed();
+        ghost.execute(&small_box_ctx, &inputs).unwrap();
+        let small_box_pixels = take_pixels_computed().expect("GHOST with a wired MASK must record a pixel count");
+
+        let full_frame_ctx = context(4, 4);
+        reset_pixels_computed();
+        ghost.execute(&full_frame_ctx, &inputs).unwrap();
+        let full_frame_pixels = take_pixels_computed().expect("GHOST with a wired MASK must record a pixel count");
+
+        assert_eq!(small_box_pixels, 1);
+        assert_eq!(full_frame_pixels, 16);
+        assert!(small_box_pixels < full_frame_pixels);
+    }
+
+    #[test]
+    fn checkerboard_resize_move_geometric_mask_end_to_end_matches_with_bbox_consumption_on_or_off() {
+        use crate::compositor::graph::Graph;
+        use crate::compositor::executors::{Execute, PreviewExecutor, RenderExecutor};
+        use crate::graphics::Color;
+        use crate::operations::generators::Checkerboard;
+        use crate::operations::sources::ImageSource;
+        use crate::operations::transform::{Move, Resize};
+
+        let mut graph = Graph::new(4, 4);
+
+        let mut source = ImageSource::new();
+        source.set_image(image((0..16).flat_map(|n| [n * 15, 0, 0, 255]).collect(), 4, 4));
+        let source_id = graph.add_node(Box::new(source));
+
+        let mut checkerboard = Checkerboard::new();
+        checkerboard.color_a = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+        checkerboard.color_b = checkerboard.color_a;
+        let checkerboard_id = graph.add_node(Box::new(checkerboard));
+
+        let mut resize = Resize::new();
+        resize.set_parameter("SCALE_X", Value::Number(50.0)).unwrap();
+        resize.set_parameter("SCALE_Y", Value::Number(50.0)).unwrap();
+        let resize_id = graph.add_node(Box::new(resize));
+        graph.connect(resize_id, Input::Source, checkerboard_id).unwrap();
+
+        let move_id = graph.add_node(Box::new(Move::new()));
+        graph.connect(move_id, Input::Source, resize_id).unwrap();
+
+        let ghost = Ghost { ghost_count: 0, show_source: true, ..Ghost::new() };
+        let ghost_id = graph.add_node(Box::new(ghost));
+        graph.connect(ghost_id, Input::Source, source_id).unwrap();
+        graph.connect(ghost_id, Input::Mask, move_id).unwrap();
+
+        graph.validate().expect("the wired pipeline is valid");
+
+        let ctx = context(4, 4);
+
+        let on_values = RenderExecutor::new().execute(&graph, ghost_id, &ctx).unwrap();
+        let on_pixels = as_u8_pixels(&on_values[0]);
+
+        let source_value = PreviewExecutor::default().execute(&graph, source_id, &ctx).unwrap().into_iter().next().unwrap();
+        let mask_value = PreviewExecutor::default().execute(&graph, move_id, &ctx).unwrap().into_iter().next().unwrap();
+
+        let ghost_off = Ghost { ghost_count: 0, show_source: true, ..Ghost::new() };
+        let off_values = ghost_off.execute(&ctx, &[
+            (Input::Source, source_value),
+            (Input::Mask, mask_value),
+        ]).unwrap();
+        let off_pixels = as_u8_pixels(&off_values[0]);
+
+        assert_eq!(on_pixels, off_pixels, "bbox consumption on vs off must produce pixel-identical output");
     }
 }
