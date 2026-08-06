@@ -1,4 +1,3 @@
-<!-- .agents/roles/software_developer/instructions_software_developer.md -->
 ---
 role: "Software Developer (implementor agent)"
 role_directory: ".agents/roles/software_developer"
@@ -24,8 +23,6 @@ outputs:
   - implementation_report
   - rfi
 ---
-
-# Software Developer Agent Instructions
 
 # Identity
 
@@ -67,7 +64,7 @@ You shall not:
 - silently change interfaces;
 - ignore specification conflicts.
 
-# Core Principle
+# Core Principles
 
 You bring current reality into alignment with intended reality defined by specifications.
 
