@@ -3,10 +3,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::compositor::{
+    bbox::Rect,
     Context,
     OperationError,
     Input,
-    input::find_input,
+    input::{find_bbox, find_input},
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
@@ -77,6 +78,23 @@ impl HueKey {
         }
 
         output
+    }
+
+    /// The keyed value of a single pixel, computed directly from
+    /// `source`/`reference` - identical math to `key_pixels`'s own loop
+    /// body for that index. Used by `execute()`'s bbox-restricted path
+    /// (Phase 3 of BBOX_CONVENTIONS.md).
+    fn key_single_pixel(source: &[f32], reference: &[f32], target_hue: f64, threshold: f64, x: u32, y: u32, width: u32) -> [f32; 4] {
+        let idx = ((y * width + x) * 4) as usize;
+        let reference_hue = reference[idx] as f64 * 360.0;
+        let distance = Self::hue_distance(reference_hue, target_hue);
+
+        [
+            source[idx],
+            source[idx + 1],
+            source[idx + 2],
+            if distance <= threshold { 0.0 } else { source[idx + 3] },
+        ]
     }
 }
 
@@ -193,7 +211,38 @@ impl Operation for HueKey {
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
-        let keyed = Self::key_pixels(&source_image.pixels, &reference_image.pixels, target_hue, self.threshold);
+        // Phase 3 of BBOX_CONVENTIONS.md: with a MASK wired, apply_mask
+        // below blends every pixel outside the relevant region straight
+        // back to SOURCE anyway - so restrict the actual keying compute
+        // to the intersection of MASK's own reported box and SOURCE's
+        // own reported box (no growth needed - key_pixels reads only the
+        // pixel it writes, no neighbors). SOURCE's box is a valid
+        // operand here, same as CHROMA KEY: key_pixels is zero-preserving
+        // in SOURCE alone - RGB always copies SOURCE unconditionally, and
+        // alpha is either explicitly zeroed or left at SOURCE's own
+        // (already-zero) alpha, regardless of REFERENCE's value. REFERENCE's
+        // own reported box deliberately plays no role in the restriction -
+        // it only decides *which* branch alpha takes, not whether the
+        // result is zero when SOURCE already is; its full pixel buffer is
+        // always read directly wherever needed, unrestricted.
+        let keyed = if mask.is_some() {
+            let natural_box = find_bbox(&ctx.input_bboxes, Input::Source)
+                .unwrap_or_else(|| Rect::full(source_image.width, source_image.height));
+            let mask_box = find_bbox(&ctx.input_bboxes, Input::Mask)
+                .unwrap_or_else(|| Rect::full(source_image.width, source_image.height));
+            let work_area = natural_box.intersect(&mask_box);
+
+            let width = source_image.width;
+            let source_pixels = &source_image.pixels;
+            let reference_pixels = &reference_image.pixels;
+
+            crate::graphics::compute_within_bbox(width, source_image.height, work_area, source_pixels, |x, y| {
+                Self::key_single_pixel(source_pixels, reference_pixels, target_hue, self.threshold, x, y, width)
+            })
+        } else {
+            Self::key_pixels(&source_image.pixels, &reference_image.pixels, target_hue, self.threshold)
+        };
+
         let keyed = crate::graphics::apply_mask(&source_image.pixels, keyed, mask.as_ref(), source_image.width, source_image.height)?;
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
@@ -351,6 +400,207 @@ mod tests {
 
         assert_ne!(hue_key_reference.accepts, patch_reference.accepts);
         assert!(hue_key_reference.accepts.contains(&OutputKind::FloatImage));
+    }
+
+    #[test]
+    fn consume_equivalence_a_real_mask_bbox_produces_the_same_output_as_a_full_frame_one() {
+        let hue_key = HueKey::new(); // default HUE_COLOR is pure green, threshold 0.1
+
+        let source = image(
+            vec![
+                255, 0, 0, 255,   0, 255, 0, 255,
+                0, 255, 0, 255,   10, 20, 30, 255,
+                255, 255, 255, 255, 0, 0, 0, 255,
+            ],
+            6, 1,
+        );
+        let reference = image(
+            (0..6).flat_map(|_| RgbToHsvHue::pack(120.0, 1.0, 1.0).into_iter().map(|v| (v * 255.0) as u8).collect::<Vec<u8>>())
+                .collect(),
+            6, 1,
+        );
+        let mask = image(
+            vec![
+                0, 0, 0, 0,   0, 0, 0, 0,
+                0, 0, 0, 255, 0, 0, 0, 255,
+                0, 0, 0, 0,   0, 0, 0, 0,
+            ],
+            6, 1,
+        );
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Reference, Value::Image(reference)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let ctx_with_real_box = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect::full(6, 1)),
+                (Input::Mask, Rect { x0: 2, y0: 0, x1: 4, y1: 1 }),
+            ],
+            ..context(6, 1)
+        };
+        let ctx_full_frame = context(6, 1);
+
+        let restricted = hue_key.execute(&ctx_with_real_box, &inputs).unwrap();
+        let unrestricted = hue_key.execute(&ctx_full_frame, &inputs).unwrap();
+
+        assert_eq!(as_u8_pixels(&restricted[0]), as_u8_pixels(&unrestricted[0]));
+    }
+
+    #[test]
+    fn consume_equivalence_holds_even_when_source_itself_reports_a_sub_frame_box() {
+        // Verifies key_pixels's zero-preservation in SOURCE directly (same
+        // shape as CHROMA KEY): RGB always copies SOURCE unconditionally
+        // and alpha is either explicitly zeroed or left at SOURCE's own
+        // (already-zero) alpha, regardless of REFERENCE - SOURCE's own
+        // box is therefore a valid intersection operand, and REFERENCE's
+        // own box correctly plays no role at all.
+        let hue_key = HueKey::new();
+
+        let mut source_pixels = vec![0u8; 10 * 4];
+        // Real content inside [3,7): pure green (keys out) at x=4, red
+        // (stays) at x=5.
+        source_pixels[3 * 4..3 * 4 + 4].copy_from_slice(&[0, 255, 0, 255]);
+        source_pixels[4 * 4..4 * 4 + 4].copy_from_slice(&[0, 255, 0, 255]);
+        source_pixels[5 * 4..5 * 4 + 4].copy_from_slice(&[255, 0, 0, 255]);
+        source_pixels[6 * 4..6 * 4 + 4].copy_from_slice(&[0, 255, 0, 255]);
+        let source = image(source_pixels, 10, 1);
+
+        // REFERENCE reports pure green's hue everywhere (so the pure-green
+        // SOURCE pixels key out, the red one doesn't).
+        let reference_pixel = RgbToHsvHue::pack(120.0, 1.0, 1.0);
+        let reference = image(
+            (0..10).flat_map(|_| reference_pixel.iter().map(|&v| (v * 255.0) as u8).collect::<Vec<u8>>()).collect(),
+            10, 1,
+        );
+        let mask = image(vec![255; 10 * 4], 10, 1);
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Reference, Value::Image(reference)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let ctx_with_real_source_box = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect { x0: 3, y0: 0, x1: 7, y1: 1 }),
+                (Input::Mask, Rect::full(10, 1)),
+            ],
+            ..context(10, 1)
+        };
+        let ctx_full_frame = context(10, 1);
+
+        let restricted = hue_key.execute(&ctx_with_real_source_box, &inputs).unwrap();
+        let unrestricted = hue_key.execute(&ctx_full_frame, &inputs).unwrap();
+
+        assert_eq!(as_u8_pixels(&restricted[0]), as_u8_pixels(&unrestricted[0]));
+    }
+
+    #[test]
+    fn a_smaller_mask_bbox_computes_strictly_fewer_pixels_than_a_full_frame_one() {
+        use crate::graphics::mask::{reset_pixels_computed, take_pixels_computed};
+
+        let hue_key = HueKey::new();
+
+        let source = image((0..16).flat_map(|n| [n, n, n, 255]).collect(), 4, 4);
+        let reference_pixel = RgbToHsvHue::pack(120.0, 1.0, 1.0);
+        let reference = image(
+            (0..16).flat_map(|_| reference_pixel.iter().map(|&v| (v * 255.0) as u8).collect::<Vec<u8>>()).collect(),
+            4, 4,
+        );
+        let mask = image(vec![255; 4 * 4 * 4], 4, 4);
+
+        let inputs = [
+            (Input::Source, Value::Image(source)),
+            (Input::Reference, Value::Image(reference)),
+            (Input::Mask, Value::Image(mask)),
+        ];
+
+        let small_box_ctx = Context {
+            input_bboxes: vec![
+                (Input::Source, Rect::full(4, 4)),
+                (Input::Mask, Rect { x0: 1, y0: 1, x1: 2, y1: 2 }),
+            ],
+            ..context(4, 4)
+        };
+        reset_pixels_computed();
+        hue_key.execute(&small_box_ctx, &inputs).unwrap();
+        let small_box_pixels = take_pixels_computed().expect("HUE KEY with a wired MASK must record a pixel count");
+
+        let full_frame_ctx = context(4, 4);
+        reset_pixels_computed();
+        hue_key.execute(&full_frame_ctx, &inputs).unwrap();
+        let full_frame_pixels = take_pixels_computed().expect("HUE KEY with a wired MASK must record a pixel count");
+
+        assert_eq!(small_box_pixels, 1);
+        assert_eq!(full_frame_pixels, 16);
+        assert!(small_box_pixels < full_frame_pixels);
+    }
+
+    #[test]
+    fn checkerboard_resize_move_geometric_mask_end_to_end_matches_with_bbox_consumption_on_or_off() {
+        use crate::compositor::graph::Graph;
+        use crate::compositor::executors::{Execute, PreviewExecutor, RenderExecutor};
+        use crate::graphics::Color;
+        use crate::operations::generators::Checkerboard;
+        use crate::operations::sources::ImageSource;
+        use crate::operations::transform::{Move, Resize};
+
+        let mut graph = Graph::new(4, 4);
+
+        let mut source = ImageSource::new();
+        source.set_image(image((0..16).flat_map(|n| [n * 15, 0, 0, 255]).collect(), 4, 4));
+        let source_id = graph.add_node(Box::new(source));
+
+        let mut reference_source = ImageSource::new();
+        let reference_pixel = RgbToHsvHue::pack(120.0, 1.0, 1.0);
+        reference_source.set_image(image(
+            (0..16).flat_map(|_| reference_pixel.iter().map(|&v| (v * 255.0) as u8).collect::<Vec<u8>>()).collect(),
+            4, 4,
+        ));
+        let reference_id = graph.add_node(Box::new(reference_source));
+
+        let mut checkerboard = Checkerboard::new();
+        checkerboard.color_a = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+        checkerboard.color_b = checkerboard.color_a;
+        let checkerboard_id = graph.add_node(Box::new(checkerboard));
+
+        let mut resize = Resize::new();
+        resize.set_parameter("SCALE_X", Value::Number(50.0)).unwrap();
+        resize.set_parameter("SCALE_Y", Value::Number(50.0)).unwrap();
+        let resize_id = graph.add_node(Box::new(resize));
+        graph.connect(resize_id, Input::Source, checkerboard_id).unwrap();
+
+        let move_id = graph.add_node(Box::new(Move::new()));
+        graph.connect(move_id, Input::Source, resize_id).unwrap();
+
+        let hue_key_id = graph.add_node(Box::new(HueKey::new()));
+        graph.connect(hue_key_id, Input::Source, source_id).unwrap();
+        graph.connect(hue_key_id, Input::Reference, reference_id).unwrap();
+        graph.connect(hue_key_id, Input::Mask, move_id).unwrap();
+
+        graph.validate().expect("the wired pipeline is valid");
+
+        let ctx = context(4, 4);
+
+        let on_values = RenderExecutor::new().execute(&graph, hue_key_id, &ctx).unwrap();
+        let on_pixels = as_u8_pixels(&on_values[0]);
+
+        let source_value = PreviewExecutor::default().execute(&graph, source_id, &ctx).unwrap().into_iter().next().unwrap();
+        let reference_value = PreviewExecutor::default().execute(&graph, reference_id, &ctx).unwrap().into_iter().next().unwrap();
+        let mask_value = PreviewExecutor::default().execute(&graph, move_id, &ctx).unwrap().into_iter().next().unwrap();
+
+        let hue_key_off = HueKey::new();
+        let off_values = hue_key_off.execute(&ctx, &[
+            (Input::Source, source_value),
+            (Input::Reference, reference_value),
+            (Input::Mask, mask_value),
+        ]).unwrap();
+        let off_pixels = as_u8_pixels(&off_values[0]);
+
+        assert_eq!(on_pixels, off_pixels, "bbox consumption on vs off must produce pixel-identical output");
     }
 
     /// Test-only helper for building a synthetic "RGB TO HSV output"
