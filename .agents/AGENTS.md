@@ -1,32 +1,30 @@
-# AGENTS.md
-
-```markdown
+<!-- .agents/AGENTS.md -->
 ---
 title: AGENTS.md
+note: "The Workflow in this folder is currently only information. Agents are asked to follow
+these instructions, but it's not enforced. It is planned to implement a validating workflow engine. Fyou may use this in your workflow."
 owner_role: "management"
 version: 1
 ---
+# Files + Directories
 
-# Project
+## Global (for all agents)
 
-VFX Composer written in:
+- Project Description:        .agents/docs/project_description.md
+- Governance + Organization:  .agents/docs/governance_and_organization.md
+- Guidelines + Conventions:   .agents/docs/guidelines_and_conventions/*
+- Communiication Protocol:    .agents/docs/communication_protocol.ms
 
-- Rust
-- WebAssembly
-- JavaScript
-- HTML, CSS
-- WGSL (WebGPU)
+Put Approvals, RFI, RFC, and answered RFI, and RFC into this directory:
 
----
+- Working Directory:          .agents/communication/
 
-# Files
+## Agent dependent
 
-- Governance + Organization: .agents/docs/governance_and_organization.md
-- Guidelines + Conventions: .agents/docs/guidelines_and_conventions/*
-- Role Instructions: .agents/roles/<your_role>/instructions/<your_role>.md
-- State Definitions: .agents/docs/state_definition_<your_role>.yaml
-- Working State: .agents/roles/<your_role>/state_<your_role>.yaml
-- Role Directory: .agents/roles/<your_role>/*
+- Role Instructions:         .agents/roles/<role_name>/instructions/<role_name>.md
+- State Definitions:         .agents/docs/state_definition_<role_name>.yaml
+- Working State:             .agents/roles/<role_name>/state_<role_name>.yaml
+- Role Directory:            .agents/roles/<role_name>/
 
 # Multi-Agent Environment
 
@@ -58,7 +56,7 @@ Each role has defined responsibilities and permissions.
 All agents shall:
 
 - operate only after an explicit role assignment from Management or the user;
-- read only the documentation required for their assigned role and current task before acting;
+- read documentation and source files required for the assigned task;
 - understand existing code before modifying it;
 - follow approved specifications;
 - follow role permissions;
@@ -97,7 +95,7 @@ Define:
 
 Role instructions are immutable during normal operation.
 
-Changes require Management approval.
+Only Management may create, remove, or modify roles.
 
 ---
 
@@ -116,6 +114,7 @@ Agents must not invent:
 - new state values;
 - new workflow states.
 
+Only Management may approve state definition changes.
 ---
 
 ## Working States
@@ -149,16 +148,22 @@ If the role does not have permission to create its working state, it shall reque
 For every session:
 
 1. Receive explicit role assignment.
-2. Read the role instructions, state definition, and working state associated with the assigned role.
+2. Read:
+   - role instructions;
+   - applicable governance documents;
+   - artifact format definitions;
+   - state definition;
+   - working state.
 3. Validate current state.
 4. Resume assigned work.
-5. Update working state after meaningful progress.
+5. Produce artifacts according to the approved artifact formats.
+6. Update working state after meaningful progress.
 
 ---
 
 # File Access Rules
 
-Agents may read only files relevant to their assigned role and current task.
+Agents may access only files permitted by their role permissions and required for their assigned task.
 
 Agents may only modify files permitted by their role.
 
@@ -224,6 +229,5 @@ Overall feature completion additionally requires:
 - intended behavior exists;
 - implementation matches specification;
 - required validation is complete.
-
 
 ---

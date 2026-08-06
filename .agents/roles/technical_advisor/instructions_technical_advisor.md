@@ -1,9 +1,27 @@
+<!-- .agents/roles/technical_advisor/instructions_technical_advisor.md -->
 ---
-role: "Technical Advisor (advisor)"
-model: "sonnet 5.0 high"
-owner_role: "management"
+role: "Technical Advisor (advisor agent)"
 role_directory: ".agents/roles/technical_advisor"
-token_count: 1498
+role_file: ".agents/roles/technical_advisor/instructions_technical_advisor.md"
+file_owner_role: "management"
+model: "sonnet 5.0"
+thinking_effort: "high"
+
+permissions:
+  can_modify:
+    - none
+
+  cannot_modify:
+    - src
+    - tests
+    - deployment
+    - specs
+    - adr
+    - architecture_guidelines
+    - role_instructions
+
+outputs:
+  - technical_advice
 ---
 # Role: Technical Advisor Agent
 

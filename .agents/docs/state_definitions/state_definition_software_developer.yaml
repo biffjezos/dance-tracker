@@ -1,3 +1,4 @@
+# .agents/docs/state_definitions/state_definition_software_developer.yaml
 state_definition:
   name: state_definition_software_developer
   version: 3
@@ -40,7 +41,7 @@ fields:
           preparation is being performed.
 
       analyzing:
-        meaning:
+        meaning: >
           The Software Developer is analyzing the specification,
           existing implementation, dependencies, conventions,
           and implementation constraints before modifying code.
@@ -90,11 +91,6 @@ fields:
           The Software Developer is pushing and merging the reviewed
           implementation according to repository workflow rules.
 
-      completed:
-        meaning: >
-          The reviewed implementation has been delivered successfully and
-          developer responsibilities for the specification are complete.
-
       blocked:
         meaning: >
           Implementation cannot continue because required information,
@@ -119,20 +115,20 @@ fields:
     properties:
 
       completed:
-        type: list
+        type: array
         required: true
         item_type:
           type: string
 
       remaining:
-        type: list
+        type: array
         required: true
         item_type:
           type: string
 
   modified_files:
     required: true
-    type: list
+    type: array
     item_type:
       type: string
 
@@ -142,26 +138,26 @@ fields:
     properties:
 
       executed:
-        type: list
+        type: array
         required: true
         item_type:
           type: string
 
       results:
-        type: list
+        type: array
         required: true
         item_type:
           type: string
 
   blockers:
     required: true
-    type: list
+    type: array
     item_type:
       type: string
 
   rfis:
     required: true
-    type: list
+    type: array
     item_type:
       type: string
 
@@ -174,8 +170,7 @@ fields:
         required: true
         type: enum
         values:
-
-          null:
+          "null":
             meaning: >
               No handoff is currently planned.
 
@@ -196,8 +191,7 @@ fields:
         required: true
         type: enum
         values:
-
-          null:
+          "null":
             meaning: >
               No handoff exists.
 
@@ -218,10 +212,11 @@ state_transitions:
   idle:
     allowed:
       - assigned
+      - blocked
 
   assigned:
     allowed:
-      - implementing
+      - analyzing
       - blocked
 
   analyzing:
@@ -239,12 +234,12 @@ state_transitions:
 
   waiting_for_architect_clarification:
     allowed:
-      - implementing
+      - analyzing
       - blocked
 
   waiting_for_management_decision:
     allowed:
-      - implementing
+      - analyzing
       - blocked
 
   validating:
@@ -266,8 +261,6 @@ state_transitions:
 
   waiting_for_review_approval:
     allowed:
-      - addressing_review_feedback
-      - preparing_delivery
       - blocked
 
   preparing_delivery:
@@ -277,18 +270,35 @@ state_transitions:
 
   delivering:
     allowed:
-      - completed
+      - idle
       - blocked
 
   blocked:
     allowed:
       - assigned
+      - analyzing
       - implementing
       - waiting_for_architect_clarification
       - waiting_for_management_decision
+      - validating
+      - ready_for_review
+      - waiting_for_review_approval
+      - addressing_review_feedback
       - preparing_delivery
       - delivering
+      
+events:
 
-  completed:
-    allowed:
-      - idle
+  review_approved:
+    meaning: >
+      Code Reviewer approved the implementation.
+    transitions:
+      waiting_for_review_approval:
+        - preparing_delivery
+
+  review_changes_requested:
+    meaning: >
+      Code Reviewer rejected the implementation and requested changes.
+    transitions:
+      waiting_for_review_approval:
+        - addressing_review_feedback

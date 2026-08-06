@@ -1,5 +1,4 @@
-# .agents/docs/state_definitions/state_definition_software_architect.yaml
-
+# .agents/docs/state_definitions/state_definition_software_architect
 state_definition:
   name: state_definition_software_architect
   version: 1
@@ -15,29 +14,63 @@ description:
 fields:
 
   active_specification:
-  required: true
-  type: object
-  description: >
-    The specification currently owned by the architect.
-    This represents the architect's responsibility for this specification
-    only. A status of waiting_for_implementation means the specification
-    has been handed to the Software Developer and no further architect
-    action is required unless implementation feedback, clarification, or
-    review is requested.
+    required: false
+    type: object
+    description: >
+      The specification currently owned by the architect.
+      This represents the architect's responsibility for this specification
+      only. No active specification exists when the architect is idle after
+      completing a handoff.
+    properties:
 
-  properties:
+      id:
+        type: string
+        required: true
+        description: >
+          Identifier of the specification currently owned by the architect.
 
-    id:
-      type: string
-      required: true
-      description: >
-        Identifier of the specification currently owned by the architect.
+      version:
+        type: integer
+        required: true
+        description: >
+          Version of the active specification.
 
-    version:
-      type: integer
-      required: true
-      description: >
-        Version of the active specification.
+  interrupted_work:
+    required: false
+    type: object
+    description: >
+      Records architectural work interrupted by a higher-priority developer RFI.
+
+    properties:
+
+      previous_state:
+        required: true
+        type: enum
+        values:
+
+          assigned:
+            meaning: >
+              The architect was assigned work before handling the RFI.
+
+          analyzing:
+            meaning: >
+              The architect was analyzing before handling the RFI.
+
+          specifying:
+            meaning: >
+              The architect was creating or updating a specification before
+              handling the RFI.
+
+          reviewing_implementation:
+            meaning: >
+              The architect was reviewing an implementation before handling
+              the RFI.
+
+      specification_id:
+        required: false
+        type: string
+        description: >
+          Identifier of the specification related to the interrupted work.
 
   status:
     required: true
@@ -66,27 +99,18 @@ fields:
         meaning: >
           The architect is creating or updating the technical specification.
 
-      waiting_for_implementation:
+      responding_to_developer_rfi:
         meaning: >
-          The current specification has been completed and handed to the Software
-          Developer for implementation. The architect has no active work remaining
-          on this specification unless implementation feedback or a completed
-          implementation review is received. The architect may receive and process
-          new architectural assignments independently.
-
-      waiting_for_developer_feedback:
-        meaning: >
-          The Software Developer has raised an implementation question or
-          clarification request requiring architectural input.
+          A downstream implementation process has raised an RFI.
+          The architect is resolving the architectural question,
+          providing clarification, or updating specifications when required.
 
       reviewing_implementation:
         meaning: >
-          Completed implementation is being evaluated against the specification.
-
-      completed:
-        meaning: >
-          Architectural responsibilities for the current specification are
-          complete.
+          An optional Management-assigned architectural review of an
+          implementation that has already been approved by the Code Reviewer.
+          This review is advisory and may result in recommendations or
+          follow-up specifications.
 
       blocked:
         meaning: >
@@ -97,7 +121,7 @@ fields:
     required: false
     type: object
     description: >
-      Records the external event and responsible role preventing progress.
+      Records the external event preventing progress.
 
     properties:
 
@@ -111,27 +135,9 @@ fields:
               Waiting for Management to provide requirements, priorities,
               or product decisions.
 
-          developer_feedback:
-            meaning: >
-              Waiting for Software Developer implementation questions or
-              clarification requests.
-
-      role:
-        required: true
-        type: enum
-        values:
-
-          management:
-            meaning: >
-              Management.
-
-          software_developer:
-            meaning: >
-              Software Developer.
-
   plans:
     required: true
-    type: list
+    type: array
     description: >
       Implementation plans associated with the active specification.
     item_type:
@@ -139,7 +145,7 @@ fields:
 
   conventions:
     required: true
-    type: list
+    type: array
     description: >
       Conventions governing architectural and implementation decisions.
     item_type:
@@ -147,7 +153,7 @@ fields:
 
   parked_work:
     required: true
-    type: list
+    type: array
     description: >
       Deferred architectural work.
     item_type:
@@ -155,7 +161,7 @@ fields:
 
   adrs:
     required: true
-    type: list
+    type: array
     description: >
       Architecture Decision Records created during architectural work.
     item_type:
@@ -163,7 +169,7 @@ fields:
 
   rfis:
     required: true
-    type: list
+    type: array
     description: >
       Requests For Information raised by or received by the architect.
     item_type:
@@ -171,7 +177,7 @@ fields:
 
   notifications:
     required: true
-    type: list
+    type: array
     description: >
       Notifications received or generated by the architect.
     item_type:
@@ -180,6 +186,9 @@ fields:
   handoff:
     required: true
     type: object
+    description: >
+      Records the transfer of completed architectural work to another role.
+
     properties:
 
       target_role:
@@ -187,7 +196,7 @@ fields:
         type: enum
         values:
 
-          null:
+          "null":
             meaning: >
               No handoff is currently planned.
 
@@ -199,12 +208,24 @@ fields:
             meaning: >
               Decision or approval is handed to Management.
 
+      specification_id:
+        required: true
+        type: string
+        description: >
+          Identifier of the specification being handed over.
+
+      version:
+        required: true
+        type: integer
+        description: >
+          Version of the specification being handed over.
+
       status:
         required: true
         type: enum
         values:
 
-          null:
+          "null":
             meaning: >
               No handoff exists.
 
@@ -225,45 +246,46 @@ state_transitions:
   idle:
     allowed:
       - assigned
+      - reviewing_implementation
+      - responding_to_developer_rfi
 
   assigned:
     allowed:
       - analyzing
       - blocked
+      - responding_to_developer_rfi
 
   analyzing:
     allowed:
       - waiting_for_management_clarification
       - specifying
       - blocked
+      - responding_to_developer_rfi
 
   waiting_for_management_clarification:
     allowed:
       - analyzing
-      - specifying
       - blocked
 
   specifying:
     allowed:
-      - waiting_for_implementation
-      - waiting_for_management_clarification
+      - responding_to_developer_rfi
+      - idle
       - blocked
 
-  waiting_for_implementation:
+  responding_to_developer_rfi:
     allowed:
-      - waiting_for_developer_feedback
-      - reviewing_implementation
-      - blocked
-
-  waiting_for_developer_feedback:
-    allowed:
+      - assigned
+      - analyzing
       - specifying
-      - waiting_for_implementation
+      - reviewing_implementation
+      - idle
       - blocked
 
   reviewing_implementation:
     allowed:
-      - completed
+      - responding_to_developer_rfi
+      - idle
       - blocked
 
   blocked:
@@ -272,7 +294,4 @@ state_transitions:
       - analyzing
       - specifying
       - waiting_for_management_clarification
-
-  completed:
-    allowed:
-      - idle
+      - reviewing_implementation

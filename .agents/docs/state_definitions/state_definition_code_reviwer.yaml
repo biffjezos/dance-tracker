@@ -45,6 +45,11 @@ fields:
         meaning: >
           A completed implementation has been assigned for review.
 
+      analyzing:
+        meaning: >
+          The implementation, specification, review history, and any newly
+          received technical information are being analyzed before review continues.
+
       reviewing:
         meaning: >
           Implementation is being evaluated against the specification,
@@ -65,15 +70,6 @@ fields:
           The implementation satisfies the specification and review
           requirements.
 
-      handoff_to_developer:
-        meaning: >
-          Review has been approved and the approval result is being returned
-          to the Software Developer so delivery can proceed.
-
-      completed:
-        meaning: >
-          Review responsibilities for the implementation are complete.
-
       blocked:
         meaning: >
           Review cannot continue because required information, access,
@@ -91,7 +87,7 @@ fields:
           Specification used as the source of truth for evaluation.
 
       criteria:
-        type: list
+        type: array
         required: true
         description: >
           Review criteria applied during evaluation.
@@ -100,7 +96,7 @@ fields:
 
   findings:
     required: true
-    type: list
+    type: array
     description: >
       Issues, deviations, or improvement requests discovered during review.
     item_type:
@@ -112,7 +108,7 @@ fields:
     properties:
 
       checks_performed:
-        type: list
+        type: array
         required: true
         description: >
           Review checks and validation activities performed.
@@ -120,7 +116,7 @@ fields:
           type: string
 
       results:
-        type: list
+        type: array
         required: true
         description: >
           Results of performed review checks.
@@ -129,7 +125,7 @@ fields:
 
   rfis:
     required: true
-    type: list
+    type: array
     description: >
       Requests For Information created when clarification is required from
       the Software Developer, Software Architect, or Management.
@@ -145,8 +141,7 @@ fields:
         required: true
         type: enum
         values:
-
-          null:
+          "null":
             meaning: >
               No handoff is currently planned.
 
@@ -166,8 +161,7 @@ fields:
         required: true
         type: enum
         values:
-
-          null:
+          "null":
             meaning: >
               No handoff exists.
 
@@ -189,9 +183,13 @@ state_transitions:
     allowed:
       - assigned
 
-  assigned:
+  analyzing:
     allowed:
       - reviewing
+      - blocked
+  assigned:
+    allowed:
+      - analyzing
       - blocked
 
   reviewing:
@@ -199,31 +197,22 @@ state_transitions:
       - requesting_developer_changes
       - approved
       - blocked
-
+  
   requesting_developer_changes:
     allowed:
       - waiting_for_developer_changes
-      - reviewing
       - blocked
 
   waiting_for_developer_changes:
     allowed:
-      - reviewing
+      - analyzing
       - blocked
 
   approved:
     allowed:
-      - handoff_to_developer
+      - idle
 
   blocked:
     allowed:
       - assigned
-      - reviewing
-
-  handoff_to_developer:
-    allowed:
-      - completed
-      
-  completed:
-    allowed:
-      - idle
+      - analyzing

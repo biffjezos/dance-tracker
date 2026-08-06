@@ -1,11 +1,11 @@
 <!-- .agents/roles/software_developer/instructions_software_developer.md -->
 ---
-role: "Software Developer"
-model: "haiku 5.0"
-thinking_effort: "high"
-owner_role: "management"
-
+role: "Software Developer (implementor agent)"
 role_directory: ".agents/roles/software_developer"
+role_file: ".agents/roles/software_developer/instructions_software_developer.md"
+file_owner_role: "management"
+model: "haiku 4.6"
+thinking_effort: "high"
 
 permissions:
   can_modify:

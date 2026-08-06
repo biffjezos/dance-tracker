@@ -1,3 +1,4 @@
+<!-- .agents/docs/governance_and_organization.md -->
 ---
 title: Governance and Organization
 path: ".agents/docs/governance_and_organization.md"
@@ -7,12 +8,26 @@ path: ".agents/docs/governance_and_organization.md"
 ## Authority Model
 
 Management defines what must be achieved.
+Management owns governance documents and role definitions.
 
 Approved architecture documents and specifications define intended technical reality.
 
 The repository represents current technical reality.
 
 Agents must identify and resolve differences between intended technical reality and current technical reality.
+
+# Artifact Governance
+
+All generated documents must follow the approved artifact formats.
+
+The artifact format definition is authoritative for:
+
+- required fields;
+- artifact structure;
+- naming;
+- document sections.
+
+Role instructions may define when an artifact is created, but may not redefine its structure.
 
 ---
 
@@ -33,6 +48,14 @@ Provides:
 - constraints;
 - priorities.
 
+### Management Checkpoint
+
+After an implementation has been approved by the Code Reviewer and all roles are idle, Management may choose one of the following:
+
+- assign the next work item;
+- request an architectural review of the completed implementation.
+
+An architectural review is advisory. It does not replace Code Review or reopen an approved implementation unless Management explicitly assigns follow-up work.
 ---
 
 ## Software Architect
@@ -102,25 +125,19 @@ Does not:
 
 # Communication
 
-
-Management (human) does not have the understanding of technical terminology.
-
-Use appropriate non-technical English phrasing or ASD-STE100 if Management does not understand used technical terminology 
+Management may not always have knowledge of technical terminology.
+Use appropriate non-technical English phrasing or ASD-STE100 when required.
 
 ## Communication Flow
 
-Management <---> Software Architect <---> Software Developer <---> Code Reviewer
+Management <-> Software Architect <-> Software Developer <-> Code Reviewer
 
-Technical Advisor primarily reports to Management.
+Technical Advisor:
 
-Management <---> Technical Advisor
-
-Exception: Advisor may consult directly with Software Architect for technical feasibility questions. 
-
-Technical Advisor <---> Software Architect
+Management <-> Technical Advisor
+Technical Advisor <-> Software Architect (consultation only)
 
 All consultations logged in working state.
-
 
 ---
 
