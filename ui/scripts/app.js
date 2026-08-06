@@ -124,7 +124,6 @@ document.getElementById("camera-preview").height = HEIGHT;
 
 async function boot() {
     const wasmApp = await initWasm();
-    await wasmApp.init_gpu();
 
     console.log("WASM APP:", wasmApp);
     console.log("WASM PTR:", wasmApp?.__wbg_ptr);
