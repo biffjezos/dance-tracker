@@ -1,14 +1,19 @@
 # .agents/roles/technical_advisor/state_technical_advisor.yaml
-status: idle
+status: awaiting_rfi_response
 
 current_topic:
+  subject: Cross-role messaging workflow test (RFI to Software Architect)
 
-rfis_sent: []
+rfis_sent:
+  - id: RFI-TA-001-specs-location
+    target_role: software_architect
+    subject: Canonical location for specification documents - .agents/communication/specs/ vs .agents/roles/software_architect/docs/specifications/
+    status: sent
 
 advice_given: []
 
 blockers: []
 
 handoff:
-  target_role: null
-  status: null
+  target_role: software_architect
+  status: sent
