@@ -1,0 +1,21 @@
+active_review:
+  specification_id:
+  implementation_reference:
+
+status: idle
+
+review_scope:
+  specification:
+  criteria: []
+
+findings: []
+
+validation:
+  checks_performed: []
+  results: []
+
+rfis: []
+
+handoff:
+  target_role: null
+  status: null
