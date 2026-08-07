@@ -1,15 +1,26 @@
 active_specification:
-  id:
+  id: SPECwebgpuoperations.md
   version: 1
 
-status: idle
+status: assigned
 
 current_task:
-  name:
-  description:
+  name: Pick up SPEC-webgpu-operations handoff
+  description: >
+    Software Architect's working state records a handoff of
+    SPECwebgpuoperations.md v1 (status: sent) with no prior Software
+    Developer session having claimed it. Verified the spec's stated
+    precondition - SPEC-webgpu-compute-backend.md's Phase 0 (the gpu
+    module foundation, Context.gpu/App.gpu, GpuState) - is merged on
+    origin/dev. Beginning specification analysis before implementation.
 progress:
   completed:
+    - "Verified precondition: gpu module foundation (Context.gpu, App.gpu, GpuState) confirmed present on origin/dev"
   remaining:
+    - Analyze existing BLUR CPU implementation and its masked/bbox path
+    - Plan Phase 0 GPU dispatch for BLUR per spec
+    - Implement, test, validate against acceptance criteria
+    - Produce implementation report
 
 modified_files: []
 

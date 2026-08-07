@@ -12,7 +12,7 @@ for the overall scheme and the claim procedure this file is maintained
 by.
 
 Tag: `role:software_developer`
-Trigger ID: trig_01PkckWsvaBJeCHD37KQiRyP
-Session ID: session_019STiQpT9EUN4cetDxE88dW
+Trigger ID: trig_01HkCcyrLXYDzUQYmN3FLU7o
+Session ID: session_01WwFddqzJWfFBecJGYJRkrL
 Last verified: 2026-08-07
 Additional live sessions (multi-session mode, no trigger binding): none
