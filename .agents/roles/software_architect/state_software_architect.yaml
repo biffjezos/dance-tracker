@@ -1,12 +1,10 @@
-active_specification:
-  id: BOUNDING_BOX_AWARENESS.md
+status: idle
+
+handoff:
+  target_role: software_developer
+  specification_id: SPECwebgpuoperations.md
   version: 1
-
-status: waiting_for_implementation_feedback
-
-waiting_for:
-  event: implementation_feedback
-  role: software_developer
+  status: sent
 
 parked_work:
   - .agents/roles/software_architect/docs/parked_work/PARKED_WORK.md
@@ -18,7 +16,9 @@ conventions:
   - .agents/roles/software_architect/docs/conventions/BBOX_CONVENTIONS.md
   - .agents/roles/software_architect/docs/conventions/ANIMATION_CONVENTIONS.md
 
-rfis: []
+rfis:
+  - .agents/communication/rfi/RFIwebgpucomputebackend.md
+  - .agents/communication/rfi/RFI001responsewebgpucomputebackend.md
 
 adrs: []
 
