@@ -11,7 +11,7 @@ permissions:
     - src
     - tests
     - documentation
-    - session_registry
+    - session_registry_software_developer
 
   cannot_modify:
     - specs

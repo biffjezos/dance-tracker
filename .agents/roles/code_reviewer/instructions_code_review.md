@@ -8,7 +8,7 @@ thinking_effort: "medium"
 
 permissions:
   can_modify:
-    - session_registry
+    - session_registry_code_reviewer
   cannot_modify:
     - src
     - tests

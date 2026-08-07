@@ -11,7 +11,7 @@ permissions:
     - specs
     - adr
     - architecture_guidelines
-    - session_registry
+    - session_registry_software_architect
 
   cannot_modify:
     - src
