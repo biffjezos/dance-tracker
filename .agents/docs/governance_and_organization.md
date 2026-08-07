@@ -132,10 +132,28 @@ Use appropriate non-technical English phrasing or ASD-STE100 when required.
 
 Management <-> Software Architect <-> Software Developer <-> Code Reviewer
 
+This chain is the default task-assignment and hand-off path.
+
+RFI, RFC, and Evaluation exchanges, and a Handoff notifying the next
+role that a piece of work is complete and ready for it (e.g. Software
+Developer -> Code Reviewer after pushing an implementation — filing the
+relevant artifact, such as an Implementation Report, with `Target-Role`
+set accordingly), may be addressed directly to whichever role owns the
+answer or is the intended receiver — not only the adjacent role in the
+chain above (e.g. Software Architect <-> Code Reviewer is valid for a
+specification question). Delivery uses the mechanism in
+`communication_protocol.md`'s "Session Registry & Delivery" section.
+Addressing a message to a role never grants that role's
+file-modification permissions to anyone else — see each role's own
+`can_modify`/`cannot_modify` list.
+
 Technical Advisor:
 
 Management <-> Technical Advisor
-Technical Advisor <-> Software Architect (consultation only)
+Technical Advisor <-> any role (RFI/RFC/Evaluation exchange only, not
+task assignment or review) — broadened 2026-08-07 from Architect-only,
+so every role can reach Technical Advisor for a consultation answer
+without relaying through the Architect.
 
 All consultations logged in working state.
 

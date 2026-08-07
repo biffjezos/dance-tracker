@@ -86,22 +86,43 @@ see the role's own instructions for which tag applies to it.
 
 ## Delivery
 
-Filing an artifact (RFI, Notification, RFC, Approval — anything with a
-`Target-Role`) is not itself delivery. After committing it:
+Filing an artifact (RFI, Notification, RFC, Approval, Implementation
+Report — anything with a `Target-Role`) is not itself delivery. After
+committing it:
 
 1. Read the target role's row in `.agents/session_registry/<role_tag>.md`
-   for its trigger ID.
+   for its trigger ID. Treat this file as a hint, not ground truth — a
+   role's own correction to its row often lands on that role's own
+   working branch before it reaches `dev` (or wherever you're reading
+   from), so the row you see can be stale even shortly after being
+   fixed. If firing the recorded trigger ID fails, or you have any doubt,
+   confirm the live trigger for that role directly (e.g. `list_triggers`
+   cross-referenced against the role's tag) before concluding delivery
+   is impossible.
 2. Call `fire_trigger` on that trigger ID, passing the artifact's
    substantive content (at minimum Subject/Context/Question, or the
-   Notification/RFC equivalent) as the trigger's `text` — not just a
-   pointer to the file. The target should be able to act on the payload
-   immediately, without waiting for it to reach `dev` through a PR merge.
+   Notification/RFC/Implementation-Report equivalent) as the trigger's
+   `text` — not just a pointer to the file. The target should be able to
+   act on the payload immediately, without waiting for it to reach `dev`
+   through a PR merge. Keep this payload single-purpose: only the
+   artifact's own content. Do not fold in an unrelated second ask (e.g.
+   "also fix your own registry entry") — the target tends to act on
+   whichever part of the message is most concrete, which can end up
+   being the side note instead of the actual artifact. If something else
+   genuinely needs saying, send it as its own separate `fire_trigger`
+   call, or after the primary artifact has been acted on.
 3. The committed file remains the permanent record once merged — the
    payload is only the live notification, it does not replace the
    artifact.
 4. If the target role's registry row has no trigger ID yet (nobody has
    run Session Registration for that role), there is nothing to fire —
    note this as a blocker rather than assuming delivery happened.
+
+Addressing is not restricted to the primary Communication Flow chain in
+`governance_and_organization.md` — an RFI, RFC, Evaluation, or a Handoff
+(filing the relevant artifact, e.g. an Implementation Report, with
+`Target-Role` set to whoever should act on it next) may go directly to
+whichever role owns the answer, using the same procedure above.
 
 Do not skip this because "the daily fallback will catch it eventually" —
 the fallback exists for missed/failed on-demand delivery, not as the
