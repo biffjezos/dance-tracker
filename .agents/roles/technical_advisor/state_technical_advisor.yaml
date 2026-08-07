@@ -3,12 +3,17 @@ status: idle
 
 current_topic:
 
-rfis_sent: []
+rfis_sent:
+  - id: RFI-TA-001-specs-location
+    target_role: software_architect
+    subject: Canonical location for specification documents - .agents/communication/specs/ vs .agents/roles/software_architect/docs/specifications/
+    status: answered
 
-advice_given: []
+advice_given:
+  - "RFI-TA-001 answered: docs/specifications/ is the sole canonical spec location; communication/specs/ unused by design. Architect flagged (but did not fix, doesn't own the file) that communication_protocol.md's own directory listing is what caused the ambiguity - open documentation correction for Management to route."
 
 blockers: []
 
 handoff:
   target_role: null
-  status: null
+  status: answered

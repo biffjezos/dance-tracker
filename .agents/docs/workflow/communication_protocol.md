@@ -87,10 +87,20 @@ see the role's own instructions for which tag applies to it.
 ## Delivery
 
 Filing an artifact (RFI, Notification, RFC, Approval, Implementation
-Report — anything with a `Target-Role`) is not itself delivery. After
-committing it:
+Report — anything with a `Target-Role`) is not itself delivery. The
+trigger fire is the notification; the artifact committed to **your own
+current working branch** is the authoritative content the receiver
+reads — not the inline `text` payload alone, and not something that
+waits for a PR merge to `dev`. Do both, every time, in this order:
 
-1. Read the target role's row in `.agents/session_registry/<role_tag>.md`
+1. Commit the actual artifact — an RFI, RFC, Evaluation, Notification,
+   Implementation Report, or whatever type your role's own `outputs`
+   list permits — to `.agents/communication/<type>/` on your own current
+   branch, and push it. This is not optional even for a short answer:
+   the committed file is the permanent record (per Document Life Cycle
+   below) and is what the receiver actually reads, not a paraphrase in
+   the trigger payload.
+2. Read the target role's row in `.agents/session_registry/<role_tag>.md`
    for its trigger ID. Treat this file as a hint, not ground truth — a
    role's own correction to its row often lands on that role's own
    working branch before it reaches `dev` (or wherever you're reading
@@ -99,21 +109,22 @@ committing it:
    confirm the live trigger for that role directly (e.g. `list_triggers`
    cross-referenced against the role's tag) before concluding delivery
    is impossible.
-2. Call `fire_trigger` on that trigger ID, passing the artifact's
-   substantive content (at minimum Subject/Context/Question, or the
-   Notification/RFC/Implementation-Report equivalent) as the trigger's
-   `text` — not just a pointer to the file. The target should be able to
-   act on the payload immediately, without waiting for it to reach `dev`
-   through a PR merge. Keep this payload single-purpose: only the
-   artifact's own content. Do not fold in an unrelated second ask (e.g.
-   "also fix your own registry entry") — the target tends to act on
-   whichever part of the message is most concrete, which can end up
-   being the side note instead of the actual artifact. If something else
-   genuinely needs saying, send it as its own separate `fire_trigger`
-   call, or after the primary artifact has been acted on.
-3. The committed file remains the permanent record once merged — the
-   payload is only the live notification, it does not replace the
-   artifact.
+3. Call `fire_trigger` on that trigger ID. The `text` must state: the
+   artifact type and its exact path, and **your own current branch
+   name** — e.g. "RFI filed at `.agents/communication/rfi/RFI...md` on
+   branch `claude/<your-branch>`, not yet merged to `dev`." You may also
+   include the substantive content inline as a convenience, but the
+   branch+path pointer is mandatory, not a fallback for when inline text
+   is inconvenient — the receiver is expected to fetch and read the
+   actual file (see "Receiving a Trigger Fire" below), not rely on the
+   payload being complete or unmodified. Keep the payload single-purpose:
+   the artifact pointer (and optionally its content) only. Do not fold in
+   an unrelated second ask (e.g. "also fix your own registry entry") —
+   the target tends to act on whichever part of the message is most
+   concrete, which can end up being the side note instead of the actual
+   artifact. If something else genuinely needs saying, send it as its
+   own separate `fire_trigger` call, or after the primary artifact has
+   been acted on.
 4. If the target role's registry row has no trigger ID yet (nobody has
    run Session Registration for that role), there is nothing to fire —
    note this as a blocker rather than assuming delivery happened.
@@ -127,6 +138,38 @@ whichever role owns the answer, using the same procedure above.
 Do not skip this because "the daily fallback will catch it eventually" —
 the fallback exists for missed/failed on-demand delivery, not as the
 primary mechanism.
+
+## Receiving a Trigger Fire
+
+A trigger firing into your session — on-demand or scheduled fallback
+alike — is itself the instruction to act. Do not wait for Management to
+separately ask whether you received something; that question should
+never need asking. In the same turn the fire arrives:
+
+1. If the message names a sender branch and artifact path, `git fetch`
+   that branch and read the actual file — this is the authoritative
+   content. Treat any inline text in the same message as a convenience
+   summary, not a substitute; it can be incomplete, and the committed
+   file is the version that survives if the two ever disagree.
+2. Act on it: answer the RFI, evaluate the RFC, acknowledge the
+   Notification, review the Implementation Report — whatever the
+   artifact type calls for per your own role instructions.
+3. Respond in kind, using the same two-part Delivery procedure above:
+   commit your response artifact to your own current branch, then fire
+   the original sender's trigger with a pointer to it. A reply that only
+   updates your own working state, without firing back, leaves the
+   sender with no way to know you responded short of polling your branch
+   themselves.
+4. Update your own working state to reflect the exchange, per your
+   role's state definition.
+
+If you are the sender and enough time has passed with no fire back, you
+may independently check the target's branch for a committed response
+before assuming nothing happened — delivery of the *notification* can
+fail silently (a `fire_trigger` call can report success while landing on
+the wrong trigger), but a properly-committed response artifact will
+still be sitting on the responder's branch regardless of whether its own
+notification-back arrived.
 
 ## Running more than one session per role concurrently
 
