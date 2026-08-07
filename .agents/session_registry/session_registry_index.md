@@ -1,4 +1,4 @@
-<!-- .agents/docs/session_registry/_index.md -->
+<!-- .agents/session_registry/session_registry__index.md -->
 ---
 title: Session Registry — Index
 owner_role: management

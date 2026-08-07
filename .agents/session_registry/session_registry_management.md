@@ -1,4 +1,4 @@
-<!-- .agents/docs/session_registry/management.md -->
+<!-- .agents/session_registry/session_registry_management.md -->
 ---
 title: Session Registry — Management
 owner_role: management

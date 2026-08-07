@@ -1,4 +1,4 @@
-<!-- .agents/docs/session_registry/software_developer.md -->
+<!-- .agents/session_registry/session_registry_software_developer.md -->
 ---
 title: Session Registry — Software Developer
 owner_role: software_developer

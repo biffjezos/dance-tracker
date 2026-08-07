@@ -1,4 +1,4 @@
-<!-- .agents/docs/session_registry/technical_advisor.md -->
+<!-- .agents/session_registry/session_registry_technical_advisor.md -->
 ---
 title: Session Registry — Technical Advisor
 owner_role: technical_advisor

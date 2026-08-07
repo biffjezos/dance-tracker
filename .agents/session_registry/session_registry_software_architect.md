@@ -1,4 +1,4 @@
-<!-- .agents/docs/session_registry/software_architect.md -->
+<!-- .agents/session_registry/session_registry_software_architect.md -->
 ---
 title: Session Registry — Software Architect
 owner_role: software_architect

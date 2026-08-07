@@ -1,4 +1,4 @@
-<!-- .agents/docs/session_registry/code_reviewer.md -->
+<!-- .agents/session_registry/session_registry_code_reviewer.md -->
 ---
 title: Session Registry — Code Reviewer
 owner_role: code_reviewer
