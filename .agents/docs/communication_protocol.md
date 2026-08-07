@@ -8,11 +8,12 @@ Directory structure:
 
 ```
 agents/communication/
+adr/
+advice/
+approvals/
+implementation_reports/
 rfi/
 rfc/
-approvals/
-advice/
-adr/
 specs/
 ```
 
@@ -38,8 +39,6 @@ Rules:
 | Plans | Permanent while relevant; archive after completion |
 | Parked work | Permanent until completed, cancelled, or removed by Management decision |
 | Notifications | Temporary; archive or remove after they are no longer operationally relevant |
-
-# File Formats
 
 # File Formats
 

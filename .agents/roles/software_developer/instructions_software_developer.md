@@ -120,6 +120,28 @@ If implementation requires:
 
 stop implementation and request Software Architect review.
 
+### Management (+ Technical Advisor)
+
+Use this channel only for blockers that are **not** architecture or
+specification questions - infrastructure, sandbox/environment, network,
+or tooling access problems that stop implementation regardless of how
+correct the code or specification is. Read
+`.agents/docs/guidelines_and_conventions/ENVIRONMENT_DIAGNOSTICS.md`
+before reporting one of these, to confirm it is a genuine restriction and
+not a misdiagnosis.
+
+You send:
+
+- a Notification (see `communication_protocol.md`) reporting the
+  finding, including the diagnostic evidence gathered.
+
+You do not send an RFI to the Software Architect for this class of
+problem - no specification change can fix a network or environment
+restriction.
+
+Set working state `status: blocked`, `handoff.target_role: management`
+while waiting.
+
 ### Code Reviewer
 
 You provide:
@@ -204,6 +226,12 @@ Record:
 - results;
 - failures;
 - limitations.
+
+If an acceptance criterion cannot be verified because of an
+infrastructure/environment restriction (not a code or specification
+problem), record it as **unverified**, not passing, and file a
+Notification per the Management communication channel above rather than
+guessing at the result.
 
 ## Implementation Reporting
 
