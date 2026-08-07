@@ -8,13 +8,13 @@ Directory structure:
 
 ```
 agents/communication/
-rfi/
-rfc/
-approvals/
 advice/
 adr/
-specs/
+evaluation/
 notifications/
+rfc/
+rfi/
+specs/
 ```
 
 Rules:

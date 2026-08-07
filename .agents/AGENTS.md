@@ -15,7 +15,7 @@ version: 1
 - Guidelines + Conventions:   .agents/docs/guidelines_and_conventions/*
 - Communiication Protocol:    .agents/docs/communication_protocol.ms
 
-Put Approvals, RFI, RFC, and answered RFI, and RFC into this directory:
+Put advices, evaluations, implementation reports, RFC, RFI, and responses (answers) to requests into the respective sub-folders within this inter-agent communication-directory:
 
 - Working Directory:          .agents/communication/
 
