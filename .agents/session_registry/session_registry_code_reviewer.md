@@ -11,9 +11,9 @@ roles may read it. See `_index.md` for the overall scheme and the claim
 procedure this file is maintained by.
 
 Tag: `role:code_reviewer`
-Trigger ID: trig_01XzkftFUrTFd2CPmQbf8jqK (daily fallback, 09:00 UTC)
-Session ID: session_013F1v83PwzQPX9H5WX9RW5M (previous recorded session
-session_01SLe29yr62NP2pnQfh8W87k not found among live sessions; treated
+Trigger ID: trig_01CzW9tXsk7EV3apAuZ1Dsy1 (daily fallback, 09:00 UTC)
+Session ID: session_011QZ5TTbgWEjWveGDaFp7yc (previous recorded session
+session_013F1v83PwzQPX9H5WX9RW5M not found among live sessions; treated
 as replaced per "Running more than one session per role" in
 `_index.md`)
 Last verified: 2026-08-07
