@@ -285,6 +285,53 @@ flickering box size destabilizing downstream ops' own compute-region
 choices tick to tick? No evidence either way yet - worth a real
 measurement before deciding, not a guess.
 
+## Backfill ADRs for architectural decisions predating the ADR artifact type
+
+**Work:** 3h · **Complexity:** 2/6
+**Depends on:** Nothing - unimplemented, not blocked. Purely a documentation
+backfill; every decision listed below is already made, already implemented,
+and already recorded somewhere (a convention file or a specification) -
+this is about giving each one its own traceable `ADR-ID` per
+`communication_protocol.md`'s Architecture Decision Record format
+(Context/Decision/Alternatives considered/Consequences/Technical impact/
+Related specifications), not re-deciding anything.
+**Existing non-functional code:** None - this is a documentation gap, not
+a code gap. The decisions themselves are real and shipped; only the
+formal ADR record is missing.
+
+Candidate decisions to backfill, identified while syncing working state
+(none of these existed as ADRs because the ADR artifact type didn't exist
+in the workflow yet when they were made):
+
+1. **Bounding-box report-vs-consume split, and `Rect` as a single
+   axis-aligned rectangle** (`BBOX_CONVENTIONS.md`) - arguably the most
+   significant architectural decision of the bbox work; currently only
+   documented as a convention, not as a decision record with alternatives
+   considered.
+2. **`Context` gains a field (`input_bboxes`, later `gpu`) rather than
+   `execute()` gaining a new parameter** (`BBOX_CONVENTIONS.md`,
+   `SPEC-webgpu-compute-backend.md`) - a real tradeoff with a stated
+   alternative that was rejected (a new `execute()` parameter, rejected
+   for the test-fixture churn it would have caused) - a natural ADR
+   candidate since "alternatives considered" is exactly this.
+3. **One-tick-latency pipelined GPU dispatch instead of blocking or a
+   fully async execution engine** (`SPEC-webgpu-compute-backend.md`) - the
+   core answer to "how does synchronous `execute()` use an inherently
+   async WebGPU readback." Two real alternatives were considered and
+   rejected (blocking the browser thread - impossible; making the whole
+   engine async - out of proportion) - another clean ADR candidate.
+4. **Typed input compatibility (`InputDescriptor`/`accepts`, empty list =
+   unrestricted)** - shipped (PR #97) but never had a standing convention
+   file *or* an ADR; currently the least-documented of the four despite
+   being real, load-bearing architecture (it's what the menu-consolidation
+   spec's registration design assumes exists).
+
+Not urgent - these are stable, already-implemented decisions, not
+open questions - but worth doing before institutional memory of *why*
+each one was made (not just *what* was decided) fades further from
+convention-file prose into something only reconstructable by reading
+old specs/chat history.
+
 ## Shrink pixel buffers to their bounding box (real RAM reduction)
 
 **Work:** 25h · **Complexity:** 6/6 (Opus territory - a fundamental
