@@ -12,7 +12,7 @@ for the overall scheme and the claim procedure this file is maintained
 by.
 
 Tag: `role:software_architect`
-Trigger ID: trig_0131HyDj5tqKLY42Zhu8m84c
-Session ID: session_01BHxXDGd8KtzB4DTGX1RxwX
+Trigger ID: trig_01LSkPdwo7nzdsAfRXKHqR3s
+Session ID: session_01W2A3JwPQom7xtuz3N7Lcv9
 Last verified: 2026-08-07
 Additional live sessions (multi-session mode, no trigger binding): none
