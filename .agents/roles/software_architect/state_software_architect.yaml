@@ -19,6 +19,8 @@ conventions:
 rfis:
   - .agents/communication/rfi/RFIwebgpucomputebackend.md
   - .agents/communication/rfi/RFI001responsewebgpucomputebackend.md
+  - .agents/communication/rfi/RFItechnicaladvisorworkflowtestspecslocation.md
+  - .agents/communication/rfi/RFIresponsetechnicaladvisorspecslocation.md
 
 adrs: []
 
