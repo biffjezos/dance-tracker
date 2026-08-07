@@ -13,7 +13,7 @@ version: 1
 - Project Description:        .agents/docs/project_description.md
 - Governance + Organization:  .agents/docs/governance_and_organization.md
 - Guidelines + Conventions:   .agents/docs/guidelines_and_conventions/*
-- Communiication Protocol:    .agents/docs/communication_protocol.ms
+- Communication Protocol:    .agents/docs/communication_protocol.ms
 
 Put advices, evaluations, implementation reports, RFC, RFI, and responses (answers) to requests into the respective sub-folders within this inter-agent communication-directory:
 
