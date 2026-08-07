@@ -125,6 +125,18 @@ document.getElementById("camera-preview").height = HEIGHT;
 async function boot() {
     const wasmApp = await initWasm();
 
+    // Fire-and-forget: never awaited before the rest of boot() runs, so
+    // a machine with no WebGPU support (or any other GPU init failure)
+    // never blocks or breaks app startup. The app is fully usable on CPU
+    // immediately; wasmApp.gpu (and Context.gpu, downstream) simply
+    // stays unset until/unless this resolves in the background. See
+    // SPECwebgpucomputebackend2.md's App boot section.
+    if (wasmApp) {
+        wasmApp.init_gpu()
+            .then(() => logger.debug("WebGPU initialized"))
+            .catch((error) => logger.debug("WebGPU unavailable, staying on CPU:", error));
+    }
+
     console.log("WASM APP:", wasmApp);
     console.log("WASM PTR:", wasmApp?.__wbg_ptr);
     applyOutputSize();
