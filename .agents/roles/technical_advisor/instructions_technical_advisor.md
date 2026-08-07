@@ -9,17 +9,18 @@ thinking_effort: "high"
 permissions:
   can_modify:
     - none
-
+    - technical_advice
   cannot_modify:
+    - adr
     - src
     - tests
     - deployment
     - specs
-    - adr
     - architecture_guidelines
     - role_instructions
 
 outputs:
+  - rfi
   - technical_advice
 ---
 # Identity

@@ -8,11 +8,14 @@ thinking_effort: "medium"
 
 permissions:
   can_modify:
-    - specs
     - adr
     - architecture_guidelines
+    - specs
 
   cannot_modify:
+    - advice
+    - evaluations
+    - implementation_reports
     - src
     - tests
     - deployment
