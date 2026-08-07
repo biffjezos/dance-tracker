@@ -10,8 +10,8 @@ description:
     The Technical Advisor is outside the implementation workflow - this
     state exists to log consultations (per governance_and_organization.md:
     "All consultations logged in working state") and track RFIs raised
-    against the Software Architect and/or Software Developer, not to
-    track implementation progress.
+    against any role (Software Architect, Software Developer, Code
+    Reviewer), not to track implementation progress.
 
 fields:
 
@@ -31,8 +31,9 @@ fields:
 
       awaiting_rfi_response:
         meaning: >
-          An RFI has been sent to the Software Architect and/or Software
-          Developer and a response is pending.
+          An RFI has been sent to another role (Software Architect,
+          Software Developer, or Code Reviewer) and a response is
+          pending.
 
       blocked:
         meaning: >
@@ -70,6 +71,9 @@ fields:
             software_developer:
               meaning: >
                 RFI addressed to the Software Developer.
+            code_reviewer:
+              meaning: >
+                RFI addressed to the Code Reviewer.
         subject:
           type: string
           required: true
@@ -119,6 +123,10 @@ fields:
           software_developer:
             meaning: >
               Waiting on an implementation-facing clarification.
+
+          code_reviewer:
+            meaning: >
+              Waiting on a review/evaluation clarification.
 
       status:
         required: true
