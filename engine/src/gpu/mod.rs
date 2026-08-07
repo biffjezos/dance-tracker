@@ -184,7 +184,7 @@ impl GpuState {
             .expect("gpu mapping channel closed before a result arrived")
             .expect("gpu buffer mapping failed");
 
-        let data = slice.get_mapped_range();
+        let data = slice.get_mapped_range(..).expect("gpu buffer mapping failed");
         let result: Vec<f32> = bytemuck::cast_slice(&data)[..len].to_vec();
         drop(data);
         buffer.unmap();
@@ -217,7 +217,7 @@ impl GpuState {
             .await
             .expect("gpu buffer mapping failed");
 
-        let data = slice.get_mapped_range();
+        let data = slice.get_mapped_range(..).expect("gpu buffer mapping failed");
         let result: Vec<f32> = bytemuck::cast_slice(&data)[..len].to_vec();
         drop(data);
         buffer.unmap();
