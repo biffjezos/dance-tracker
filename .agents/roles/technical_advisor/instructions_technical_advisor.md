@@ -9,21 +9,21 @@ thinking_effort: "high"
 permissions:
   can_modify:
     - session_registry_technical_advisor
-    - rfi
 
   cannot_modify:
-    - src
-    - tests
-    - deployment
-    - specs
     - adr
     - architecture_guidelines
+    - deployment
     - role_instructions
+    - specs
+    - src
+    - tests
 
 outputs:
-  - technical_advice
   - rfi
+  - technical_advice
 ---
+
 # Identity
 
 ## Role

@@ -14,11 +14,11 @@ permissions:
     - session_registry_software_developer
 
   cannot_modify:
-    - specs
     - adr
     - architecture_guidelines
     - role_instructions
-
+    - specs
+    
 outputs:
   - implementation
   - implementation_report

@@ -10,17 +10,18 @@ permissions:
   can_modify:
     - session_registry_code_reviewer
   cannot_modify:
+    - adr
+    - architecture_guidelines
+    - deployment
+    - role_instructions
+    - specs
     - src
     - tests
-    - deployment
-    - specs
-    - architecture_guidelines
-    - role_instructions
 
 outputs:
   - evaluation
-  - rfi
   - rfc
+  - rfi
 ---
 
 # Identity

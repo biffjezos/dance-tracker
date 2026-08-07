@@ -8,8 +8,8 @@ thinking_effort: "medium"
 
 permissions:
   can_modify:
-    - specs
     - adr
+    - specs
     - architecture_guidelines
     - session_registry_software_architect
 
@@ -20,9 +20,9 @@ permissions:
     - role_instructions
 
 outputs:
-  - specification
-  - rfi
   - adr
+  - rfi
+  - specification
 ---
 
 # Identity
