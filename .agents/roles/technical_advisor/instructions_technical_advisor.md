@@ -9,6 +9,7 @@ thinking_effort: "high"
 permissions:
   can_modify:
     - session_registry_technical_advisor
+    - state_technical_advisor
 
   cannot_modify:
     - adr

@@ -12,6 +12,7 @@ permissions:
     - tests
     - documentation
     - session_registry_software_developer
+    - state_software_developer
 
   cannot_modify:
     - adr

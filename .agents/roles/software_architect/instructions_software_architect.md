@@ -12,6 +12,7 @@ permissions:
     - specs
     - architecture_guidelines
     - session_registry_software_architect
+    - state_software_architect
 
   cannot_modify:
     - src

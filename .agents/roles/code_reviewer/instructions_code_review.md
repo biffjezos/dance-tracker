@@ -9,6 +9,7 @@ thinking_effort: "medium"
 permissions:
   can_modify:
     - session_registry_code_reviewer
+    - state_code_reviewer
   cannot_modify:
     - adr
     - architecture_guidelines
