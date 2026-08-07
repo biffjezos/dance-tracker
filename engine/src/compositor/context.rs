@@ -2,7 +2,9 @@
 
 use crate::compositor::bbox::Rect;
 use crate::compositor::input::Input;
+use crate::gpu::GpuState;
 use crate::resources::manager::ResourceManager;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderQuality {
@@ -40,4 +42,14 @@ pub struct Context {
     /// contexts) - `find_bbox` returning `None` is exactly equivalent to
     /// "no box was reported," so nothing breaks by omission.
     pub input_bboxes: Vec<(Input, Rect)>,
+    /// The GPU device/queue handle, if WebGPU initialized successfully
+    /// before this tick - see SPECwebgpucomputebackend2.md's Phase 0.
+    /// `None` is the correct default and the common/expected case: on a
+    /// machine with no WebGPU support, or before `App::init_gpu()`'s
+    /// backgrounded init resolves, this stays `None` forever/for now -
+    /// never an error state. Every GPU-capable operation must treat
+    /// `None` as "fall back to the existing CPU path", not something to
+    /// unwrap past (see RFC-001's post-mortem on why the removed
+    /// attempt's `.expect("Compute backend not initialized")` was wrong).
+    pub gpu: Option<Arc<GpuState>>,
 }

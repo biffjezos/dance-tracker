@@ -55,6 +55,12 @@ pub struct App {
     // on the user just because something is still visible.
     output_out_of_gamut: bool,
     system_menus: Vec<SystemMenuDescriptor>,
+    // None until (and unless) init_gpu()'s async adapter/device request
+    // resolves successfully - see context()'s own wiring below and
+    // Context.gpu's doc comment. Never awaited inline in boot() (see
+    // ui/scripts/app.js) so a machine with no WebGPU support, or any
+    // other init failure, never blocks or breaks app startup.
+    gpu: Option<Arc<crate::gpu::GpuState>>,
 }
 
 #[wasm_bindgen]
@@ -73,8 +79,29 @@ impl App {
             render_executor: RenderExecutor::new(),
             start_time_ms: now_ms(),
             output_out_of_gamut: false,
-            system_menus
+            system_menus,
+            gpu: None,
         }
+    }
+
+    /// Requests a WebGPU adapter/device in the background. The JS call
+    /// site (ui/scripts/app.js's boot()) fires this off via a bare
+    /// `.then()`/`.catch()`, never `await`ed inline before the rest of
+    /// boot - a rejected promise here (no WebGPU support, adapter
+    /// request denied, etc.) must never block or break app startup. On
+    /// success, self.gpu becomes reachable from the very next
+    /// render_tick/preview_tick's Context (see context() below); on
+    /// failure it just stays None, same as before this ever resolves -
+    /// this is the entire "GPU first, CPU fallback" behavior, with no
+    /// COMPUTE MODE switch or mode-selection UI needed (see
+    /// SPECwebgpucomputebackend2.md's "Out of scope").
+    pub async fn init_gpu(&mut self) -> Result<(), JsValue> {
+        let gpu = crate::gpu::GpuState::new()
+            .await
+            .map_err(|error| JsValue::from_str(&error))?;
+
+        self.gpu = Some(Arc::new(gpu));
+        Ok(())
     }
 
     // debug: temp
@@ -531,6 +558,10 @@ impl App {
             },
             resources: self.resources.clone(),
             input_bboxes: Vec::new(),
+            // A plain clone, never `.expect()`'d - None is an expected,
+            // common state (GPU not yet available/never available), not
+            // an error to unwrap past. See Context.gpu's own doc comment.
+            gpu: self.gpu.clone(),
         }
     }
 
