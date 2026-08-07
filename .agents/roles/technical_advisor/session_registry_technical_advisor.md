@@ -12,6 +12,6 @@ RFIs flow outward from this role via the RFI channel, not in. Self-tags
 only, for registry visibility and consistency with the other roles.
 
 Tag: `role:technical_advisor`
-Trigger ID: n/a
-Session ID: session_01XhxXWKKkhJzcQ4stjJXVho
+Trigger ID: trig_01HW19NtC4KFEcAcihSASW7q
+Session ID: session_011i8b9j5ahyPWk4GsoAEQrX
 Last verified: 2026-08-07
