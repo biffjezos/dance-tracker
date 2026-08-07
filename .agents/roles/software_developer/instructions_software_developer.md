@@ -96,43 +96,10 @@ Meaningful progress includes:
 
 ## Session Registration
 
-On every session start, immediately after reading these role instructions
-and before reading state:
-
-1. Determine your own CCR session ID from the git commit template already
-   present in your system prompt (the `Claude-Session:
-   https://claude.ai/code/session_...` line) — this is authoritative. Do
-   **not** trust a role instructions file's own frontmatter `role`/
-   `role_directory` fields for self-identification: they are
-   hand-maintained and have been found wrong before elsewhere in this
-   project (see `.agents/docs/session_registry/_index.md`). Your role
-   identity comes from which file Management told you to load, not from
-   metadata inside it.
-2. Tag yourself: `role:software_developer`.
-3. Read `.agents/docs/session_registry/software_developer.md`.
-4. Check whether another *live* (running/connected) session already
-   carries the `role:software_developer` tag. If one exists and is not
-   this session: do not touch the trigger. Note yourself under
-   "Additional live sessions" in the registry file and stop here — you
-   are an additional concurrent worker, not the pager (see "Running more
-   than one session per role" in `.agents/docs/session_registry/
-   _index.md`). This is the normal case if Management is intentionally
-   running more than one Developer session at once.
-5. If no other live session holds the slot, this session is now the
-   pager target:
-   - If the registry file has no trigger ID yet, create one bound to
-     your own session ID (prompt: check `.agents/communication/rfi/` and
-     `.agents/communication/notifications/` for items addressed to
-     `Target-Role: Software Developer`; daily fallback schedule, unless
-     Management specifies otherwise).
-   - If a trigger ID is recorded but bound to a different session ID
-     than your own, the previous pager session has been replaced —
-     delete the old trigger and create a new one bound to your own
-     session ID, reusing its prompt/schedule.
-   - If the recorded trigger is already bound to your own session ID,
-     nothing to do.
-   - Update the registry file: trigger ID, your session ID, today's date.
-6. Continue with the rest of this Execution Protocol.
+Run the Session Registration procedure from
+`.agents/docs/workflow/communication_protocol.md`'s "Session Registry &
+Delivery" section. Your role tag: `role:software_developer`. Your
+registry file: `.agents/session_registry/software_developer.md`.
 
 # Organization
 
