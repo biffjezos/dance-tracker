@@ -3,6 +3,18 @@
 Branch: `claude/webgpu-phase0-foundation` (based on real `origin/dev` tip `0b070ff`, post-RFC-002)
 Spec: `SPECwebgpucomputebackend2.md`
 
+## Addendum — fix for the evaluator's confirmed blocking finding
+
+The evaluator's round-1 review (❌ Request changes) fetched wgpu 30.0.0's real source directly (`raw.githubusercontent.com`) and confirmed my one deliberate deviation from the removed attempt's reference code was wrong: `get_mapped_range()` returns `Result<BufferView, MapRangeError>` and requires a `bounds` argument, not the bare `BufferView`-with-no-args I'd assumed when I stripped the reference's `.expect()`. Both `read_buffer_blocking` and `read_buffer_async` called it identically (`slice.get_mapped_range()`) and would have failed to compile the same way.
+
+Fixed both to `slice.get_mapped_range(..).expect("gpu buffer mapping failed")` — commit `a8fbd08`, `engine/src/gpu/mod.rs` only, 2 lines changed. Every other API-shape judgment call the evaluator checked against real source (`request_device`'s single argument, `request_adapter` returning `Result`, `bind_group_layouts: &[Option<&BindGroupLayout>]`, `immediate_size` vs. `push_constant_ranges`) was already correct and untouched.
+
+Still open, unchanged from before (both structurally forced by this sandbox, not corner-cutting — see the evaluator's own independent confirmation of each):
+- **AC1 still cannot be verified here** — the network restriction on `static.crates.io` is unrelated to this fix and remains unresolved; this fix is unbuilt and untested, same as the rest of the module.
+- **AC3's named test** ("after `init_gpu()` resolves in a test/integration context, the next `App::context()` call returns `Context.gpu = Some(...)`") is still unwritten — `app.rs` is wasm32-gated entirely with zero pre-existing native tests, and no wasm32/browser test runner is reachable in this sandbox (the evaluator independently tried installing `wasm-pack`/the wasm32 target too and hit the same block).
+
+Everything below this line is the original report, unmodified.
+
 ## ⚠️ Could not be built or tested in this sandbox — read this first
 
 Unlike every prior round in this project, **this one has no working-around it.** `static.crates.io` is policy-blocked in this sandbox (confirmed via the proxy status endpoint, same as the RFC-001 investigation), and none of `wgpu`'s dependency tree is cached locally. RFC-001 could dodge an equivalent problem by verifying on a commit that predated the broken dependency and patching a scoped diff onto the real tip — that doesn't work here, because **`wgpu` being present and compiling is the actual deliverable of this spec.** There is no clean base without it to fall back to.
