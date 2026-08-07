@@ -72,12 +72,12 @@ see the role's own instructions for which tag applies to it.
    pager target:
    - If the registry file has no trigger ID yet, create one bound to
      your own session ID, **explicitly passing your own `environment_id`**
-     (from the git commit template / your own session context — do not
-     rely on the tool's default, which is whatever environment happens to
-     be creating the trigger, not necessarily yours) (prompt: check
-     `.agents/communication/rfi/` and `.agents/communication/notifications/`
-     for items addressed to your role; daily fallback schedule, unless
-     Management specifies otherwise).
+     (from your own session context — do not rely on the tool's default,
+     which is whatever environment happens to be creating the trigger,
+     not necessarily yours) (prompt: check `.agents/communication/rfi/`
+     and `.agents/communication/notifications/` for items addressed to
+     your role; daily fallback schedule, unless Management specifies
+     otherwise).
    - If a trigger ID is recorded but bound to a different session ID
      than your own, the previous pager session has been replaced —
      delete the old trigger and create a new one bound to your own
@@ -88,63 +88,70 @@ see the role's own instructions for which tag applies to it.
    - Update the registry file: trigger ID, your session ID, today's date.
 6. Continue with the rest of your role's own Execution Protocol.
 
-## Delivery
+## Send
 
-Filing an artifact (RFI, Notification, RFC, Approval — anything with a
-`Target-Role`) is not itself delivery. After committing it:
+One procedure, used any time a role wants another role to know
+something — filing a new artifact addressed to a `Target-Role`, or
+replying to one you received. There is no separate "back channel" or
+special reply mechanism: replying uses these exact same steps, aimed at
+the `Created-By` role of whatever you're responding to, instead of a new
+target. The only reason to call replying out at all: an agent whose only
+instruction is "check your inbox for things addressed to you" has no
+built-in reason to also send something back once it's done — that has to
+be stated as a behavior, even though the mechanism is identical either
+way.
 
-1. Read the target role's row in `.agents/session_registry/<role_tag>.md`
+1. Commit whatever you want the other role to see — a new artifact, or
+   your response to one — to `.agents/communication/...` on your own
+   branch. A PR/merge is not required before sending.
+2. Read the target role's row in `.agents/session_registry/<role_tag>.md`
    for its trigger ID and session ID.
-2. Call `fire_trigger` on that trigger ID with a **verifiable pointer**
-   (branch name + exact file path), not the artifact's content. Example
+3. Call `fire_trigger` on that trigger ID with a **verifiable pointer**
+   (branch name + exact file path), not the content itself. Example
    text: "RFI-00X pushed to branch `<your-branch>` at
    `.agents/communication/rfi/<file>.md`, not yet merged — fetch and
    read it directly, do not treat this message as the content."
-   An earlier version of this procedure recommended embedding the
-   artifact's content directly in the fired `text` instead. That was
-   tested and failed: the target correctly refused to act on
-   unverifiable inline content it couldn't trace to a real artifact,
-   which is the right instinct, not a bug to route around. Give the
-   target something to verify, not something to trust.
-3. **When creating or recreating a trigger for another role's session,
-   always pass that session's actual `environment_id` explicitly**
-   (read it via a session lookup on the target) — do not rely on the
-   default, which is the *creating* session's own environment. Every
-   silent delivery failure observed so far traces back to this
-   mismatch. This is necessary but not yet confirmed sufficient — see
-   the open issue below.
-4. The committed file remains the permanent record once merged — the
+   An earlier version of this procedure recommended embedding content
+   directly in the fired message instead. That was tested and failed:
+   the target correctly refused to act on unverifiable inline content it
+   couldn't trace to a real artifact, which is the right instinct, not a
+   bug to route around. Give the target something to verify, not
+   something to trust.
+4. **When creating or recreating a trigger for another role's session,
+   always pass that session's actual `environment_id` explicitly** (read
+   it via a session lookup on the target) — do not rely on the default,
+   which is the *creating* session's own environment. This has been the
+   confirmed cause of at least one silent delivery failure; see the open
+   issue below for what it does not explain.
+5. The committed file remains the permanent record once merged — the
    fired pointer is only the live notification, it does not replace the
    artifact.
-5. If the target role's registry row has no trigger ID yet (nobody has
+6. If the target role's registry row has no trigger ID yet (nobody has
    run Session Registration for that role), there is nothing to fire —
    note this as a blocker rather than assuming delivery happened.
-6. **Responding to an artifact uses this same procedure, in reverse.**
-   After committing your response, read the *Created-By* role's own row
-   in its `session_registry/<role_tag>.md` and fire its trigger the same
-   way — a verifiable pointer to your response, with the correct
-   `environment_id`. The mechanism is symmetric: nothing prevents any
-   role from paging any other role back. Skipping this step leaves the
-   original filer with no way to know a response exists short of
-   manually re-checking, which defeats the purpose of having a trigger
-   at all.
 
-Do not skip step 6 because "the daily fallback will catch it eventually"
-— the fallback only covers a target checking for things addressed to
-*it*; it does not cover a response reaching back to the original sender.
+Do not skip sending because "the daily fallback will catch it
+eventually" — the fallback only covers a session checking its own inbox
+for things addressed to it; it does not get a reply back to whoever sent
+the original message.
 
 ### Open issue — delivery reliability to long-lived sessions
 
-As of 2026-08-07: on-demand `fire_trigger` delivery has been confirmed to
-reach freshly-created sessions, but has repeatedly failed to reach at
-least one long-lived session (active since 2026-08-02, many resume
-cycles) even after the `environment_id` mismatch above was corrected.
-Root cause not yet identified. Do not assume delivery succeeded just
-because the `fire_trigger` call itself returns success or the trigger's
-`last_fired_at` updates — independently confirm receipt (ask the target
-directly) before treating time-sensitive delivery as reliable, especially
-against a session that has been running for a while. Update this note
-once root-caused.
+As of 2026-08-07: on-demand `fire_trigger` delivery has reached every
+freshly-created session tested (2/2) and failed to reach every
+long-lived session tested (2/2 — both active since 2026-08-02, many
+resume cycles), **regardless of `environment_id` correctness**. One of
+the two failing sessions had the correct `environment_id` from the
+start, which rules that out as the deciding factor for it specifically.
+Getting `environment_id` right remains necessary — it was the confirmed
+cause of a separate, earlier failure — but it is not the full
+explanation for this pattern. Root cause not yet identified.
+
+Practical mitigation, not a fix: do not rely on `fire_trigger` reaching a
+session that has been running for a while. Retire it and let a fresh
+session claim the role's pager slot through Session Registration, rather
+than continuing to debug delivery to the old one. Update this note if
+root-caused.
 
 ## Running more than one session per role concurrently
 
