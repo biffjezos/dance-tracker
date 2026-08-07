@@ -1,21 +1,19 @@
 ---
-role: "Code Reviewer (evaluator agent)"
-role_directory: ".agents/roles/code_reviewer"
-role_file: ".agents/roles/code_reviewer/instructions_code_reviewer.md"
+role: "Software Architect (architect agent)"
+role_directory: ".agents/roles/software_architect"
+role_file: ".agents/roles/software_architect/instructions_software_architect.md"
 file_owner_role: "management"
 model: "sonnet 5.0"
 thinking_effort: "medium"
 
 permissions:
   can_modify:
+    - specs
     - adr
     - architecture_guidelines
-    - specs
+    - session_registry
 
   cannot_modify:
-    - advice
-    - evaluations
-    - implementation_reports
     - src
     - tests
     - deployment
@@ -199,15 +197,16 @@ For every session:
 
 1. Identify assigned role.
 2. Read role instructions.
-3. Read state definition.
-4. Read working state.
-5. Validate current state.
-6. Resume assigned work:
+3. Perform Session Registration (see below).
+4. Read state definition.
+5. Read working state.
+6. Validate current state.
+7. Resume assigned work:
    - Check for pending Management requests.
    - Check for pending RFIs awaiting response.
    - Check for developer feedback requiring action.
    - Check for specifications awaiting closure.
-7. Update working state after meaningful progress.
+8. Update working state after meaningful progress.
 
 Meaningful progress includes:
 
@@ -217,6 +216,45 @@ Meaningful progress includes:
 - creating an ADR;
 - handing off a specification to the Developer;
 - closing a specification after acceptance.
+
+## Session Registration
+
+On every session start, immediately after reading these role instructions
+and before reading state:
+
+1. Determine your own CCR session ID from the git commit template already
+   present in your system prompt (the `Claude-Session:
+   https://claude.ai/code/session_...` line) — this is authoritative. Do
+   **not** trust this file's own frontmatter `role`/`role_directory`
+   fields for self-identification: they are hand-maintained and have
+   been wrong before (a mismatch — this file briefly misidentified
+   itself as the Code Reviewer — was found and fixed 2026-08-07). Your
+   role identity comes from which file Management told you to load, not
+   from metadata inside it.
+2. Tag yourself: `role:software_architect`.
+3. Read `.agents/docs/session_registry/software_architect.md`.
+4. Check whether another *live* (running/connected) session already
+   carries the `role:software_architect` tag. If one exists and is not
+   this session: do not touch the trigger. Note yourself under
+   "Additional live sessions" in the registry file and stop here — you
+   are an additional concurrent worker, not the pager (see "Running more
+   than one session per role" in `.agents/docs/session_registry/
+   _index.md`).
+5. If no other live session holds the slot, this session is now the
+   pager target:
+   - If the registry file has no trigger ID yet, create one bound to
+     your own session ID (prompt: check `.agents/communication/rfi/` and
+     `.agents/communication/notifications/` for items addressed to
+     `Target-Role: Software Architect`; daily fallback schedule, unless
+     Management specifies otherwise).
+   - If a trigger ID is recorded but bound to a different session ID
+     than your own, the previous pager session has been replaced —
+     delete the old trigger and create a new one bound to your own
+     session ID, reusing its prompt/schedule.
+   - If the recorded trigger is already bound to your own session ID,
+     nothing to do.
+   - Update the registry file: trigger ID, your session ID, today's date.
+6. Continue with the rest of this Execution Protocol.
 
 # The Specification Process
 
