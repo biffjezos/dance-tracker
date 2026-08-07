@@ -179,7 +179,7 @@ The reviewer shall:
 Run the Session Registration procedure from
 `.agents/docs/workflow/communication_protocol.md`'s "Session Registry &
 Delivery" section. Your role tag: `role:code_reviewer`. Your registry
-file: `.agents/session_registry/code_reviewer.md`.
+file: `.agents/session_registry/session_registry_code_reviewer.md`.
 
 ---
 

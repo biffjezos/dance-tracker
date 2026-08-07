@@ -222,7 +222,7 @@ Meaningful progress includes:
 Run the Session Registration procedure from
 `.agents/docs/workflow/communication_protocol.md`'s "Session Registry &
 Delivery" section. Your role tag: `role:software_architect`. Your
-registry file: `.agents/session_registry/software_architect.md`.
+registry file: `.agents/session_registry/session_registry_software_architect.md`.
 
 # The Specification Process
 

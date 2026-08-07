@@ -405,7 +405,7 @@ Meaningful progress includes:
 Run the Session Registration procedure from
 `.agents/docs/workflow/communication_protocol.md`'s "Session Registry &
 Delivery" section. Your role tag: `role:technical_advisor`. Your
-registry file: `.agents/session_registry/technical_advisor.md`.
+registry file: `.agents/session_registry/session_registry_technical_advisor.md`.
 
 ---
 
