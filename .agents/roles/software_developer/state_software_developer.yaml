@@ -5,53 +5,50 @@ active_specification:
 status: waiting_for_review_approval
 
 current_task:
-  name: SPEC-webgpu-operations Phase 1.1 (pointwise ops) - RFC-003 fixed, awaiting re-confirmation
+  name: SPEC-webgpu-operations Phase 1.2 (procedural ops) - implemented, awaiting review
   description: >
-    Code Reviewer's RFI response on Phase 1.1: CLAMP, INVERT, SHUFFLE,
-    CHROMAKEY approved outright; RGB_TO_HSV got RFC-003 (GPU saturation
-    guard `max_c > 0.0` diverged from CPU's `max == 0.0` for negative
-    max_c - unclamped out-of-gamut FloatImage data can genuinely reach
-    RGB_TO_HSV via ADD/SUBTRACT/SCREEN with no intervening CLAMP).
-    Fixed per RFC-003's exact acceptance conditions (guard changed to
-    `max_c != 0.0`, added a regression test using a directly-constructed
-    FloatImage since U8Image can't represent negative channels), commit
-    1d53d7d, pushed to claude/agent-setup-prep-oyj2ri. Notified Code
-    Reviewer. The other four operations don't need to wait on this per
-    the reviewer's own note - they're independently merge-ready.
+    Implemented SPECwebgpuoperations.md's Phase 1.2 (CHECKERBOARD, RING
+    GPU dispatch) on branch claude/agent-setup-prep-oyj2ri, following
+    the pattern from Phases 0/1.1. Both operations have no wired inputs
+    at all, so their fingerprints are keyed on ctx.meta.width/height
+    plus their own parameters (no value_ptr_eq, nothing to compare by
+    pointer identity). RING needed a runtime-sized storage buffer for
+    its unbounded per-ring colors list, using the same arrayLength()
+    mechanism gpu/mod.rs's own test already demonstrates. Both output
+    U8Image via Color::to_rgba_u8's truncating cast, not
+    to_image_clamped's rounding one - a new quantization-rule
+    distinction flagged for reviewer attention. Could not run cargo
+    build/cargo test in this sandbox (same restriction as every prior
+    phase). Filed one RFI covering both operations.
 progress:
   completed:
     - "Phase 0 (BLUR) delivered - merge commit 706d362 on dev"
-    - Implemented Phase 1.1 GPU dispatch for CLAMP, INVERT, RGB_TO_HSV, SHUFFLE, CHROMAKEY (five independent commits)
-    - Wrote implementation report and filed RFI covering all five
-    - "Code Reviewer response: CLAMP/INVERT/SHUFFLE/CHROMAKEY approved; RGB_TO_HSV got RFC-003"
-    - "Fixed RFC-003 (commit 1d53d7d): saturation guard max_c != 0.0, regression test added"
-    - Notified Code Reviewer the fix is pushed
+    - "Phase 1.1 (CLAMP, INVERT, RGB_TO_HSV, SHUFFLE, CHROMAKEY) delivered - merge commit b5eb6fe on dev"
+    - Implemented Phase 1.2 GPU dispatch for CHECKERBOARD, RING (two independent commits)
+    - Wrote implementation report and filed RFI covering both
   remaining:
-    - Await Code Reviewer's confirmation that RFC-003's acceptance conditions are met
-    - Merge all five Phase 1.1 commits to dev once confirmed
-    - Phase 1.2 onward (CHECKERBOARD, RING) - not started
+    - Await Code Reviewer's RFI response or RFC
+    - Phase 1.3 (ADD, SCREEN, SUBTRACT, MULTIPLY, MIX, HUE_KEY) - not started, depends on Phase 1.2 being confirmed sound
+    - Phase 2 (RESIZE, MOVE) - not started
 
 modified_files:
-  - engine/src/operations/transform/clamp.rs
-  - engine/src/operations/transform/invert.rs
-  - engine/src/operations/transform/rgb_to_hsv.rs
-  - engine/src/operations/transform/shuffle.rs
-  - engine/src/operations/key/chromakey.rs
+  - engine/src/operations/generators/checkerboard.rs
+  - engine/src/operations/generators/ring.rs
 
 tests:
   executed:
     - is_live_is_true_only_while_a_gpu_dispatch_is_pending (new, one per operation)
-    - gpu_<op>_matches_cpu_within_tolerance (new, one per operation)
-    - gpu_rgb_to_hsv_matches_cpu_for_out_of_gamut_negative_channels (new, RFC-003 regression)
+    - gpu_<op>_matches_cpu_within_tolerance_once_warmed_up (new, one per operation)
     - "Each operation's full pre-existing test suite - unchanged"
   results:
-    - "UNVERIFIED - cargo build/cargo test could not run at all in this sandbox (index.crates.io returns 403, same restriction as Phase 0/1.1). All code hand-traced, not compiler- or runtime-verified."
+    - "UNVERIFIED - cargo build/cargo test could not run at all in this sandbox (index.crates.io returns 403, same restriction as every prior phase). All code hand-traced, not compiler- or runtime-verified."
 
 blockers: []
 
 rfis:
   - RFIwebgpuoperationsphase0blurevaluation.md (answered)
-  - RFIwebgpuoperationsphase1_1evaluation.md (answered - mixed: 4 approved, RFC-003 filed against RGB_TO_HSV, now fixed)
+  - RFIwebgpuoperationsphase1_1evaluation.md (answered, RFC-003 fixed and confirmed)
+  - RFIwebgpuoperationsphase1_2evaluation.md
 
 handoff:
   target_role: code_reviewer
