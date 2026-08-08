@@ -1,5 +1,7 @@
 // src/operations/compose/add.rs
 use std::any::Any;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::compositor::{
@@ -11,9 +13,118 @@ use crate::compositor::{
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, PIXEL_KINDS},
+    value::value_ptr_eq,
     Value,
 };
 use crate::graphics::FloatImage;
+use crate::gpu::GpuState;
+
+// GPU compute shader - SPECwebgpuoperations.md's Phase 1.3. Same
+// bind-group shape as Phase 1.1 but with two read-only input storage
+// buffers (Foreground/Background) instead of one - the blanket rule
+// (GPU dispatch only replaces the unmasked path) applies identically;
+// only the unmasked branch below attempts GPU, the masked (union-of-
+// boxes) path is untouched.
+const ADD_SHADER: &str = r#"
+    @group(0) @binding(0) var<storage, read> foreground: array<f32>;
+    @group(0) @binding(1) var<storage, read> background: array<f32>;
+    @group(0) @binding(2) var<storage, read_write> output: array<f32>;
+    @group(0) @binding(3) var<uniform> params: vec4<u32>;
+
+    @compute @workgroup_size(8, 8, 1)
+    fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+        let width = params.x;
+        let height = params.y;
+
+        if (id.x >= width || id.y >= height) {
+            return;
+        }
+
+        let idx = (id.y * width + id.x) * 4u;
+        output[idx] = foreground[idx] + background[idx];
+        output[idx + 1u] = foreground[idx + 1u] + background[idx + 1u];
+        output[idx + 2u] = foreground[idx + 2u] + background[idx + 2u];
+        output[idx + 3u] = foreground[idx + 3u] + background[idx + 3u];
+    }
+"#;
+
+struct AddGpuPipeline {
+    pipeline: wgpu::ComputePipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+}
+
+fn build_add_pipeline(gpu: &GpuState) -> AddGpuPipeline {
+    let shader = gpu.create_shader(ADD_SHADER);
+
+    let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("add bind group layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let pipeline = gpu.create_compute_pipeline("add pipeline", &shader, "main", &[&bind_group_layout]);
+
+    AddGpuPipeline { pipeline, bind_group_layout }
+}
+
+#[derive(Clone)]
+struct AddFingerprint {
+    foreground: Value,
+    background: Value,
+}
+
+impl AddFingerprint {
+    fn matches(&self, other: &AddFingerprint) -> bool {
+        value_ptr_eq(&self.foreground, &other.foreground) && value_ptr_eq(&self.background, &other.background)
+    }
+}
+
+struct CompletedAddJob {
+    fingerprint: AddFingerprint,
+    pixels: Vec<f32>,
+    width: u32,
+    height: u32,
+}
 
 /// Add operation - adds RGBA channels from two inputs pixel by pixel,
 /// unclamped: a sum above 1.0 is a legitimate out-of-gamut result (an
@@ -23,11 +134,98 @@ use crate::graphics::FloatImage;
 /// Multiply, other than that. Both inputs accept a bounded Image or an
 /// already-unbounded FloatImage alike (via FloatImage::from_value), so
 /// chaining ADD -> ADD works without an intervening CLAMP.
-pub struct Add;
+pub struct Add {
+    // GPU-backed dispatch state - see blur.rs's identical fields for the
+    // full rationale.
+    gpu_pipeline: RefCell<Option<AddGpuPipeline>>,
+    pending: Rc<RefCell<Option<AddFingerprint>>>,
+    last_gpu_result: Rc<RefCell<Option<CompletedAddJob>>>,
+}
 
 impl Add {
     pub fn new() -> Self {
-        Self
+        Self {
+            gpu_pipeline: RefCell::new(None),
+            pending: Rc::new(RefCell::new(None)),
+            last_gpu_result: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Mirrors `Blur::dispatch_gpu` in structure, with two input images
+    /// instead of one.
+    fn dispatch_gpu(&self, gpu: Arc<GpuState>, fingerprint: AddFingerprint, foreground: FloatImage, background: FloatImage) {
+        let width = foreground.width;
+        let height = foreground.height;
+        let len = foreground.pixels.len();
+        let byte_len = (len * std::mem::size_of::<f32>()) as u64;
+
+        {
+            let mut pipeline_slot = self.gpu_pipeline.borrow_mut();
+            if pipeline_slot.is_none() {
+                *pipeline_slot = Some(build_add_pipeline(&gpu));
+            }
+        }
+
+        let foreground_buffer = gpu.upload("add foreground", &foreground.pixels, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+        let background_buffer = gpu.upload("add background", &background.pixels, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+        let output_buffer = gpu.create_buffer(
+            "add output",
+            byte_len,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        );
+        let params: [u32; 4] = [width, height, 0, 0];
+        let params_buffer = gpu.upload("add params", &params, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+
+        let readback_buffer = gpu.create_buffer(
+            "add readback",
+            byte_len,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        );
+
+        {
+            let pipeline_slot = self.gpu_pipeline.borrow();
+            let pipeline = pipeline_slot.as_ref().expect("just built above");
+
+            let bind_group = gpu.create_bind_group("add bind group", &pipeline.bind_group_layout, &[
+                wgpu::BindGroupEntry { binding: 0, resource: foreground_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: background_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: output_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 3, resource: params_buffer.as_entire_binding() },
+            ]);
+
+            let workgroups_x = width.div_ceil(8);
+            let workgroups_y = height.div_ceil(8);
+            gpu.dispatch("add dispatch", &pipeline.pipeline, &bind_group, (workgroups_x, workgroups_y, 1));
+        }
+
+        gpu.copy_buffer_to_buffer(&output_buffer, &readback_buffer, byte_len);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let pixels = gpu.read_buffer_blocking(&readback_buffer, len);
+            *self.last_gpu_result.borrow_mut() = Some(CompletedAddJob { fingerprint, pixels, width, height });
+            *self.pending.borrow_mut() = None;
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            *self.pending.borrow_mut() = Some(fingerprint.clone());
+            let pending = self.pending.clone();
+            let last_gpu_result = self.last_gpu_result.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let pixels = gpu.read_buffer_async(&readback_buffer, len).await;
+                *last_gpu_result.borrow_mut() = Some(CompletedAddJob {
+                    fingerprint: fingerprint.clone(),
+                    pixels,
+                    width,
+                    height,
+                });
+                let mut pending_slot = pending.borrow_mut();
+                if pending_slot.as_ref().is_some_and(|p| p.matches(&fingerprint)) {
+                    *pending_slot = None;
+                }
+            });
+        }
     }
 
     /// Raw per-channel sum - NOT clamped. See this module's own doc
@@ -117,6 +315,11 @@ impl Operation for Add {
         Err(OperationError::UnknownParameter(name.to_string()))
     }
 
+    // See blur.rs's identical override for the full rationale.
+    fn is_live(&self) -> bool {
+        self.pending.borrow().is_some()
+    }
+
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(first) = find_input(inputs, Input::Foreground) else {
             return Err(OperationError::InvalidInputType("Add requires first input".into()));
@@ -154,7 +357,8 @@ impl Operation for Add {
         // genuinely non-default output. The natural box is therefore the
         // UNION of Foreground's and Background's own reported boxes - the
         // region where EITHER input could contribute real content.
-        let added = if mask.is_some() {
+        if mask.is_some() {
+            let mask = mask.as_ref();
             let foreground_box = find_bbox(&ctx.input_bboxes, Input::Foreground)
                 .unwrap_or_else(|| Rect::full(first_image.width, first_image.height));
             let background_box = find_bbox(&ctx.input_bboxes, Input::Background)
@@ -168,14 +372,33 @@ impl Operation for Add {
             let a = &first_image.pixels;
             let b = &second_image.pixels;
 
-            crate::graphics::compute_within_bbox(width, first_image.height, work_area, a, |x, y| {
+            let added = crate::graphics::compute_within_bbox(width, first_image.height, work_area, a, |x, y| {
                 Self::add_single_pixel(a, b, x, y, width)
-            })
-        } else {
-            Self::add_pixels(&first_image.pixels, &second_image.pixels)
-        };
+            });
+            let added = crate::graphics::apply_mask(&first_image.pixels, added, mask, first_image.width, first_image.height)?;
 
-        let added = crate::graphics::apply_mask(&first_image.pixels, added, mask.as_ref(), first_image.width, first_image.height)?;
+            return Ok(vec![Value::FloatImage(Arc::new(FloatImage { pixels: added, width: first_image.width, height: first_image.height }))]);
+        }
+
+        // Unmasked path: try GPU first when available.
+        if let Some(gpu) = ctx.gpu.clone() {
+            let fingerprint = AddFingerprint { foreground: first.clone(), background: second.clone() };
+
+            let cached = self.last_gpu_result.borrow().as_ref()
+                .filter(|completed| completed.fingerprint.matches(&fingerprint))
+                .map(|completed| FloatImage { pixels: completed.pixels.clone(), width: completed.width, height: completed.height });
+
+            if let Some(result) = cached {
+                return Ok(vec![Value::FloatImage(Arc::new(result))]);
+            }
+
+            let already_pending = self.pending.borrow().as_ref().is_some_and(|p| p.matches(&fingerprint));
+            if !already_pending {
+                self.dispatch_gpu(gpu, fingerprint, first_image.clone(), second_image.clone());
+            }
+        }
+
+        let added = Self::add_pixels(&first_image.pixels, &second_image.pixels);
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels: added,
@@ -507,5 +730,56 @@ mod tests {
         let off_pixels = as_u8_pixels(&off_values[0]);
 
         assert_eq!(on_pixels, off_pixels, "bbox consumption on vs off must produce pixel-identical output");
+    }
+
+    // --- WebGPU Phase 1.3 (SPECwebgpuoperations.md) ---
+
+    #[test]
+    fn is_live_is_true_only_while_a_gpu_dispatch_is_pending() {
+        let add = Add::new();
+        assert!(!add.is_live());
+
+        *add.pending.borrow_mut() = Some(AddFingerprint { foreground: Value::Number(0.0), background: Value::Number(0.0) });
+        assert!(add.is_live());
+
+        *add.pending.borrow_mut() = None;
+        assert!(!add.is_live());
+    }
+
+    #[test]
+    fn gpu_add_matches_cpu_within_tolerance_once_warmed_up() {
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        let width = 5;
+        let height = 3;
+        let fg = image((0..(width * height)).flat_map(|n| {
+            let v = ((n * 53) % 256) as u8;
+            [v, v.wrapping_add(20), v.wrapping_add(40), 255]
+        }).collect(), width, height);
+        let bg = image((0..(width * height)).flat_map(|n| {
+            let v = ((n * 89) % 256) as u8;
+            [v, v.wrapping_add(60), v.wrapping_add(120), 255]
+        }).collect(), width, height);
+
+        let cpu_add = Add::new();
+        let cpu_values = cpu_add
+            .execute(&context(width, height), &[(Input::Foreground, Value::Image(fg.clone())), (Input::Background, Value::Image(bg.clone()))])
+            .unwrap();
+        let Value::FloatImage(cpu_result) = &cpu_values[0] else { panic!("expected a float image") };
+
+        let gpu_add = Add::new();
+        let gpu_ctx = Context { gpu: Some(gpu), ..context(width, height) };
+        let _ = gpu_add.execute(&gpu_ctx, &[(Input::Foreground, Value::Image(fg.clone())), (Input::Background, Value::Image(bg.clone()))]).unwrap();
+        let gpu_values = gpu_add.execute(&gpu_ctx, &[(Input::Foreground, Value::Image(fg)), (Input::Background, Value::Image(bg))]).unwrap();
+        let Value::FloatImage(gpu_result) = &gpu_values[0] else { panic!("expected a float image") };
+
+        assert_eq!(cpu_result.pixels.len(), gpu_result.pixels.len());
+        for (index, (cpu_px, gpu_px)) in cpu_result.pixels.iter().zip(gpu_result.pixels.iter()).enumerate() {
+            assert!((cpu_px - gpu_px).abs() < 1e-4, "channel {}: cpu={}, gpu={}", index, cpu_px, gpu_px);
+        }
     }
 }
