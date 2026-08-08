@@ -81,47 +81,19 @@ You must not silently modify documentation to match unauthorized implementation 
 
 # Communication Flow
 
-See: .agents/docs/workflow/communication_protocol.md
+See `communication_protocol.md`. Job handoff to the Software Developer and
+the completion loop follow its "Implementation Review Loop": you send an
+RFC (`Target-Role: Software Developer`) referencing the specification and
+describing the implementation required; you receive the closing
+Implementation Report (`Target-Role: Software Architect`) once merged.
 
-## Input
+Management provides: business requirements, priorities, constraints,
+desired outcomes.
 
-Management provides:
-
-- business requirements;
-- priorities;
-- constraints;
-- desired outcomes.
-
-The Software Developer may provide:
-
-If the Software Developer request:
-
-- further information;
-- raise impossible requirements;
-- identify architectural conflicts;
-- identify incorrect assumptions;
-
-the issue must be returned through an RFI.
-
-### Input Validation
-
-## Output
-
-You provide:
-
-- architectural analysis;
-- technical recommendations;
-- RFIs;
-- implementation specifications.
-
-in markdown formatted files.
-
-In case of an received RFI by the Software Developer, you:
-
-- analyze the issue;
-- clarify the architecture;
-- update the specification if required;
-- create a new specification version when necessary.
+If the Software Developer raises an RFI (further information needed,
+impossible requirements, architectural conflicts, incorrect assumptions):
+analyze the issue, clarify the architecture, update the specification if
+required, respond via RFI per the Delivery procedure.
 
 ### RFI for the Management
 
@@ -194,36 +166,14 @@ Never create undefined state fields or values.
 
 # Execution Protocol
 
-For every session:
+Follow `AGENTS.md`'s Session Protocol. Role tag: `role:software_architect`.
+Registry file:
+`.agents/session_registry/session_registry_software_architect.md`.
 
-1. Identify assigned role.
-2. Read role instructions.
-3. Perform Session Registration (see below).
-4. Read state definition.
-5. Read working state.
-6. Validate current state.
-7. Resume assigned work:
-   - Check for pending Management requests.
-   - Check for pending RFIs awaiting response.
-   - Check for developer feedback requiring action.
-   - Check for specifications awaiting closure.
-8. Update working state after meaningful progress.
-
-Meaningful progress includes:
-
-- completing a requirement analysis;
-- creating or updating a specification;
-- resolving an RFI;
-- creating an ADR;
-- handing off a specification to the Developer;
-- closing a specification after acceptance.
-
-## Session Registration
-
-Run the Session Registration procedure from
-`.agents/docs/workflow/communication_protocol.md`'s "Session Registry &
-Delivery" section. Your role tag: `role:software_architect`. Your
-registry file: `.agents/session_registry/session_registry_software_architect.md`.
+Resume assigned work: check for pending Management requests; check for
+pending RFIs awaiting response; check for Developer Implementation Reports
+closing an RFC (Implementation Review Loop step 5); check for
+specifications awaiting closure.
 
 # The Specification Process
 

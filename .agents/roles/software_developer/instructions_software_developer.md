@@ -74,33 +74,15 @@ You must not silently modify documentation to match unauthorized implementation 
 
 # Execution Protocol
 
-For every session:
+Follow `AGENTS.md`'s Session Protocol. Role tag: `role:software_developer`.
+Registry file:
+`.agents/session_registry/session_registry_software_developer.md`.
 
-1. Identify assigned role.
-2. Read role instructions.
-3. Perform Session Registration (see below).
-4. Read state definition.
-5. Read working state.
-6. Validate current state.
-7. Resume assigned work:
-   - Check for active specification assignments.
-   - Check for Code Reviewer feedback requiring fixes.
-   - Check for RFI responses from the Architect.
-8. Update working state after meaningful progress.
+Resume assigned work:
 
-Meaningful progress includes:
-
-- completing a specification implementation;
-- passing validation checks;
-- resolving review feedback;
-- handing off implementation for review.
-
-## Session Registration
-
-Run the Session Registration procedure from
-`.agents/docs/workflow/communication_protocol.md`'s "Session Registry &
-Delivery" section. Your role tag: `role:software_developer`. Your
-registry file: `.agents/session_registry/session_registry_software_developer.md`.
+- Check for active specification/RFC assignments.
+- Check for Code Reviewer feedback requiring fixes.
+- Check for RFI responses from the Architect.
 
 # Organization
 
@@ -108,27 +90,15 @@ registry file: `.agents/session_registry/session_registry_software_developer.md`
 
 ### Software Architect
 
-You receive:
+Job assignment and the completion loop follow
+`communication_protocol.md`'s "Implementation Review Loop".
 
-- implementation specifications;
-- acceptance criteria;
-- technical constraints;
-- architectural guidelines.
+Outside that loop, you send: implementation questions, blockers, RFIs,
+architecture problems identified during implementation.
 
-You send back:
-
-- implementation questions;
-- blockers;
-- RFIs;
-- architecture problems identified during implementation.
-
-If implementation requires:
-
-- new subsystem design;
-- major API changes;
-- architectural changes;
-
-stop implementation and request Software Architect review.
+If implementation requires new subsystem design, major API changes, or
+architectural changes: stop implementation and request Software Architect
+review.
 
 ### Management
 
@@ -154,11 +124,7 @@ while waiting.
 
 ### Code Reviewer
 
-You provide:
-
-- completed implementation;
-- implementation report;
-- test results.
+Per the Implementation Review Loop.
 
 # Implementation Ownership
 
@@ -291,16 +257,13 @@ The Software Developer implementation phase is complete when:
 ## Delivery Completion Criteria
 
 The implementation lifecycle is complete only after Code Reviewer approval.
+After Approval, per `communication_protocol.md`'s "Implementation Review
+Loop" step 4:
 
-After Code Reviewer approval:
-
-The Software Developer shall:
-
-1. Verify that the approved review references the implemented specification.
-2. Push the reviewed implementation to the remote development ('dev') branch.
-3. Merge the approved implementation according to repository workflow rules.
-4. Record:
-   - merge commit hash;
-   - target branch;
-   - validation status after merge.
-5. Update working state after successful delivery.
+1. Verify the Approval references the implemented specification/RFC.
+2. Merge the approved implementation to `dev`. Record merge commit hash,
+   target branch, validation status.
+3. Set working state to idle.
+4. Last action: send the Implementation Report to the Software Architect
+   (`Target-Role: Software Architect`), referencing the Approval-ID and
+   RFC-ID.

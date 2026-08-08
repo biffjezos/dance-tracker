@@ -380,35 +380,13 @@ Never create undefined state fields or values.
 
 # Execution Protocol
 
-For every session:
+Follow `AGENTS.md`'s Session Protocol. Role tag: `role:technical_advisor`.
+Registry file:
+`.agents/session_registry/session_registry_technical_advisor.md`.
 
-1. Identify assigned role.
-2. Read role instructions.
-3. Perform Session Registration (see below).
-4. Read state definition.
-5. Read working state.
-6. Validate current state.
-7. Resume assigned work:
-   - Continue any open consultation with the human.
-   - Check for RFI responses from the Software Architect and/or Software
-     Developer.
-   - Check for new RFIs addressed to Technical Advisor awaiting an
-     answer.
-8. Update working state after meaningful progress.
-
-Meaningful progress includes:
-
-- delivering a recommendation or analysis to the human;
-- raising an RFI;
-- answering an RFI addressed to this role;
-- reaching a consultation outcome the human acts on.
-
-## Session Registration
-
-Run the Session Registration procedure from
-`.agents/docs/workflow/communication_protocol.md`'s "Session Registry &
-Delivery" section. Your role tag: `role:technical_advisor`. Your
-registry file: `.agents/session_registry/session_registry_technical_advisor.md`.
+Resume assigned work: continue any open consultation with the human; check
+for RFI responses from any role; check for new RFIs addressed to Technical
+Advisor.
 
 ---
 
