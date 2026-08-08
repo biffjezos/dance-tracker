@@ -5,46 +5,53 @@ active_specification:
 status: waiting_for_review_approval
 
 current_task:
-  name: SPEC-webgpu-operations Phase 0 (BLUR) - implemented, awaiting review
+  name: SPEC-webgpu-operations Phase 1.1 (pointwise ops) - RFC-003 fixed, awaiting re-confirmation
   description: >
-    Implemented SPECwebgpuoperations.md's Phase 0 (BLUR's GPU-backed
-    unmasked path) on branch claude/agent-setup-prep-oyj2ri. Scoped to
-    Phase 0 only - the spec's own acceptance criterion #1 makes it the
-    sole prerequisite for every later phase, and it is the first-ever
-    per-operation WebGPU implementation in this codebase, with no prior
-    per-operation evaluation to pattern-match against. Could not run
-    cargo build/cargo test in this sandbox (index.crates.io blocked,
-    403 - same restriction already on record from the Code Reviewer's
-    notification_cargo_registry_index_blocked.md); every claim in the
-    implementation report is hand-traced, not build-verified. Filed an
-    RFI to Code Reviewer requesting evaluation, asking for an RFC in
-    response if anything is found not approvable.
+    Code Reviewer's RFI response on Phase 1.1: CLAMP, INVERT, SHUFFLE,
+    CHROMAKEY approved outright; RGB_TO_HSV got RFC-003 (GPU saturation
+    guard `max_c > 0.0` diverged from CPU's `max == 0.0` for negative
+    max_c - unclamped out-of-gamut FloatImage data can genuinely reach
+    RGB_TO_HSV via ADD/SUBTRACT/SCREEN with no intervening CLAMP).
+    Fixed per RFC-003's exact acceptance conditions (guard changed to
+    `max_c != 0.0`, added a regression test using a directly-constructed
+    FloatImage since U8Image can't represent negative channels), commit
+    1d53d7d, pushed to claude/agent-setup-prep-oyj2ri. Notified Code
+    Reviewer. The other four operations don't need to wait on this per
+    the reviewer's own note - they're independently merge-ready.
 progress:
   completed:
-    - "Verified precondition: gpu module foundation (Context.gpu, App.gpu, GpuState) confirmed present on origin/dev"
-    - Analyzed existing BLUR CPU implementation and its masked/bbox path
-    - Implemented Phase 0 GPU dispatch for BLUR (WGSL shader, fingerprint/pending/last_gpu_result state, target-conditional readback, is_live() override)
-    - Wrote implementation report (.agents/communication/implementation_reports/webgpu/operations_Phase0_blur_report.md)
-    - Filed RFI to Code Reviewer requesting evaluation (.agents/communication/rfi/RFIwebgpuoperationsphase0blurevaluation.md)
+    - "Phase 0 (BLUR) delivered - merge commit 706d362 on dev"
+    - Implemented Phase 1.1 GPU dispatch for CLAMP, INVERT, RGB_TO_HSV, SHUFFLE, CHROMAKEY (five independent commits)
+    - Wrote implementation report and filed RFI covering all five
+    - "Code Reviewer response: CLAMP/INVERT/SHUFFLE/CHROMAKEY approved; RGB_TO_HSV got RFC-003"
+    - "Fixed RFC-003 (commit 1d53d7d): saturation guard max_c != 0.0, regression test added"
+    - Notified Code Reviewer the fix is pushed
   remaining:
-    - Await Code Reviewer's RFI response or RFC
-    - Phases 1.1 through 2 (nine remaining operations) - not started, each depends on this phase being confirmed sound first
+    - Await Code Reviewer's confirmation that RFC-003's acceptance conditions are met
+    - Merge all five Phase 1.1 commits to dev once confirmed
+    - Phase 1.2 onward (CHECKERBOARD, RING) - not started
 
 modified_files:
-  - engine/src/operations/transform/blur.rs
+  - engine/src/operations/transform/clamp.rs
+  - engine/src/operations/transform/invert.rs
+  - engine/src/operations/transform/rgb_to_hsv.rs
+  - engine/src/operations/transform/shuffle.rs
+  - engine/src/operations/key/chromakey.rs
 
 tests:
   executed:
-    - is_live_is_true_only_while_a_gpu_dispatch_is_pending (new)
-    - gpu_blur_matches_cpu_blur_within_tolerance_once_warmed_up (new)
-    - "BLUR's full pre-existing test suite (masked/bbox consume-equivalence, identity, mismatched-mask-size, etc.) - unchanged apart from one struct-literal mechanical fix"
+    - is_live_is_true_only_while_a_gpu_dispatch_is_pending (new, one per operation)
+    - gpu_<op>_matches_cpu_within_tolerance (new, one per operation)
+    - gpu_rgb_to_hsv_matches_cpu_for_out_of_gamut_negative_channels (new, RFC-003 regression)
+    - "Each operation's full pre-existing test suite - unchanged"
   results:
-    - "UNVERIFIED - cargo build/cargo test could not run at all in this sandbox (index.crates.io returns 403, confirmed via ENVIRONMENT_DIAGNOSTICS.md Steps 1-2). All code is hand-traced against existing gpu/mod.rs API usage and WGSL semantics, not compiler- or runtime-verified."
+    - "UNVERIFIED - cargo build/cargo test could not run at all in this sandbox (index.crates.io returns 403, same restriction as Phase 0/1.1). All code hand-traced, not compiler- or runtime-verified."
 
 blockers: []
 
 rfis:
-  - RFIwebgpuoperationsphase0blurevaluation.md
+  - RFIwebgpuoperationsphase0blurevaluation.md (answered)
+  - RFIwebgpuoperationsphase1_1evaluation.md (answered - mixed: 4 approved, RFC-003 filed against RGB_TO_HSV, now fixed)
 
 handoff:
   target_role: code_reviewer
