@@ -27,10 +27,11 @@ use crate::compositor::{
 use crate::graphics::FloatImage;
 
 /// Repeat of a masked object, both spatially and in time: ghost `n`
-/// (1-based) is offset by `n * DISTANCE * (SPATIAL_X, SPATIAL_Y)` - that
-/// part scales by ghost index. DELAY does not: every ghost shows the
-/// source from the same DELAY frames ago, same as OPACITY_MULTIPLIER is
-/// one shared value for every ghost, not indexed by n. SHOW_SOURCE
+/// (1-based) is offset by `n * DISTANCE * (SPATIAL_X, SPATIAL_Y)` and
+/// reads its historical cutout from `n * DELAY` frames back - both scale
+/// by ghost index, a cascading chain where ghost `n` is delayed `DELAY`
+/// more than ghost `n-1`. OPACITY_MULTIPLIER is different: one shared
+/// value for every ghost, not indexed by n. SHOW_SOURCE
 /// toggles whether the live (unmoved, undelayed) source itself is
 /// composited on top at all, or only the ghost trail shows. Only SOURCE
 /// is required - MASK is optional: when it's not wired, SOURCE's own
@@ -161,10 +162,11 @@ impl Ghost {
     }
 
     /// The full GHOST composite: `ghost_count` copies, each spatially
-    /// offset by `n * DISTANCE`, all pulled from the same `delay` frames
-    /// ago and all at the same `opacity_multiplier`, stacked nearest-to-
-    /// source-on-top (painted far-to-near - the spatially-farthest ghost
-    /// goes down first). Stacking order is a judgment call the user
+    /// offset by `n * DISTANCE` and pulled from `n * delay` frames ago
+    /// (a cascading chain: ghost `n` is `delay` frames further back than
+    /// ghost `n-1`), all at the same `opacity_multiplier`, stacked
+    /// nearest-to-source-on-top (painted far-to-near - the spatially-
+    /// farthest ghost goes down first). Stacking order is a judgment call the user
     /// hasn't specified either way - see ANIMATION_IMPLEMENTATION_PLAN.md's
     /// GHOST section. The live source itself is composited on top last,
     /// at its own native opacity, only when `show_source` is true.
@@ -204,7 +206,7 @@ impl Ghost {
         let mut result = vec![0f32; cutout.len()];
 
         for n in (1..=self.ghost_count).rev() {
-            let delayed = self.delayed_cutout(self.delay);
+            let delayed = self.delayed_cutout(n as u64 * self.delay);
             let offset_x = n as f64 * self.distance * self.spatial_x;
             let offset_y = n as f64 * self.distance * self.spatial_y;
 
@@ -239,7 +241,7 @@ impl Ghost {
         let mut history = self.history.borrow_mut();
         history.push_back(cutout.to_vec());
 
-        let capacity = self.delay as usize + 1;
+        let capacity = (self.ghost_count as u64).saturating_mul(self.delay).saturating_add(1) as usize;
         while history.len() > capacity {
             history.pop_front();
         }
@@ -701,19 +703,21 @@ mod tests {
     }
 
     #[test]
-    fn every_ghost_uses_the_same_delay_not_scaled_by_ghost_index() {
-        // Regression: DELAY must behave like OPACITY_MULTIPLIER (one
-        // shared value for every ghost), not like DISTANCE (scaled by n).
+    fn each_ghost_delay_scales_by_ghost_index_like_distance_does() {
+        // RFC-005 / SPEC-GHOST-DELAY: DELAY must cascade per ghost layer,
+        // exactly mirroring DISTANCE's own n-scaling - ghost n reads
+        // n * DELAY frames back, not a shared DELAY value.
         let ghost = Ghost { ghost_count: 2, distance: 1.0, spatial_x: 1.0, spatial_y: 0.0, opacity_multiplier: 1.0, delay: 1, show_source: false, ..Ghost::new() };
         let opaque_mask = solid(3, 1, 0.0, 0.0, 0.0, 1.0);
 
         ghost.render(&solid(3, 1, 1.0, 0.0, 0.0, 1.0), Some(&opaque_mask), 3, 1); // frame 0: red
-        let out = ghost.render(&solid(3, 1, 0.0, 1.0, 0.0, 1.0), Some(&opaque_mask), 3, 1); // frame 1: green
+        ghost.render(&solid(3, 1, 0.0, 1.0, 0.0, 1.0), Some(&opaque_mask), 3, 1); // frame 1: green
+        let out = ghost.render(&solid(3, 1, 0.0, 0.0, 1.0, 1.0), Some(&opaque_mask), 3, 1); // frame 2: blue
 
-        // Both ghost 1 (x=1) and ghost 2 (x=2) must show the same
-        // (delayed, red) frame - not ghost 2 reaching back twice as far.
-        assert!((out[4] - 1.0).abs() < 1e-6, "ghost 1 should show red (delay=1 back)");
-        assert!((out[8] - 1.0).abs() < 1e-6, "ghost 2 should also show red, the same delay as ghost 1 - not a further-back frame");
+        // Ghost 1 (x=1) reads 1 * DELAY = 1 frame back from frame 2: green.
+        assert!((out[5] - 1.0).abs() < 1e-6, "ghost 1 should show green (1 * delay = 1 frame back), got {:?}", &out[4..8]);
+        // Ghost 2 (x=2) reads 2 * DELAY = 2 frames back from frame 2: red.
+        assert!((out[8] - 1.0).abs() < 1e-6, "ghost 2 should show red (2 * delay = 2 frames back), got {:?}", &out[8..12]);
     }
 
     #[test]

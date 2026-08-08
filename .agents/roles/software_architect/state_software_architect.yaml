@@ -1,8 +1,10 @@
 status: idle
 
 handoff:
-  target_role: null
-  status: null
+  target_role: software_developer
+  specification_id: SPEC-GHOST-DELAY
+  version: 1
+  status: sent
 
 parked_work:
   - .agents/roles/software_architect/docs/parked_work/PARKED_WORK.md
