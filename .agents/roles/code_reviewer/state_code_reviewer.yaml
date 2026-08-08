@@ -14,7 +14,14 @@ validation:
   checks_performed: []
   results: []
 
-rfis: []
+rfis:
+  - "RFI-webgpu-operations-phase0-blur-eval - answered, approved (RFIresponsewebgpuoperationsphase0blurevaluation.md)"
+  - "RFI-webgpu-operations-phase1-1-pointwise-eval - answered, 4/5 approved, RFC-003 filed for RGB_TO_HSV (RFIresponsewebgpuoperationsphase1_1evaluation.md)"
+  - "RFC-003 (RGB_TO_HSV GPU saturation guard) - fix confirmed, closed (RFIresponserfc003rgbtohsvconfirmed.md)"
+  - "RFI-webgpu-operations-phase1-2-procedural-eval - answered, approved (RFIresponsewebgpuoperationsphase1_2evaluation.md)"
+  - "RFI-webgpu-operations-phase1-3-twobuffer-eval - answered, approved, closes Phase 1 (RFIresponsewebgpuoperationsphase1_3evaluation.md)"
+  - "RFI-webgpu-operations-phase2-resampling-eval - answered, approved, closes SPECwebgpuoperations.md entirely (RFIresponsewebgpuoperationsphase2evaluation.md)"
+  - "ADD Phase 3 bbox migration (RFC-002) - retroactive evaluation, approved (evaluation_bbox_phase3_add.md)"
 
 handoff:
   target_role: null
