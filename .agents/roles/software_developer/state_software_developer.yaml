@@ -2,25 +2,19 @@ active_specification:
   id: SPECwebgpuoperations.md
   version: 1
 
-status: assigned
+status: idle
 
 current_task:
-  name: Pick up SPEC-webgpu-operations handoff
-  description: >
-    Software Architect's working state records a handoff of
-    SPECwebgpuoperations.md v1 (status: sent) with no prior Software
-    Developer session having claimed it. Verified the spec's stated
-    precondition - SPEC-webgpu-compute-backend.md's Phase 0 (the gpu
-    module foundation, Context.gpu/App.gpu, GpuState) - is merged on
-    origin/dev. Beginning specification analysis before implementation.
+  name:
+  description:
 progress:
   completed:
-    - "Verified precondition: gpu module foundation (Context.gpu, App.gpu, GpuState) confirmed present on origin/dev"
+    - "Phase 0 (BLUR) delivered - merge commit 706d362 on dev"
+    - "Phase 1.1 (CLAMP, INVERT, RGB_TO_HSV, SHUFFLE, CHROMAKEY) delivered - merge commit b5eb6fe on dev"
+    - "Phase 1.2 (CHECKERBOARD, RING) delivered - merge commit 2914425 on dev"
   remaining:
-    - Analyze existing BLUR CPU implementation and its masked/bbox path
-    - Plan Phase 0 GPU dispatch for BLUR per spec
-    - Implement, test, validate against acceptance criteria
-    - Produce implementation report
+    - "Phase 1.3 (ADD, SCREEN, SUBTRACT, MULTIPLY, MIX, HUE_KEY - two-buffer pointwise ops) - not started"
+    - "Phase 2 (RESIZE, MOVE - resampling ops) - not started"
 
 modified_files: []
 
@@ -30,7 +24,10 @@ tests:
 
 blockers: []
 
-rfis: []
+rfis:
+  - RFIwebgpuoperationsphase0blurevaluation.md (answered)
+  - RFIwebgpuoperationsphase1_1evaluation.md (answered, RFC-003 fixed and confirmed)
+  - RFIwebgpuoperationsphase1_2evaluation.md (answered, both approved)
 
 handoff:
   target_role: null
