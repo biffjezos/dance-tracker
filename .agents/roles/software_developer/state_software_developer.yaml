@@ -2,23 +2,11 @@ active_specification:
   id: SPECwebgpuoperations.md
   version: 1
 
-status: waiting_for_review_approval
+status: idle
 
 current_task:
-  name: SPEC-webgpu-operations Phase 0 (BLUR) - implemented, awaiting review
-  description: >
-    Implemented SPECwebgpuoperations.md's Phase 0 (BLUR's GPU-backed
-    unmasked path) on branch claude/agent-setup-prep-oyj2ri. Scoped to
-    Phase 0 only - the spec's own acceptance criterion #1 makes it the
-    sole prerequisite for every later phase, and it is the first-ever
-    per-operation WebGPU implementation in this codebase, with no prior
-    per-operation evaluation to pattern-match against. Could not run
-    cargo build/cargo test in this sandbox (index.crates.io blocked,
-    403 - same restriction already on record from the Code Reviewer's
-    notification_cargo_registry_index_blocked.md); every claim in the
-    implementation report is hand-traced, not build-verified. Filed an
-    RFI to Code Reviewer requesting evaluation, asking for an RFC in
-    response if anything is found not approvable.
+  name:
+  description:
 progress:
   completed:
     - "Verified precondition: gpu module foundation (Context.gpu, App.gpu, GpuState) confirmed present on origin/dev"
@@ -26,9 +14,10 @@ progress:
     - Implemented Phase 0 GPU dispatch for BLUR (WGSL shader, fingerprint/pending/last_gpu_result state, target-conditional readback, is_live() override)
     - Wrote implementation report (.agents/communication/implementation_reports/webgpu/operations_Phase0_blur_report.md)
     - Filed RFI to Code Reviewer requesting evaluation (.agents/communication/rfi/RFIwebgpuoperationsphase0blurevaluation.md)
+    - "Code Reviewer approved (.agents/communication/rfi/RFIresponsewebgpuoperationsphase0blurevaluation.md, evaluation: .agents/communication/evaluation/bbox/webgpu/evaluation_webgpu_operations_phase0_blur.md) - no RFC needed"
+    - "Delivered: merged claude/agent-setup-prep-oyj2ri into dev, merge commit 706d362, pushed to origin/dev; RFI response quoted in the merge commit message"
   remaining:
-    - Await Code Reviewer's RFI response or RFC
-    - Phases 1.1 through 2 (nine remaining operations) - not started, each depends on this phase being confirmed sound first
+    - Phases 1.1 through 2 (nine remaining operations) - not started; SPECwebgpuoperations.md v1 stays the active specification until they're picked up, since Phase 0 was the sole prerequisite and is now confirmed sound
 
 modified_files:
   - engine/src/operations/transform/blur.rs
@@ -39,13 +28,13 @@ tests:
     - gpu_blur_matches_cpu_blur_within_tolerance_once_warmed_up (new)
     - "BLUR's full pre-existing test suite (masked/bbox consume-equivalence, identity, mismatched-mask-size, etc.) - unchanged apart from one struct-literal mechanical fix"
   results:
-    - "UNVERIFIED - cargo build/cargo test could not run at all in this sandbox (index.crates.io returns 403, confirmed via ENVIRONMENT_DIAGNOSTICS.md Steps 1-2). All code is hand-traced against existing gpu/mod.rs API usage and WGSL semantics, not compiler- or runtime-verified."
+    - "UNVERIFIED (implementor) / UNVERIFIED (reviewer, independently re-confirmed) - cargo build/cargo test could not run in either session (index.crates.io returns 403, ENVIRONMENT_DIAGNOSTICS.md Steps 1-2). Both implementation and evaluation are hand-traced against gpu/mod.rs's already-source-verified API surface and WGSL language semantics, not compiler- or runtime-verified. Does not block the approval per ENVIRONMENT_DIAGNOSTICS.md; Management's open notification (notification_cargo_registry_index_blocked.md) covers the underlying restriction."
 
 blockers: []
 
 rfis:
-  - RFIwebgpuoperationsphase0blurevaluation.md
+  - RFIwebgpuoperationsphase0blurevaluation.md (answered: RFIresponsewebgpuoperationsphase0blurevaluation.md)
 
 handoff:
-  target_role: code_reviewer
-  status: sent
+  target_role: null
+  status: null
