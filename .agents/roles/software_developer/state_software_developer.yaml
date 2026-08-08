@@ -2,25 +2,50 @@ active_specification:
   id: SPECwebgpuoperations.md
   version: 1
 
-status: idle
+status: waiting_for_review_approval
 
 current_task:
-  name:
-  description:
+  name: SPEC-webgpu-operations Phase 1.3 (two-buffer ops) - implemented, awaiting review
+  description: >
+    Implemented SPECwebgpuoperations.md's Phase 1.3 (ADD, SCREEN,
+    SUBTRACT, MULTIPLY, MIX, HUE_KEY GPU dispatch) on branch
+    claude/agent-setup-prep-oyj2ri, following the pattern from Phases
+    0/1.1/1.2. Same bind-group shape as Phase 1.1 plus a second input
+    storage buffer. MULTIPLY (not yet migrated to bbox-consumption)
+    keeps its masked path entirely CPU/unrestricted, same blanket-rule
+    split as every other operation. MIX has no MASK input, GPU dispatch
+    unconditional. HUE_KEY's target_hue is computed CPU-side via the
+    already-tested Color::to_hsv() rather than re-porting the full
+    conversion into WGSL. Could not run cargo build/cargo test in this
+    sandbox (same restriction as every prior phase). Filed one RFI
+    covering all six operations; this closes out Phase 1 entirely once
+    reviewed.
 progress:
   completed:
     - "Phase 0 (BLUR) delivered - merge commit 706d362 on dev"
     - "Phase 1.1 (CLAMP, INVERT, RGB_TO_HSV, SHUFFLE, CHROMAKEY) delivered - merge commit b5eb6fe on dev"
     - "Phase 1.2 (CHECKERBOARD, RING) delivered - merge commit 2914425 on dev"
+    - Implemented Phase 1.3 GPU dispatch for ADD, SCREEN, SUBTRACT, MULTIPLY, MIX, HUE_KEY (six independent commits)
+    - Wrote implementation report and filed RFI covering all six
   remaining:
-    - "Phase 1.3 (ADD, SCREEN, SUBTRACT, MULTIPLY, MIX, HUE_KEY - two-buffer pointwise ops) - not started"
-    - "Phase 2 (RESIZE, MOVE - resampling ops) - not started"
+    - Await Code Reviewer's RFI response or RFC
+    - Phase 2 (RESIZE, MOVE) - not started, depends on Phase 1.3 being confirmed sound
 
-modified_files: []
+modified_files:
+  - engine/src/operations/compose/add.rs
+  - engine/src/operations/compose/screen.rs
+  - engine/src/operations/compose/subtract.rs
+  - engine/src/operations/compose/multiply.rs
+  - engine/src/operations/compose/mix.rs
+  - engine/src/operations/key/hue_key.rs
 
 tests:
-  executed: []
-  results: []
+  executed:
+    - is_live_is_true_only_while_a_gpu_dispatch_is_pending (new, one per operation)
+    - gpu_<op>_matches_cpu_within_tolerance_once_warmed_up (new, one per operation)
+    - "Each operation's full pre-existing test suite - unchanged"
+  results:
+    - "UNVERIFIED - cargo build/cargo test could not run at all in this sandbox (index.crates.io returns 403, same restriction as every prior phase). All code hand-traced, not compiler- or runtime-verified."
 
 blockers: []
 
@@ -28,7 +53,8 @@ rfis:
   - RFIwebgpuoperationsphase0blurevaluation.md (answered)
   - RFIwebgpuoperationsphase1_1evaluation.md (answered, RFC-003 fixed and confirmed)
   - RFIwebgpuoperationsphase1_2evaluation.md (answered, both approved)
+  - RFIwebgpuoperationsphase1_3evaluation.md
 
 handoff:
-  target_role: null
-  status: null
+  target_role: code_reviewer
+  status: sent

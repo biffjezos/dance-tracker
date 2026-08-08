@@ -1,5 +1,7 @@
 // src/operations/key/hue_key.rs
 use std::any::Any;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::compositor::{
@@ -11,9 +13,140 @@ use crate::compositor::{
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
+    value::value_ptr_eq,
     Value,
 };
 use crate::graphics::{Color, FloatImage};
+use crate::gpu::GpuState;
+
+// GPU compute shader - SPECwebgpuoperations.md's Phase 1.3. Two input
+// buffers (SOURCE/REFERENCE, not Foreground/Background). `target_hue` is
+// computed once, CPU-side, via the already-tested `Color::to_hsv()`
+// (reused directly rather than re-porting the full RGB->HSV conversion
+// into WGSL a second time - HUE_KEY only ever needs the single hue
+// scalar, not the full HSV triple) and passed down as a plain uniform
+// float, same pattern as CHROMAKEY's KEY_COLOR/THRESHOLD. `hue_distance`
+// itself IS ported to WGSL, since it runs per-pixel against REFERENCE's
+// buffer. Its `%` usage doesn't need RGB_TO_HSV's floor-mod emulation:
+// the dividend (`abs(a - b)`) is always non-negative by construction, so
+// WGSL's truncated `%` and a euclidean one agree exactly here - see
+// hue_distance's own doc comment on the CPU side for why.
+const HUE_KEY_SHADER: &str = r#"
+    @group(0) @binding(0) var<storage, read> source: array<f32>;
+    @group(0) @binding(1) var<storage, read> reference: array<f32>;
+    @group(0) @binding(2) var<storage, read_write> output: array<f32>;
+    @group(0) @binding(3) var<uniform> params: vec4<u32>;
+
+    fn hue_distance(a: f32, b: f32) -> f32 {
+        let diff = abs(a - b) % 360.0;
+        let shortest = min(diff, 360.0 - diff);
+        return shortest / 180.0;
+    }
+
+    @compute @workgroup_size(8, 8, 1)
+    fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+        let width = params.x;
+        let height = params.y;
+        let target_hue = bitcast<f32>(params.z);
+        let threshold = bitcast<f32>(params.w);
+
+        if (id.x >= width || id.y >= height) {
+            return;
+        }
+
+        let idx = (id.y * width + id.x) * 4u;
+        let reference_hue = reference[idx] * 360.0;
+        let distance = hue_distance(reference_hue, target_hue);
+
+        output[idx] = source[idx];
+        output[idx + 1u] = source[idx + 1u];
+        output[idx + 2u] = source[idx + 2u];
+        output[idx + 3u] = select(source[idx + 3u], 0.0, distance <= threshold);
+    }
+"#;
+
+struct HueKeyGpuPipeline {
+    pipeline: wgpu::ComputePipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+}
+
+fn build_hue_key_pipeline(gpu: &GpuState) -> HueKeyGpuPipeline {
+    let shader = gpu.create_shader(HUE_KEY_SHADER);
+
+    let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("hue_key bind group layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let pipeline = gpu.create_compute_pipeline("hue_key pipeline", &shader, "main", &[&bind_group_layout]);
+
+    HueKeyGpuPipeline { pipeline, bind_group_layout }
+}
+
+#[derive(Clone)]
+struct HueKeyFingerprint {
+    source: Value,
+    reference: Value,
+    target_hue_bits: u64,
+    threshold_bits: u64,
+}
+
+impl HueKeyFingerprint {
+    fn matches(&self, other: &HueKeyFingerprint) -> bool {
+        self.target_hue_bits == other.target_hue_bits
+            && self.threshold_bits == other.threshold_bits
+            && value_ptr_eq(&self.source, &other.source)
+            && value_ptr_eq(&self.reference, &other.reference)
+    }
+}
+
+struct CompletedHueKeyJob {
+    fingerprint: HueKeyFingerprint,
+    pixels: Vec<f32>,
+    width: u32,
+    height: u32,
+}
 
 /// What an unconnected SOURCE shows - same convention as CHROMA KEY: a
 /// flat, obviously-fake placeholder rather than the usual missing()
@@ -38,6 +171,11 @@ const PLACEHOLDER_COLOR: Color = Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };
 pub struct HueKey {
     pub hue_color: Color,
     pub threshold: f64,
+    // GPU-backed dispatch state - see blur.rs's identical fields for the
+    // full rationale.
+    gpu_pipeline: RefCell<Option<HueKeyGpuPipeline>>,
+    pending: Rc<RefCell<Option<HueKeyFingerprint>>>,
+    last_gpu_result: Rc<RefCell<Option<CompletedHueKeyJob>>>,
 }
 
 impl HueKey {
@@ -45,6 +183,88 @@ impl HueKey {
         Self {
             hue_color: Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 },
             threshold: 0.1,
+            gpu_pipeline: RefCell::new(None),
+            pending: Rc::new(RefCell::new(None)),
+            last_gpu_result: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Mirrors `Blur::dispatch_gpu` in structure, with two input images
+    /// (SOURCE/REFERENCE) instead of one.
+    fn dispatch_gpu(&self, gpu: Arc<GpuState>, fingerprint: HueKeyFingerprint, source: FloatImage, reference: FloatImage) {
+        let width = source.width;
+        let height = source.height;
+        let len = source.pixels.len();
+        let byte_len = (len * std::mem::size_of::<f32>()) as u64;
+
+        {
+            let mut pipeline_slot = self.gpu_pipeline.borrow_mut();
+            if pipeline_slot.is_none() {
+                *pipeline_slot = Some(build_hue_key_pipeline(&gpu));
+            }
+        }
+
+        let source_buffer = gpu.upload("hue_key source", &source.pixels, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+        let reference_buffer = gpu.upload("hue_key reference", &reference.pixels, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+        let output_buffer = gpu.create_buffer(
+            "hue_key output",
+            byte_len,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        );
+        let target_hue_bits = (f64::from_bits(fingerprint.target_hue_bits) as f32).to_bits();
+        let threshold_bits = (f64::from_bits(fingerprint.threshold_bits) as f32).to_bits();
+        let params: [u32; 4] = [width, height, target_hue_bits, threshold_bits];
+        let params_buffer = gpu.upload("hue_key params", &params, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+
+        let readback_buffer = gpu.create_buffer(
+            "hue_key readback",
+            byte_len,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        );
+
+        {
+            let pipeline_slot = self.gpu_pipeline.borrow();
+            let pipeline = pipeline_slot.as_ref().expect("just built above");
+
+            let bind_group = gpu.create_bind_group("hue_key bind group", &pipeline.bind_group_layout, &[
+                wgpu::BindGroupEntry { binding: 0, resource: source_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: reference_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: output_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 3, resource: params_buffer.as_entire_binding() },
+            ]);
+
+            let workgroups_x = width.div_ceil(8);
+            let workgroups_y = height.div_ceil(8);
+            gpu.dispatch("hue_key dispatch", &pipeline.pipeline, &bind_group, (workgroups_x, workgroups_y, 1));
+        }
+
+        gpu.copy_buffer_to_buffer(&output_buffer, &readback_buffer, byte_len);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let pixels = gpu.read_buffer_blocking(&readback_buffer, len);
+            *self.last_gpu_result.borrow_mut() = Some(CompletedHueKeyJob { fingerprint, pixels, width, height });
+            *self.pending.borrow_mut() = None;
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            *self.pending.borrow_mut() = Some(fingerprint.clone());
+            let pending = self.pending.clone();
+            let last_gpu_result = self.last_gpu_result.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let pixels = gpu.read_buffer_async(&readback_buffer, len).await;
+                *last_gpu_result.borrow_mut() = Some(CompletedHueKeyJob {
+                    fingerprint: fingerprint.clone(),
+                    pixels,
+                    width,
+                    height,
+                });
+                let mut pending_slot = pending.borrow_mut();
+                if pending_slot.as_ref().is_some_and(|p| p.matches(&fingerprint)) {
+                    *pending_slot = None;
+                }
+            });
         }
     }
 
@@ -184,6 +404,11 @@ impl Operation for HueKey {
         }
     }
 
+    // See blur.rs's identical override for the full rationale.
+    fn is_live(&self) -> bool {
+        self.pending.borrow().is_some()
+    }
+
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(source) = find_input(inputs, Input::Source) else {
             return Ok(vec![Value::Image(crate::graphics::U8Image::solid(PLACEHOLDER_COLOR, ctx.meta.width, ctx.meta.height))]);
@@ -225,7 +450,7 @@ impl Operation for HueKey {
         // it only decides *which* branch alpha takes, not whether the
         // result is zero when SOURCE already is; its full pixel buffer is
         // always read directly wherever needed, unrestricted.
-        let keyed = if mask.is_some() {
+        if let Some(mask) = &mask {
             let natural_box = find_bbox(&ctx.input_bboxes, Input::Source)
                 .unwrap_or_else(|| Rect::full(source_image.width, source_image.height));
             let mask_box = find_bbox(&ctx.input_bboxes, Input::Mask)
@@ -236,14 +461,38 @@ impl Operation for HueKey {
             let source_pixels = &source_image.pixels;
             let reference_pixels = &reference_image.pixels;
 
-            crate::graphics::compute_within_bbox(width, source_image.height, work_area, source_pixels, |x, y| {
+            let keyed = crate::graphics::compute_within_bbox(width, source_image.height, work_area, source_pixels, |x, y| {
                 Self::key_single_pixel(source_pixels, reference_pixels, target_hue, self.threshold, x, y, width)
-            })
-        } else {
-            Self::key_pixels(&source_image.pixels, &reference_image.pixels, target_hue, self.threshold)
-        };
+            });
+            let keyed = crate::graphics::apply_mask(&source_image.pixels, keyed, Some(mask), width, source_image.height)?;
 
-        let keyed = crate::graphics::apply_mask(&source_image.pixels, keyed, mask.as_ref(), source_image.width, source_image.height)?;
+            return Ok(vec![Value::FloatImage(Arc::new(FloatImage { pixels: keyed, width, height: source_image.height }))]);
+        }
+
+        // Unmasked path: try GPU first when available.
+        if let Some(gpu) = ctx.gpu.clone() {
+            let fingerprint = HueKeyFingerprint {
+                source: source.clone(),
+                reference: reference.clone(),
+                target_hue_bits: target_hue.to_bits(),
+                threshold_bits: self.threshold.to_bits(),
+            };
+
+            let cached = self.last_gpu_result.borrow().as_ref()
+                .filter(|completed| completed.fingerprint.matches(&fingerprint))
+                .map(|completed| FloatImage { pixels: completed.pixels.clone(), width: completed.width, height: completed.height });
+
+            if let Some(result) = cached {
+                return Ok(vec![Value::FloatImage(Arc::new(result))]);
+            }
+
+            let already_pending = self.pending.borrow().as_ref().is_some_and(|p| p.matches(&fingerprint));
+            if !already_pending {
+                self.dispatch_gpu(gpu, fingerprint, source_image.clone(), reference_image.clone());
+            }
+        }
+
+        let keyed = Self::key_pixels(&source_image.pixels, &reference_image.pixels, target_hue, self.threshold);
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels: keyed,
@@ -601,6 +850,81 @@ mod tests {
         let off_pixels = as_u8_pixels(&off_values[0]);
 
         assert_eq!(on_pixels, off_pixels, "bbox consumption on vs off must produce pixel-identical output");
+    }
+
+    // --- WebGPU Phase 1.3 (SPECwebgpuoperations.md) ---
+
+    #[test]
+    fn is_live_is_true_only_while_a_gpu_dispatch_is_pending() {
+        let hue_key = HueKey::new();
+        assert!(!hue_key.is_live());
+
+        *hue_key.pending.borrow_mut() = Some(HueKeyFingerprint {
+            source: Value::Number(0.0),
+            reference: Value::Number(0.0),
+            target_hue_bits: 120.0f64.to_bits(),
+            threshold_bits: 0.1f64.to_bits(),
+        });
+        assert!(hue_key.is_live());
+
+        *hue_key.pending.borrow_mut() = None;
+        assert!(!hue_key.is_live());
+    }
+
+    #[test]
+    fn gpu_hue_key_matches_cpu_within_tolerance_once_warmed_up() {
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        let width = 6;
+        let height = 4;
+        let source_pixels: Vec<u8> = (0..(width * height))
+            .flat_map(|n| {
+                let v = ((n * 43) % 256) as u8;
+                [v, v.wrapping_add(70), v.wrapping_add(140), 255]
+            })
+            .collect();
+        let source = image(source_pixels, width, height);
+
+        // Reference hues alternating between pure green (120deg, keys
+        // out against the default HUE_COLOR) and pure blue (240deg,
+        // doesn't) - exercises both branches of the select().
+        let reference_pixels: Vec<u8> = (0..(width * height))
+            .flat_map(|n| {
+                let hue = if n % 2 == 0 { 120.0 } else { 240.0 };
+                RgbToHsvHue::pack(hue, 1.0, 1.0).into_iter().map(|v| (v * 255.0) as u8).collect::<Vec<u8>>()
+            })
+            .collect();
+        let reference = image(reference_pixels, width, height);
+
+        let cpu_hue_key = HueKey::new();
+        let cpu_values = cpu_hue_key
+            .execute(&context(width, height), &[
+                (Input::Source, Value::Image(source.clone())),
+                (Input::Reference, Value::Image(reference.clone())),
+            ])
+            .unwrap();
+        let Value::FloatImage(cpu_result) = &cpu_values[0] else { panic!("expected a float image") };
+
+        let gpu_hue_key = HueKey::new();
+        let gpu_ctx = Context { gpu: Some(gpu), ..context(width, height) };
+        let _ = gpu_hue_key.execute(&gpu_ctx, &[
+            (Input::Source, Value::Image(source.clone())),
+            (Input::Reference, Value::Image(reference.clone())),
+        ]).unwrap();
+        let gpu_values = gpu_hue_key.execute(&gpu_ctx, &[
+            (Input::Source, Value::Image(source)),
+            (Input::Reference, Value::Image(reference)),
+        ]).unwrap();
+        let Value::FloatImage(gpu_result) = &gpu_values[0] else { panic!("expected a float image") };
+
+        assert_eq!(cpu_result.pixels.len(), gpu_result.pixels.len());
+        for (index, (cpu_px, gpu_px)) in cpu_result.pixels.iter().zip(gpu_result.pixels.iter()).enumerate() {
+            assert!((cpu_px - gpu_px).abs() < 1e-4, "channel {}: cpu={}, gpu={}", index, cpu_px, gpu_px);
+        }
     }
 
     /// Test-only helper for building a synthetic "RGB TO HSV output"
