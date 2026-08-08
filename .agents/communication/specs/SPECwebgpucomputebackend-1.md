@@ -6,15 +6,9 @@
      .agents/roles/software_architect/docs/specifications/SPECwebgpucomputebackend-1.md
      (Software Architect). -->
 
-# Specification: WebGPU compute backend
+<!-- Corrected 2026-08-08: see this file's own "Correction — 2026-08-08" section
+     near the end, and RFC-006. -->
 
-**Precondition:** RFC-001 has landed. Before starting this spec's Phase 0, verify with `grep -rE "wgpu|ComputeBackend|GpuBackend|GpuContext|compute_mode" engine/src ui/scripts` — it must return zero matches. This spec builds fresh on a clean tree; it does not patch the removed attempt.
-
-**Scope of this spec: the foundation only — no operation's own GPU work lives here.** This spec builds the `gpu` module, the `Context`/`App` wiring, and the async-safe dispatch mechanism every GPU-capable operation will use. It ends with a mechanism that compiles, boots safely, and does nothing operation-specific yet. Every actual operation (starting with `BLUR`) is specified separately in the companion document, `SPEC-webgpu-operations.md`, which depends on this one landing first. Selection stays automatic (GPU when available, CPU otherwise) — **no user-facing COMPUTE MODE switch in this round**, deferred; see "Out of scope."
-
-## The core problem this spec has to solve, and why the previous attempt couldn't
-
-WebGPU buffer readback is *unavoidably asynchronous* in a browser — there is no blocking-wait available, unlike native wgpu backends (Vulkan/Metal/DX12), which is what the removed attempt actually used. `Operation::execute()` is, and stays, fully synchronous — rewriting the whole execution engine (`RenderExecutor`, `PreviewExecutor`, every operation, the WASM boundary, the JS render loop) to be async is a categorically bigger change than this round asks for, and isn't necessary.
 
 **Decision: GPU-backed operations use one-tick-latency pipelined dispatch, not same-tick blocking reads.** On a given tick, a GPU-backed operation returns the most recently *completed* GPU result (or falls back to CPU if none exists yet), and separately kicks off a fresh async GPU job for the current inputs, to be consumed on some future tick. This is a standard pattern for integrating async GPU work into a synchronous per-frame loop, and it fits precedent already in this codebase:
 
@@ -91,3 +85,56 @@ This is the only phase in this spec. Every operation's own GPU work is specified
 3. `Context` and `App` both carry a working, correctly-wired `gpu: Option<Arc<GpuState>>` (per the `App::context()` seam above), even though nothing consumes it yet.
 4. No blocking call reachable from the `wasm32` build target anywhere in the `gpu` module — audit every `wgpu` call and confirm no `PollType::Wait`/blocking `recv()` exists outside a `#[cfg(not(target_arch = "wasm32"))]` branch.
 5. `SPEC-webgpu-operations.md` can be started immediately after this lands, with no further foundation work needed first.
+
+## Correction — 2026-08-08: unbounded concurrent dispatch, and readback panics on failure
+
+Filed against this spec's own "Dispatch, every tick" and "The pattern every
+GPU-backed operation follows" sections above (not a new design — a
+correction to two real defects in the design as written, found via a
+Management bug report: constant high GPU/fan load and intermittent full
+app hangs since this backend shipped). Full detail, root-cause trace, and
+required fix: RFC-006 (`.agents/communication/rfc/RFC006gpudispatchoverloadandpanic.md`).
+Summary of what was wrong in the two sections above, for anyone reading
+this spec fresh:
+
+**Defect 1 — "Dispatch, every tick" step 2's re-dispatch condition is
+wrong.** As written and as implemented in every operation
+(`already_pending = pending.borrow().as_ref().is_some_and(|p|
+p.matches(&fingerprint))`), a new dispatch is gated on whether *this exact
+fingerprint* is already in flight — not on whether *any* dispatch is in
+flight. For an input that changes every tick (any live video source, or
+any procedural generator with a time-varying parameter — this app's
+primary use case, not an edge case), the fingerprint never repeats, so
+this condition is always false: a brand new GPU dispatch (fresh buffer
+allocations, a fresh `spawn_local` task) launches on literally every
+animation frame, with no cap on how many can be in flight simultaneously,
+none of which ever get consumed before being superseded by the next
+tick's fingerprint change (WebGPU buffer-mapping readback takes multiple
+frames; the one-tick-latency assumption this spec's own "Decision" section
+states does not hold for continuously-changing input). Corrected rule:
+gate on **any** pending dispatch for this operation instance, not a
+fingerprint match — `let has_pending = self.pending.borrow().is_some();
+if !has_pending { dispatch_gpu(...) }`. This bounds concurrent in-flight
+GPU work per operation to exactly one dispatch, regardless of how fast
+the input changes; content that changes faster than one dispatch's
+readback latency now correctly stays on CPU fallback throughout (no
+lag, no wasted GPU work), same as intended, while content stable across
+multiple ticks still benefits from the GPU result once it lands.
+
+**Defect 2 — `read_buffer_blocking`/`read_buffer_async` (`gpu/mod.rs`)
+violate this module's own stated contract.** `GpuState::new()`'s doc
+comment states adapter/device request "Resolves to `Err` — never panics."
+The same contract was never extended to buffer mapping: both readback
+functions `.expect()` on a mapping failure. On `wasm32`, `read_buffer_async`
+runs inside a detached `wasm_bindgen_futures::spawn_local` task with no
+caller able to catch a panic there — a real mapping failure (e.g. GPU
+device lost, plausible after Defect 1's sustained overload, or from
+ordinary thermal/driver conditions independent of it) traps the entire
+WASM instance with no recovery path: every subsequent exported call
+becomes unreliable for the rest of the session. Corrected rule: mapping
+failure must resolve to `Result`/`Option`, propagated back through the
+operation's spawned task to clear `pending` and leave `last_gpu_result`
+untouched (silently continuing on CPU fallback), never a panic.
+
+RFC-006 has the full required-change list (all 16 operations sharing this
+pattern) and acceptance criteria.

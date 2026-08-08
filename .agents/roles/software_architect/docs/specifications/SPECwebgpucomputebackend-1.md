@@ -83,3 +83,56 @@ This is the only phase in this spec. Every operation's own GPU work is specified
 3. `Context` and `App` both carry a working, correctly-wired `gpu: Option<Arc<GpuState>>` (per the `App::context()` seam above), even though nothing consumes it yet.
 4. No blocking call reachable from the `wasm32` build target anywhere in the `gpu` module — audit every `wgpu` call and confirm no `PollType::Wait`/blocking `recv()` exists outside a `#[cfg(not(target_arch = "wasm32"))]` branch.
 5. `SPEC-webgpu-operations.md` can be started immediately after this lands, with no further foundation work needed first.
+
+## Correction — 2026-08-08: unbounded concurrent dispatch, and readback panics on failure
+
+Filed against this spec's own "Dispatch, every tick" and "The pattern every
+GPU-backed operation follows" sections above (not a new design — a
+correction to two real defects in the design as written, found via a
+Management bug report: constant high GPU/fan load and intermittent full
+app hangs since this backend shipped). Full detail, root-cause trace, and
+required fix: RFC-006 (`.agents/communication/rfc/RFC006gpudispatchoverloadandpanic.md`).
+Summary of what was wrong in the two sections above, for anyone reading
+this spec fresh:
+
+**Defect 1 — "Dispatch, every tick" step 2's re-dispatch condition is
+wrong.** As written and as implemented in every operation
+(`already_pending = pending.borrow().as_ref().is_some_and(|p|
+p.matches(&fingerprint))`), a new dispatch is gated on whether *this exact
+fingerprint* is already in flight — not on whether *any* dispatch is in
+flight. For an input that changes every tick (any live video source, or
+any procedural generator with a time-varying parameter — this app's
+primary use case, not an edge case), the fingerprint never repeats, so
+this condition is always false: a brand new GPU dispatch (fresh buffer
+allocations, a fresh `spawn_local` task) launches on literally every
+animation frame, with no cap on how many can be in flight simultaneously,
+none of which ever get consumed before being superseded by the next
+tick's fingerprint change (WebGPU buffer-mapping readback takes multiple
+frames; the one-tick-latency assumption this spec's own "Decision" section
+states does not hold for continuously-changing input). Corrected rule:
+gate on **any** pending dispatch for this operation instance, not a
+fingerprint match — `let has_pending = self.pending.borrow().is_some();
+if !has_pending { dispatch_gpu(...) }`. This bounds concurrent in-flight
+GPU work per operation to exactly one dispatch, regardless of how fast
+the input changes; content that changes faster than one dispatch's
+readback latency now correctly stays on CPU fallback throughout (no
+lag, no wasted GPU work), same as intended, while content stable across
+multiple ticks still benefits from the GPU result once it lands.
+
+**Defect 2 — `read_buffer_blocking`/`read_buffer_async` (`gpu/mod.rs`)
+violate this module's own stated contract.** `GpuState::new()`'s doc
+comment states adapter/device request "Resolves to `Err` — never panics."
+The same contract was never extended to buffer mapping: both readback
+functions `.expect()` on a mapping failure. On `wasm32`, `read_buffer_async`
+runs inside a detached `wasm_bindgen_futures::spawn_local` task with no
+caller able to catch a panic there — a real mapping failure (e.g. GPU
+device lost, plausible after Defect 1's sustained overload, or from
+ordinary thermal/driver conditions independent of it) traps the entire
+WASM instance with no recovery path: every subsequent exported call
+becomes unreliable for the rest of the session. Corrected rule: mapping
+failure must resolve to `Result`/`Option`, propagated back through the
+operation's spawned task to clear `pending` and leave `last_gpu_result`
+untouched (silently continuing on CPU fallback), never a panic.
+
+RFC-006 has the full required-change list (all 16 operations sharing this
+pattern) and acceptance criteria.
