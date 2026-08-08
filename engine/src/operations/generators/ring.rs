@@ -1,5 +1,7 @@
 // src/operations/generators/ring.rs
 use std::any::Any;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::compositor::{
@@ -19,6 +21,145 @@ use crate::compositor::{
 };
 
 use crate::graphics::{Color, U8Image, ImageFormat};
+use crate::gpu::GpuState;
+
+// GPU compute shader - SPECwebgpuoperations.md's Phase 1.2. RING's
+// per-ring `colors: Vec<Color>` has no fixed upper bound (COUNT's own
+// `max: None`), so it can't fit a fixed-size uniform buffer the way
+// CHECKERBOARD's two colors do. Uses a runtime-sized storage buffer
+// instead (`array<vec4<f32>>`, length read via `arrayLength()`) - the
+// exact same WGSL mechanism `gpu/mod.rs`'s own DOUBLE_SHADER test
+// already relies on (`id.x < arrayLength(&input)`), just applied to a
+// per-ring color table instead of pixel data. This is still "zero
+// buffer" per the phase's own framing in the sense that matters (no
+// wired SOURCE/input pixel buffer) - the colors buffer holds this
+// operation's own parameter data, not an input.
+const RING_SHADER: &str = r#"
+    @group(0) @binding(0) var<storage, read_write> output: array<f32>;
+    @group(0) @binding(1) var<storage, read> colors: array<vec4<f32>>;
+    @group(0) @binding(2) var<uniform> params: array<vec4<u32>, 2>;
+
+    @compute @workgroup_size(8, 8, 1)
+    fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+        let width = params[0].x;
+        let height = params[0].y;
+        let count = params[0].z;
+        let radius = bitcast<f32>(params[0].w);
+        let spacing = bitcast<f32>(params[1].x);
+        let thickness = bitcast<f32>(params[1].y);
+
+        if (id.x >= width || id.y >= height) {
+            return;
+        }
+
+        let cx = f32(width) / 2.0;
+        let cy = f32(height) / 2.0;
+        let dx = f32(id.x) + 0.5 - cx;
+        let dy = f32(id.y) + 0.5 - cy;
+        let dist = sqrt(dx * dx + dy * dy);
+        let half_thickness = max(thickness, 0.0) / 2.0;
+
+        var out_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+
+        for (var ring_number = 1u; ring_number <= count; ring_number = ring_number + 1u) {
+            let ring_radius = radius - (f32(ring_number) - 1.0) * spacing;
+            if (ring_radius < 0.0) {
+                continue;
+            }
+            if (abs(dist - ring_radius) <= half_thickness) {
+                out_color = colors[ring_number - 1u];
+                break;
+            }
+        }
+
+        let idx = (id.y * width + id.x) * 4u;
+        output[idx] = out_color.x;
+        output[idx + 1u] = out_color.y;
+        output[idx + 2u] = out_color.z;
+        output[idx + 3u] = out_color.w;
+    }
+"#;
+
+struct RingGpuPipeline {
+    pipeline: wgpu::ComputePipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+}
+
+fn build_ring_pipeline(gpu: &GpuState) -> RingGpuPipeline {
+    let shader = gpu.create_shader(RING_SHADER);
+
+    let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("ring bind group layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let pipeline = gpu.create_compute_pipeline("ring pipeline", &shader, "main", &[&bind_group_layout]);
+
+    RingGpuPipeline { pipeline, bind_group_layout }
+}
+
+#[derive(Clone)]
+struct RingFingerprint {
+    width: u32,
+    height: u32,
+    count: usize,
+    radius_bits: u64,
+    spacing_bits: u64,
+    thickness_bits: u64,
+    colors: Vec<Color>,
+}
+
+impl RingFingerprint {
+    fn matches(&self, other: &RingFingerprint) -> bool {
+        self.width == other.width
+            && self.height == other.height
+            && self.count == other.count
+            && self.radius_bits == other.radius_bits
+            && self.spacing_bits == other.spacing_bits
+            && self.thickness_bits == other.thickness_bits
+            && self.colors == other.colors
+    }
+}
+
+struct CompletedRingJob {
+    fingerprint: RingFingerprint,
+    // Already quantized to u8, matching to_rgba_u8's truncating cast
+    // exactly (see CHECKERBOARD's identical comment).
+    pixels: Vec<u8>,
+    width: u32,
+    height: u32,
+}
 
 /// Concentric rings, sized like Saturn's rings: RADIUS is the outer
 /// edge of the whole set, SPACING is the gap between consecutive rings,
@@ -36,6 +177,11 @@ pub struct Ring {
     pub thickness: f64,
     selected_ring: usize, // 1-based, always in 1..=count
     colors: Vec<Color>,   // always exactly `count` long
+    // GPU-backed dispatch state - see blur.rs's identical fields for the
+    // full rationale.
+    gpu_pipeline: RefCell<Option<RingGpuPipeline>>,
+    pending: Rc<RefCell<Option<RingFingerprint>>>,
+    last_gpu_result: Rc<RefCell<Option<CompletedRingJob>>>,
 }
 
 impl Ring {
@@ -47,6 +193,98 @@ impl Ring {
             thickness: 4.0,
             selected_ring: 1,
             colors: vec![Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }],
+            gpu_pipeline: RefCell::new(None),
+            pending: Rc::new(RefCell::new(None)),
+            last_gpu_result: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Mirrors `Blur::dispatch_gpu` in structure - see `CHECKERBOARD`'s
+    /// identical doc comment for the no-input-buffer and truncating-
+    /// quantization notes, both of which apply here too. The one
+    /// RING-specific addition is the `colors` storage buffer, uploaded
+    /// alongside the uniform scalar params.
+    fn dispatch_gpu(&self, gpu: Arc<GpuState>, fingerprint: RingFingerprint) {
+        let width = fingerprint.width;
+        let height = fingerprint.height;
+        let len = (width as usize) * (height as usize) * 4;
+        let byte_len = (len * std::mem::size_of::<f32>()) as u64;
+
+        {
+            let mut pipeline_slot = self.gpu_pipeline.borrow_mut();
+            if pipeline_slot.is_none() {
+                *pipeline_slot = Some(build_ring_pipeline(&gpu));
+            }
+        }
+
+        let output_buffer = gpu.create_buffer(
+            "ring output",
+            byte_len,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        );
+
+        let color_floats: Vec<f32> = fingerprint.colors.iter().flat_map(|c| [c.r, c.g, c.b, c.a]).collect();
+        let colors_buffer = gpu.upload("ring colors", &color_floats, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+
+        let params: [u32; 8] = [
+            width, height, fingerprint.count as u32,
+            (f64::from_bits(fingerprint.radius_bits) as f32).to_bits(),
+            (f64::from_bits(fingerprint.spacing_bits) as f32).to_bits(),
+            (f64::from_bits(fingerprint.thickness_bits) as f32).to_bits(),
+            0, 0,
+        ];
+        let params_buffer = gpu.upload("ring params", &params, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+
+        let readback_buffer = gpu.create_buffer(
+            "ring readback",
+            byte_len,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        );
+
+        {
+            let pipeline_slot = self.gpu_pipeline.borrow();
+            let pipeline = pipeline_slot.as_ref().expect("just built above");
+
+            let bind_group = gpu.create_bind_group("ring bind group", &pipeline.bind_group_layout, &[
+                wgpu::BindGroupEntry { binding: 0, resource: output_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: colors_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: params_buffer.as_entire_binding() },
+            ]);
+
+            let workgroups_x = width.div_ceil(8);
+            let workgroups_y = height.div_ceil(8);
+            gpu.dispatch("ring dispatch", &pipeline.pipeline, &bind_group, (workgroups_x, workgroups_y, 1));
+        }
+
+        gpu.copy_buffer_to_buffer(&output_buffer, &readback_buffer, byte_len);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let raw = gpu.read_buffer_blocking(&readback_buffer, len);
+            let pixels: Vec<u8> = raw.iter().map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8).collect();
+            *self.last_gpu_result.borrow_mut() = Some(CompletedRingJob { fingerprint, pixels, width, height });
+            *self.pending.borrow_mut() = None;
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            *self.pending.borrow_mut() = Some(fingerprint.clone());
+            let pending = self.pending.clone();
+            let last_gpu_result = self.last_gpu_result.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let raw = gpu.read_buffer_async(&readback_buffer, len).await;
+                let pixels: Vec<u8> = raw.iter().map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8).collect();
+                *last_gpu_result.borrow_mut() = Some(CompletedRingJob {
+                    fingerprint: fingerprint.clone(),
+                    pixels,
+                    width,
+                    height,
+                });
+                let mut pending_slot = pending.borrow_mut();
+                if pending_slot.as_ref().is_some_and(|p| p.matches(&fingerprint)) {
+                    *pending_slot = None;
+                }
+            });
         }
     }
 
@@ -238,7 +476,40 @@ impl Operation for Ring {
         }
     }
 
+    // See blur.rs's identical override for the full rationale.
+    fn is_live(&self) -> bool {
+        self.pending.borrow().is_some()
+    }
+
     fn execute(&self, ctx: &Context, _inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
+        // No wired inputs at all - GPU dispatch applies unconditionally
+        // when available, keyed on (width, height, count, radius,
+        // spacing, thickness, colors) directly.
+        if let Some(gpu) = ctx.gpu.clone() {
+            let fingerprint = RingFingerprint {
+                width: ctx.meta.width,
+                height: ctx.meta.height,
+                count: self.count,
+                radius_bits: self.radius.to_bits(),
+                spacing_bits: self.spacing.to_bits(),
+                thickness_bits: self.thickness.to_bits(),
+                colors: self.colors.clone(),
+            };
+
+            let cached = self.last_gpu_result.borrow().as_ref()
+                .filter(|completed| completed.fingerprint.matches(&fingerprint))
+                .map(|completed| U8Image { pixels: completed.pixels.clone(), width: completed.width, height: completed.height, format: ImageFormat::Rgba8 });
+
+            if let Some(result) = cached {
+                return Ok(vec![Value::Image(Arc::new(result))]);
+            }
+
+            let already_pending = self.pending.borrow().as_ref().is_some_and(|p| p.matches(&fingerprint));
+            if !already_pending {
+                self.dispatch_gpu(gpu, fingerprint);
+            }
+        }
+
         Ok(vec![
             Value::Image(Arc::new(U8Image {
                 pixels: self.generate(ctx.meta.width, ctx.meta.height),
@@ -349,5 +620,63 @@ mod tests {
         RenderExecutor::new()
             .execute(&graph, ring_id, &context(8, 8))
             .expect("unwired ring renders");
+    }
+
+    // --- WebGPU Phase 1.2 (SPECwebgpuoperations.md) ---
+
+    #[test]
+    fn is_live_is_true_only_while_a_gpu_dispatch_is_pending() {
+        let ring = Ring::new();
+        assert!(!ring.is_live());
+
+        *ring.pending.borrow_mut() = Some(RingFingerprint {
+            width: 8,
+            height: 8,
+            count: 1,
+            radius_bits: 2.0f64.to_bits(),
+            spacing_bits: 1.0f64.to_bits(),
+            thickness_bits: 1.0f64.to_bits(),
+            colors: vec![Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }],
+        });
+        assert!(ring.is_live());
+
+        *ring.pending.borrow_mut() = None;
+        assert!(!ring.is_live());
+    }
+
+    #[test]
+    fn gpu_ring_matches_cpu_within_tolerance_once_warmed_up() {
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        let width = 8;
+        let height = 8;
+
+        let mut cpu_ring = Ring::new();
+        cpu_ring.set_parameter("COUNT", Value::Number(2.0)).unwrap();
+        cpu_ring.radius = 3.0;
+        cpu_ring.spacing = 1.0;
+        cpu_ring.thickness = 1.0;
+        cpu_ring.colors[0] = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
+        cpu_ring.colors[1] = Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 };
+        let cpu_values = cpu_ring.execute(&context(width, height), &[]).unwrap();
+        let Value::Image(cpu_result) = &cpu_values[0] else { panic!("expected an image") };
+
+        let mut gpu_ring = Ring::new();
+        gpu_ring.set_parameter("COUNT", Value::Number(2.0)).unwrap();
+        gpu_ring.radius = 3.0;
+        gpu_ring.spacing = 1.0;
+        gpu_ring.thickness = 1.0;
+        gpu_ring.colors[0] = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
+        gpu_ring.colors[1] = Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 };
+        let gpu_ctx = Context { gpu: Some(gpu), ..context(width, height) };
+        let _ = gpu_ring.execute(&gpu_ctx, &[]).unwrap();
+        let gpu_values = gpu_ring.execute(&gpu_ctx, &[]).unwrap();
+        let Value::Image(gpu_result) = &gpu_values[0] else { panic!("expected an image") };
+
+        assert_eq!(cpu_result.pixels, gpu_result.pixels);
     }
 }
