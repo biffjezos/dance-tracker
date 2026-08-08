@@ -57,7 +57,7 @@ const RGB_TO_HSV_SHADER: &str = r#"
 
         let v = max_c;
         var s: f32 = 0.0;
-        if (max_c > 0.0) {
+        if (max_c != 0.0) {
             s = delta / max_c;
         }
 
@@ -563,5 +563,51 @@ mod tests {
         for (index, (cpu_px, gpu_px)) in cpu_result.pixels.iter().zip(gpu_result.pixels.iter()).enumerate() {
             assert!((cpu_px - gpu_px).abs() < 1e-4, "channel {}: cpu={}, gpu={}", index, cpu_px, gpu_px);
         }
+    }
+
+    #[test]
+    fn gpu_rgb_to_hsv_matches_cpu_for_out_of_gamut_negative_channels() {
+        // Regression for RFC-003: the GPU saturation guard must match
+        // Color::to_hsv()'s CPU guard (`max == 0.0`) exactly - it used to
+        // read `max_c > 0.0`, which silently zeroed saturation for any
+        // negative max_c instead of computing the real (correct) value.
+        // A u8-sourced image (0..255) can never produce a negative
+        // channel, so this needs a FloatImage built directly to actually
+        // reach the diverging branch - the tolerance test above
+        // structurally cannot, which is why RFC-003's bug wasn't caught
+        // by it.
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        // Same worked example as RFC-003: max_c = -0.2 (negative),
+        // delta = 0.6, so the CPU reference's real answer is -3.0.
+        let pixels = vec![-0.2, -0.5, -0.8, 1.0, -0.1, -0.3, -0.05, 1.0];
+        let source = Arc::new(FloatImage { pixels: pixels.clone(), width: 2, height: 1 });
+
+        let cpu_result = RgbToHsv::convert_pixels(&pixels, ColorFormat::Hsv);
+
+        let gpu_node = RgbToHsv::new();
+        let gpu_ctx = Context { gpu: Some(gpu), ..context(2, 1) };
+        let _ = gpu_node.execute(&gpu_ctx, &[(Input::Source, Value::FloatImage(source.clone()))]).unwrap();
+        let gpu_values = gpu_node.execute(&gpu_ctx, &[(Input::Source, Value::FloatImage(source))]).unwrap();
+        let Value::FloatImage(gpu_result) = &gpu_values[0] else { panic!("expected a float image") };
+
+        for (index, (cpu_px, gpu_px)) in cpu_result.iter().zip(gpu_result.pixels.iter()).enumerate() {
+            assert!((cpu_px - gpu_px).abs() < 1e-4, "channel {}: cpu={}, gpu={}", index, cpu_px, gpu_px);
+        }
+
+        // Directly pin the specific value the bug got wrong, not just
+        // GPU-vs-CPU agreement (both could theoretically agree on a wrong
+        // answer) - the saturation channel must be the real negative
+        // value, not silently zeroed.
+        assert!((cpu_result[1] - (-3.0)).abs() < 1e-4, "expected CPU reference saturation -3.0, got {}", cpu_result[1]);
+        assert!(
+            (gpu_result.pixels[1] - (-3.0)).abs() < 1e-4,
+            "expected GPU saturation -3.0 matching CPU, got {} - this is exactly RFC-003's bug if it reads 0.0",
+            gpu_result.pixels[1]
+        );
     }
 }
