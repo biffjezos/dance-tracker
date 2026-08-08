@@ -1,5 +1,7 @@
 // src/operations/transform/move_op.rs
 use std::any::Any;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::compositor::{
@@ -11,9 +13,131 @@ use crate::compositor::{
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
+    value::value_ptr_eq,
     Value,
 };
 use crate::graphics::FloatImage;
+use crate::gpu::GpuState;
+
+// GPU compute shader - SPECwebgpuoperations.md's Phase 2 (resampling).
+// Same "unmigrated to bbox-consumption" situation as MULTIPLY (Phase
+// 1.3): MOVE's execute() masked path is still an unrestricted full-frame
+// move_pixels + apply_mask, not a work_area-restricted one - see
+// find_bbox/compute_within_bbox appearing only in output_bbox() below,
+// never in execute() itself. GPU dispatch still applies only when
+// `mask.is_none()`, same blanket-rule split as every other operation -
+// the masked path is left entirely untouched (still CPU, still
+// unrestricted). Coordinate math is a direct port of move_pixels's own
+// simple offset inverse-mapping (destination -> source), same structure
+// as RESIZE's shader but without the center-relative scale term.
+const MOVE_SHADER: &str = r#"
+    @group(0) @binding(0) var<storage, read> input: array<f32>;
+    @group(0) @binding(1) var<storage, read_write> output: array<f32>;
+    @group(0) @binding(2) var<uniform> params: vec4<u32>;
+
+    @compute @workgroup_size(8, 8, 1)
+    fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+        let width = params.x;
+        let height = params.y;
+        let offset_x = bitcast<f32>(params.z);
+        let offset_y = bitcast<f32>(params.w);
+
+        if (id.x >= width || id.y >= height) {
+            return;
+        }
+
+        let src_x = f32(id.x) - offset_x;
+        let src_y = f32(id.y) - offset_y;
+
+        let out_idx = (id.y * width + id.x) * 4u;
+
+        if (src_x < 0.0 || src_y < 0.0 || src_x >= f32(width) || src_y >= f32(height)) {
+            output[out_idx] = 0.0;
+            output[out_idx + 1u] = 0.0;
+            output[out_idx + 2u] = 0.0;
+            output[out_idx + 3u] = 0.0;
+            return;
+        }
+
+        let sx = u32(src_x);
+        let sy = u32(src_y);
+        let src_idx = (sy * width + sx) * 4u;
+
+        output[out_idx] = input[src_idx];
+        output[out_idx + 1u] = input[src_idx + 1u];
+        output[out_idx + 2u] = input[src_idx + 2u];
+        output[out_idx + 3u] = input[src_idx + 3u];
+    }
+"#;
+
+struct MoveGpuPipeline {
+    pipeline: wgpu::ComputePipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+}
+
+fn build_move_pipeline(gpu: &GpuState) -> MoveGpuPipeline {
+    let shader = gpu.create_shader(MOVE_SHADER);
+
+    let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("move bind group layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let pipeline = gpu.create_compute_pipeline("move pipeline", &shader, "main", &[&bind_group_layout]);
+
+    MoveGpuPipeline { pipeline, bind_group_layout }
+}
+
+#[derive(Clone)]
+struct MoveFingerprint {
+    source: Value,
+    offset_x_bits: u64,
+    offset_y_bits: u64,
+}
+
+impl MoveFingerprint {
+    fn matches(&self, other: &MoveFingerprint) -> bool {
+        self.offset_x_bits == other.offset_x_bits && self.offset_y_bits == other.offset_y_bits && value_ptr_eq(&self.source, &other.source)
+    }
+}
+
+struct CompletedMoveJob {
+    fingerprint: MoveFingerprint,
+    pixels: Vec<f32>,
+    width: u32,
+    height: u32,
+}
 
 /// Translates a node's own content by a fixed pixel offset, keeping the
 /// frame's width/height unchanged - unlike RESIZE (which scales around the
@@ -23,11 +147,103 @@ use crate::graphics::FloatImage;
 pub struct Move {
     pub offset_x: f64,
     pub offset_y: f64,
+    // GPU-backed dispatch state - see blur.rs's identical fields for the
+    // full rationale (Rc so the wasm32 spawn_local task can share the
+    // cell without requiring `self` to be 'static).
+    gpu_pipeline: RefCell<Option<MoveGpuPipeline>>,
+    pending: Rc<RefCell<Option<MoveFingerprint>>>,
+    last_gpu_result: Rc<RefCell<Option<CompletedMoveJob>>>,
 }
 
 impl Move {
     pub fn new() -> Self {
-        Self { offset_x: 0.0, offset_y: 0.0 }
+        Self {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            gpu_pipeline: RefCell::new(None),
+            pending: Rc::new(RefCell::new(None)),
+            last_gpu_result: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Mirrors `Multiply::dispatch_gpu` in structure (single-buffer input,
+    /// same as RESIZE's own dispatch_gpu). `offset_x`/`offset_y` are
+    /// uploaded as bitcast-f32 uniform values, matching move_pixels's own
+    /// f64 formula exactly before the f32 cast.
+    fn dispatch_gpu(&self, gpu: Arc<GpuState>, fingerprint: MoveFingerprint, source: FloatImage, offset_x: f64, offset_y: f64) {
+        let width = source.width;
+        let height = source.height;
+        let len = source.pixels.len();
+        let byte_len = (len * std::mem::size_of::<f32>()) as u64;
+
+        {
+            let mut pipeline_slot = self.gpu_pipeline.borrow_mut();
+            if pipeline_slot.is_none() {
+                *pipeline_slot = Some(build_move_pipeline(&gpu));
+            }
+        }
+
+        let input_buffer = gpu.upload("move input", &source.pixels, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+        let output_buffer = gpu.create_buffer(
+            "move output",
+            byte_len,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        );
+
+        let offset_x_f32 = offset_x as f32;
+        let offset_y_f32 = offset_y as f32;
+        let params: [u32; 4] = [width, height, offset_x_f32.to_bits(), offset_y_f32.to_bits()];
+        let params_buffer = gpu.upload("move params", &params, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+
+        let readback_buffer = gpu.create_buffer(
+            "move readback",
+            byte_len,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        );
+
+        {
+            let pipeline_slot = self.gpu_pipeline.borrow();
+            let pipeline = pipeline_slot.as_ref().expect("just built above");
+
+            let bind_group = gpu.create_bind_group("move bind group", &pipeline.bind_group_layout, &[
+                wgpu::BindGroupEntry { binding: 0, resource: input_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: output_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: params_buffer.as_entire_binding() },
+            ]);
+
+            let workgroups_x = width.div_ceil(8);
+            let workgroups_y = height.div_ceil(8);
+            gpu.dispatch("move dispatch", &pipeline.pipeline, &bind_group, (workgroups_x, workgroups_y, 1));
+        }
+
+        gpu.copy_buffer_to_buffer(&output_buffer, &readback_buffer, byte_len);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let pixels = gpu.read_buffer_blocking(&readback_buffer, len);
+            *self.last_gpu_result.borrow_mut() = Some(CompletedMoveJob { fingerprint, pixels, width, height });
+            *self.pending.borrow_mut() = None;
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            *self.pending.borrow_mut() = Some(fingerprint.clone());
+            let pending = self.pending.clone();
+            let last_gpu_result = self.last_gpu_result.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let pixels = gpu.read_buffer_async(&readback_buffer, len).await;
+                *last_gpu_result.borrow_mut() = Some(CompletedMoveJob {
+                    fingerprint: fingerprint.clone(),
+                    pixels,
+                    width,
+                    height,
+                });
+                let mut pending_slot = pending.borrow_mut();
+                if pending_slot.as_ref().is_some_and(|p| p.matches(&fingerprint)) {
+                    *pending_slot = None;
+                }
+            });
+        }
     }
 
     /// Nearest-neighbor translate of an RGBA buffer by (offset_x, offset_y)
@@ -144,19 +360,63 @@ impl Operation for Move {
         }
     }
 
+    // See blur.rs's identical override for the full rationale - a pending
+    // GPU dispatch must force re-execution or a completed result can get
+    // stranded behind RenderExecutor's cross-tick cache.
+    fn is_live(&self) -> bool {
+        self.pending.borrow().is_some()
+    }
+
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
             return Ok(vec![Value::Image(crate::graphics::U8Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
 
-        let source = FloatImage::from_value(value, ctx)?;
-
         let mask = find_input(inputs, Input::Mask)
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
+        // MOVE isn't migrated to bbox-consumption (see this module's own
+        // GPU shader doc comment) - the masked path stays exactly as it
+        // was, full-frame CPU compute + apply_mask, completely untouched
+        // by GPU dispatch.
+        if let Some(mask) = &mask {
+            let source = FloatImage::from_value(value, ctx)?;
+            let moved = Self::move_pixels(&source.pixels, source.width, source.height, self.offset_x, self.offset_y);
+            let moved = crate::graphics::apply_mask(&source.pixels, moved, Some(mask), source.width, source.height)?;
+
+            return Ok(vec![Value::FloatImage(Arc::new(FloatImage {
+                pixels: moved,
+                width: source.width,
+                height: source.height,
+            }))]);
+        }
+
+        // Unmasked path: try GPU first when available.
+        if let Some(gpu) = ctx.gpu.clone() {
+            let fingerprint = MoveFingerprint {
+                source: value.clone(),
+                offset_x_bits: self.offset_x.to_bits(),
+                offset_y_bits: self.offset_y.to_bits(),
+            };
+
+            let cached = self.last_gpu_result.borrow().as_ref()
+                .filter(|completed| completed.fingerprint.matches(&fingerprint))
+                .map(|completed| FloatImage { pixels: completed.pixels.clone(), width: completed.width, height: completed.height });
+
+            if let Some(result) = cached {
+                return Ok(vec![Value::FloatImage(Arc::new(result))]);
+            }
+
+            let already_pending = self.pending.borrow().as_ref().is_some_and(|p| p.matches(&fingerprint));
+            if !already_pending {
+                let source = FloatImage::from_value(value, ctx)?;
+                self.dispatch_gpu(gpu, fingerprint, source, self.offset_x, self.offset_y);
+            }
+        }
+
+        let source = FloatImage::from_value(value, ctx)?;
         let moved = Self::move_pixels(&source.pixels, source.width, source.height, self.offset_x, self.offset_y);
-        let moved = crate::graphics::apply_mask(&source.pixels, moved, mask.as_ref(), source.width, source.height)?;
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels: moved,
@@ -257,7 +517,7 @@ mod tests {
 
     #[test]
     fn output_bbox_translates_a_full_frame_input_by_exactly_the_offset_clamped_to_the_frame() {
-        let mv = Move { offset_x: 2.0, offset_y: 1.0 };
+        let mv = Move { offset_x: 2.0, offset_y: 1.0, ..Move::new() };
         let ctx = context(8, 8);
         let full = crate::compositor::bbox::Rect::full(8, 8);
         let bbox = mv.output_bbox(&ctx, &[(Input::Source, full)], &Value::Number(0.0));
@@ -269,7 +529,7 @@ mod tests {
 
     #[test]
     fn output_bbox_with_an_offset_larger_than_the_frame_is_empty_not_negative_extent() {
-        let mv = Move { offset_x: 100.0, offset_y: 0.0 };
+        let mv = Move { offset_x: 100.0, offset_y: 0.0, ..Move::new() };
         let ctx = context(8, 8);
         let full = crate::compositor::bbox::Rect::full(8, 8);
         let bbox = mv.output_bbox(&ctx, &[(Input::Source, full)], &Value::Number(0.0));
@@ -286,7 +546,7 @@ mod tests {
         // real content), offset_x=0.4: move_pixels puts real content at
         // dest_x=1 (src_x = 1 - 0.4 = 0.6, truncates to source pixel 0,
         // which is inside the box) - the reported box must cover dest_x=1.
-        let mv = Move { offset_x: 0.4, offset_y: 0.0 };
+        let mv = Move { offset_x: 0.4, offset_y: 0.0, ..Move::new() };
         let ctx = context(4, 1);
         let source_box = crate::compositor::bbox::Rect { x0: 0, y0: 0, x1: 1, y1: 1 };
 
@@ -317,7 +577,7 @@ mod tests {
 
     #[test]
     fn output_bbox_with_no_reported_source_box_defaults_to_full_frame_then_translates() {
-        let mv = Move { offset_x: 1.0, offset_y: 0.0 };
+        let mv = Move { offset_x: 1.0, offset_y: 0.0, ..Move::new() };
         let ctx = context(8, 8);
         let bbox = mv.output_bbox(&ctx, &[], &Value::Number(0.0));
 
@@ -372,7 +632,7 @@ mod tests {
 
     #[test]
     fn a_zero_alpha_mask_leaves_the_source_unmoved() {
-        let mv = Move { offset_x: 1.0, offset_y: 0.0 };
+        let mv = Move { offset_x: 1.0, offset_y: 0.0, ..Move::new() };
         let input = image(vec![10, 20, 30, 255, 40, 50, 60, 255], 2, 1);
         let mask = image(vec![0, 0, 0, 0, 0, 0, 0, 0], 2, 1);
 
@@ -439,7 +699,7 @@ mod tests {
 
     #[test]
     fn a_full_alpha_mask_moves_exactly_as_unmasked() {
-        let mv = Move { offset_x: 1.0, offset_y: 0.0 };
+        let mv = Move { offset_x: 1.0, offset_y: 0.0, ..Move::new() };
         let input = image(vec![10, 20, 30, 255, 40, 50, 60, 255], 2, 1);
         let mask = image(vec![0, 0, 0, 255, 0, 0, 0, 255], 2, 1);
 
@@ -454,5 +714,75 @@ mod tests {
             .unwrap();
 
         assert_eq!(as_u8_pixels(&unmasked[0]), as_u8_pixels(&masked[0]));
+    }
+
+    // --- WebGPU Phase 2 (SPECwebgpuoperations.md) ---
+
+    #[test]
+    fn is_live_is_true_only_while_a_gpu_dispatch_is_pending() {
+        let mv = Move::new();
+        assert!(!mv.is_live(), "no dispatch in flight yet - must not force re-execution");
+
+        *mv.pending.borrow_mut() = Some(MoveFingerprint {
+            source: Value::Number(0.0),
+            offset_x_bits: 1.0_f64.to_bits(),
+            offset_y_bits: 0.0_f64.to_bits(),
+        });
+        assert!(mv.is_live(), "a pending GPU dispatch must force re-execution so a just-completed result gets picked up");
+
+        *mv.pending.borrow_mut() = None;
+        assert!(!mv.is_live(), "once nothing is pending, normal cross-tick caching should resume");
+    }
+
+    #[test]
+    fn gpu_move_matches_cpu_within_tolerance_once_warmed_up() {
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        let width = 6;
+        let height = 5;
+        let pixels: Vec<u8> = (0..(width * height))
+            .flat_map(|n| {
+                let v = ((n * 37) % 256) as u8;
+                [v, v.wrapping_add(50), v.wrapping_add(100), 255]
+            })
+            .collect();
+        let input = image(pixels, width, height);
+
+        let mut cpu_move = Move::new();
+        cpu_move.set_parameter("OFFSET_X", Value::Number(2.0)).unwrap();
+        cpu_move.set_parameter("OFFSET_Y", Value::Number(-1.0)).unwrap();
+        let cpu_values = cpu_move
+            .execute(&context(width, height), &[(Input::Source, Value::Image(input.clone()))])
+            .unwrap();
+        let Value::FloatImage(cpu_result) = &cpu_values[0] else { panic!("expected a float image") };
+
+        let mut gpu_move = Move::new();
+        gpu_move.set_parameter("OFFSET_X", Value::Number(2.0)).unwrap();
+        gpu_move.set_parameter("OFFSET_Y", Value::Number(-1.0)).unwrap();
+        let gpu_ctx = Context { gpu: Some(gpu), ..context(width, height) };
+
+        // First call: no cached GPU result yet - kicks off a dispatch
+        // (native resolves it synchronously inside dispatch_gpu) and
+        // falls back to CPU for this tick regardless.
+        let _ = gpu_move.execute(&gpu_ctx, &[(Input::Source, Value::Image(input.clone()))]).unwrap();
+        // Second call, same fingerprint (same wired Arc, same offsets):
+        // the now-completed GPU result is cached and used directly.
+        let gpu_values = gpu_move.execute(&gpu_ctx, &[(Input::Source, Value::Image(input.clone()))]).unwrap();
+        let Value::FloatImage(gpu_result) = &gpu_values[0] else { panic!("expected a float image") };
+
+        assert_eq!(cpu_result.pixels.len(), gpu_result.pixels.len());
+        for (index, (cpu_px, gpu_px)) in cpu_result.pixels.iter().zip(gpu_result.pixels.iter()).enumerate() {
+            assert!(
+                (cpu_px - gpu_px).abs() < 1e-4,
+                "channel {}: cpu={}, gpu={}",
+                index,
+                cpu_px,
+                gpu_px
+            );
+        }
     }
 }
