@@ -1,5 +1,7 @@
 // src/operations/transform/resize.rs
 use std::any::Any;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::compositor::{
@@ -11,9 +13,136 @@ use crate::compositor::{
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
+    value::value_ptr_eq,
     Value,
 };
 use crate::graphics::FloatImage;
+use crate::gpu::GpuState;
+
+// GPU compute shader - SPECwebgpuoperations.md's Phase 2 (resampling).
+// No MASK input exists for this operation (see metadata()'s own
+// comment), so GPU dispatch applies unconditionally when available -
+// same shape as RGB_TO_HSV/CHECKERBOARD in that regard. Unlike every
+// prior phase's pointwise shaders, this one computes a *transformed*
+// source address per invocation (destination -> source, inverse-mapped)
+// rather than reading its own (x, y) - the WGSL body is a direct port of
+// resize_pixels's own coordinate math, done in f32 (GPU) vs. f64 (CPU),
+// same precision-tolerance story every prior phase's numerical-tolerance
+// test already covers. inv_x/inv_y (100.0 / scale) are precomputed
+// Rust-side in f64, matching resize_pixels's own formula exactly, then
+// cast to f32 for upload - not recomputed from raw SCALE_X/SCALE_Y
+// inside the shader itself.
+const RESIZE_SHADER: &str = r#"
+    @group(0) @binding(0) var<storage, read> input: array<f32>;
+    @group(0) @binding(1) var<storage, read_write> output: array<f32>;
+    @group(0) @binding(2) var<uniform> params: vec4<u32>;
+
+    @compute @workgroup_size(8, 8, 1)
+    fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+        let width = params.x;
+        let height = params.y;
+        let inv_x = bitcast<f32>(params.z);
+        let inv_y = bitcast<f32>(params.w);
+
+        if (id.x >= width || id.y >= height) {
+            return;
+        }
+
+        let cx = f32(width) / 2.0;
+        let cy = f32(height) / 2.0;
+
+        let src_x = cx + (f32(id.x) + 0.5 - cx) * inv_x;
+        let src_y = cy + (f32(id.y) + 0.5 - cy) * inv_y;
+
+        let out_idx = (id.y * width + id.x) * 4u;
+
+        if (src_x < 0.0 || src_y < 0.0 || src_x >= f32(width) || src_y >= f32(height)) {
+            output[out_idx] = 0.0;
+            output[out_idx + 1u] = 0.0;
+            output[out_idx + 2u] = 0.0;
+            output[out_idx + 3u] = 0.0;
+            return;
+        }
+
+        let sx = u32(src_x);
+        let sy = u32(src_y);
+        let src_idx = (sy * width + sx) * 4u;
+
+        output[out_idx] = input[src_idx];
+        output[out_idx + 1u] = input[src_idx + 1u];
+        output[out_idx + 2u] = input[src_idx + 2u];
+        output[out_idx + 3u] = input[src_idx + 3u];
+    }
+"#;
+
+struct ResizeGpuPipeline {
+    pipeline: wgpu::ComputePipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+}
+
+fn build_resize_pipeline(gpu: &GpuState) -> ResizeGpuPipeline {
+    let shader = gpu.create_shader(RESIZE_SHADER);
+
+    let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("resize bind group layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let pipeline = gpu.create_compute_pipeline("resize pipeline", &shader, "main", &[&bind_group_layout]);
+
+    ResizeGpuPipeline { pipeline, bind_group_layout }
+}
+
+#[derive(Clone)]
+struct ResizeFingerprint {
+    source: Value,
+    scale_x_bits: u64,
+    scale_y_bits: u64,
+}
+
+impl ResizeFingerprint {
+    fn matches(&self, other: &ResizeFingerprint) -> bool {
+        self.scale_x_bits == other.scale_x_bits && self.scale_y_bits == other.scale_y_bits && value_ptr_eq(&self.source, &other.source)
+    }
+}
+
+struct CompletedResizeJob {
+    fingerprint: ResizeFingerprint,
+    pixels: Vec<f32>,
+    width: u32,
+    height: u32,
+}
 
 /// Resampling algorithm for RESIZE. Only NEAREST_NEIGHBOR exists today - the
 /// enum and the single-entry options list both exist already so adding
@@ -56,6 +185,12 @@ pub struct Resize {
     pub scale_x: f64,
     pub scale_y: f64,
     pub algorithm: ResizeAlgorithm,
+    // GPU-backed dispatch state - see blur.rs's identical fields for the
+    // full rationale (Rc so the wasm32 spawn_local task can share the
+    // cell without requiring `self` to be 'static).
+    gpu_pipeline: RefCell<Option<ResizeGpuPipeline>>,
+    pending: Rc<RefCell<Option<ResizeFingerprint>>>,
+    last_gpu_result: Rc<RefCell<Option<CompletedResizeJob>>>,
 }
 
 impl Resize {
@@ -64,6 +199,90 @@ impl Resize {
             scale_x: 100.0,
             scale_y: 100.0,
             algorithm: ResizeAlgorithm::default(),
+            gpu_pipeline: RefCell::new(None),
+            pending: Rc::new(RefCell::new(None)),
+            last_gpu_result: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Mirrors `Blur::dispatch_gpu` exactly in structure (see its own doc
+    /// comment for the target-conditional readback rationale). `inv_x`/
+    /// `inv_y` are precomputed here in f64, matching `resize_pixels`'s own
+    /// formula exactly, then cast to f32 for upload - not recomputed from
+    /// raw scale inside the shader itself.
+    fn dispatch_gpu(&self, gpu: Arc<GpuState>, fingerprint: ResizeFingerprint, source: FloatImage, scale_x: f64, scale_y: f64) {
+        let width = source.width;
+        let height = source.height;
+        let len = source.pixels.len();
+        let byte_len = (len * std::mem::size_of::<f32>()) as u64;
+
+        {
+            let mut pipeline_slot = self.gpu_pipeline.borrow_mut();
+            if pipeline_slot.is_none() {
+                *pipeline_slot = Some(build_resize_pipeline(&gpu));
+            }
+        }
+
+        let input_buffer = gpu.upload("resize input", &source.pixels, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+        let output_buffer = gpu.create_buffer(
+            "resize output",
+            byte_len,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        );
+
+        let inv_x = (100.0 / scale_x) as f32;
+        let inv_y = (100.0 / scale_y) as f32;
+        let params: [u32; 4] = [width, height, inv_x.to_bits(), inv_y.to_bits()];
+        let params_buffer = gpu.upload("resize params", &params, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+
+        let readback_buffer = gpu.create_buffer(
+            "resize readback",
+            byte_len,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        );
+
+        {
+            let pipeline_slot = self.gpu_pipeline.borrow();
+            let pipeline = pipeline_slot.as_ref().expect("just built above");
+
+            let bind_group = gpu.create_bind_group("resize bind group", &pipeline.bind_group_layout, &[
+                wgpu::BindGroupEntry { binding: 0, resource: input_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: output_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: params_buffer.as_entire_binding() },
+            ]);
+
+            let workgroups_x = width.div_ceil(8);
+            let workgroups_y = height.div_ceil(8);
+            gpu.dispatch("resize dispatch", &pipeline.pipeline, &bind_group, (workgroups_x, workgroups_y, 1));
+        }
+
+        gpu.copy_buffer_to_buffer(&output_buffer, &readback_buffer, byte_len);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let pixels = gpu.read_buffer_blocking(&readback_buffer, len);
+            *self.last_gpu_result.borrow_mut() = Some(CompletedResizeJob { fingerprint, pixels, width, height });
+            *self.pending.borrow_mut() = None;
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            *self.pending.borrow_mut() = Some(fingerprint.clone());
+            let pending = self.pending.clone();
+            let last_gpu_result = self.last_gpu_result.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let pixels = gpu.read_buffer_async(&readback_buffer, len).await;
+                *last_gpu_result.borrow_mut() = Some(CompletedResizeJob {
+                    fingerprint: fingerprint.clone(),
+                    pixels,
+                    width,
+                    height,
+                });
+                let mut pending_slot = pending.borrow_mut();
+                if pending_slot.as_ref().is_some_and(|p| p.matches(&fingerprint)) {
+                    *pending_slot = None;
+                }
+            });
         }
     }
 
@@ -202,10 +421,48 @@ impl Operation for Resize {
         }
     }
 
+    // See blur.rs's identical override for the full rationale - a pending
+    // GPU dispatch must force re-execution or a completed result can get
+    // stranded behind RenderExecutor's cross-tick cache.
+    fn is_live(&self) -> bool {
+        self.pending.borrow().is_some()
+    }
+
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
             return Ok(vec![Value::Image(crate::graphics::U8Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
+
+        // No MASK input exists for this operation (see metadata()'s own
+        // comment) - GPU dispatch applies unconditionally when available,
+        // no blanket-rule split needed. Gated on
+        // `algorithm == NearestNeighbor` defensively: the shader only ever
+        // implements nearest-neighbor sampling, so a future BILINEAR
+        // variant must fall back to CPU until it gets its own shader
+        // branch, rather than silently computing the wrong resample on GPU.
+        if let Some(gpu) = ctx.gpu.clone() {
+            if self.algorithm == ResizeAlgorithm::NearestNeighbor {
+                let fingerprint = ResizeFingerprint {
+                    source: value.clone(),
+                    scale_x_bits: self.scale_x.to_bits(),
+                    scale_y_bits: self.scale_y.to_bits(),
+                };
+
+                let cached = self.last_gpu_result.borrow().as_ref()
+                    .filter(|completed| completed.fingerprint.matches(&fingerprint))
+                    .map(|completed| FloatImage { pixels: completed.pixels.clone(), width: completed.width, height: completed.height });
+
+                if let Some(result) = cached {
+                    return Ok(vec![Value::FloatImage(Arc::new(result))]);
+                }
+
+                let already_pending = self.pending.borrow().as_ref().is_some_and(|p| p.matches(&fingerprint));
+                if !already_pending {
+                    let source = FloatImage::from_value(value, ctx)?;
+                    self.dispatch_gpu(gpu, fingerprint, source, self.scale_x, self.scale_y);
+                }
+            }
+        }
 
         let source = FloatImage::from_value(value, ctx)?;
 
@@ -262,12 +519,17 @@ mod tests {
     use super::*;
     use crate::compositor::graph::Graph;
     use crate::compositor::executors::{Execute, RenderExecutor};
+    use crate::graphics::{ImageFormat, U8Image};
 
     fn context(width: u32, height: u32) -> Context {
         Context {
             meta: crate::compositor::Meta { width, height, ..Default::default() },
             ..Default::default()
         }
+    }
+
+    fn image(pixels: Vec<u8>, width: u32, height: u32) -> Arc<U8Image> {
+        Arc::new(U8Image { pixels, width, height, format: ImageFormat::Rgba8 })
     }
 
     #[test]
@@ -401,5 +663,75 @@ mod tests {
         RenderExecutor::new()
             .execute(&graph, resize_id, &context(4, 4))
             .expect("unwired resize renders");
+    }
+
+    // --- WebGPU Phase 2 (SPECwebgpuoperations.md) ---
+
+    #[test]
+    fn is_live_is_true_only_while_a_gpu_dispatch_is_pending() {
+        let resize = Resize::new();
+        assert!(!resize.is_live(), "no dispatch in flight yet - must not force re-execution");
+
+        *resize.pending.borrow_mut() = Some(ResizeFingerprint {
+            source: Value::Number(0.0),
+            scale_x_bits: 50.0_f64.to_bits(),
+            scale_y_bits: 50.0_f64.to_bits(),
+        });
+        assert!(resize.is_live(), "a pending GPU dispatch must force re-execution so a just-completed result gets picked up");
+
+        *resize.pending.borrow_mut() = None;
+        assert!(!resize.is_live(), "once nothing is pending, normal cross-tick caching should resume");
+    }
+
+    #[test]
+    fn gpu_resize_matches_cpu_within_tolerance_once_warmed_up() {
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        let width = 6;
+        let height = 5;
+        let pixels: Vec<u8> = (0..(width * height))
+            .flat_map(|n| {
+                let v = ((n * 37) % 256) as u8;
+                [v, v.wrapping_add(50), v.wrapping_add(100), 255]
+            })
+            .collect();
+        let input = image(pixels, width, height);
+
+        let mut cpu_resize = Resize::new();
+        cpu_resize.set_parameter("SCALE_X", Value::Number(150.0)).unwrap();
+        cpu_resize.set_parameter("SCALE_Y", Value::Number(60.0)).unwrap();
+        let cpu_values = cpu_resize
+            .execute(&context(width, height), &[(Input::Source, Value::Image(input.clone()))])
+            .unwrap();
+        let Value::FloatImage(cpu_result) = &cpu_values[0] else { panic!("expected a float image") };
+
+        let mut gpu_resize = Resize::new();
+        gpu_resize.set_parameter("SCALE_X", Value::Number(150.0)).unwrap();
+        gpu_resize.set_parameter("SCALE_Y", Value::Number(60.0)).unwrap();
+        let gpu_ctx = Context { gpu: Some(gpu), ..context(width, height) };
+
+        // First call: no cached GPU result yet - kicks off a dispatch
+        // (native resolves it synchronously inside dispatch_gpu) and
+        // falls back to CPU for this tick regardless.
+        let _ = gpu_resize.execute(&gpu_ctx, &[(Input::Source, Value::Image(input.clone()))]).unwrap();
+        // Second call, same fingerprint (same wired Arc, same scales):
+        // the now-completed GPU result is cached and used directly.
+        let gpu_values = gpu_resize.execute(&gpu_ctx, &[(Input::Source, Value::Image(input.clone()))]).unwrap();
+        let Value::FloatImage(gpu_result) = &gpu_values[0] else { panic!("expected a float image") };
+
+        assert_eq!(cpu_result.pixels.len(), gpu_result.pixels.len());
+        for (index, (cpu_px, gpu_px)) in cpu_result.pixels.iter().zip(gpu_result.pixels.iter()).enumerate() {
+            assert!(
+                (cpu_px - gpu_px).abs() < 1e-4,
+                "channel {}: cpu={}, gpu={}",
+                index,
+                cpu_px,
+                gpu_px
+            );
+        }
     }
 }
