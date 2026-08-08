@@ -168,8 +168,14 @@ impl GpuState {
     /// GPU-backed operation's `#[cfg(not(target_arch = "wasm32"))]`
     /// branch uses this - see SPECwebgpucomputebackend2.md's "Target-
     /// conditional dispatch, not two designs".
+    ///
+    /// Resolves to `Err` - never panics - on a mapping failure (channel
+    /// closed before a result arrived, or the map itself failing), per
+    /// `GpuState::new()`'s own "never panics" contract, extended here per
+    /// RFC-006. Callers degrade to CPU fallback on `Err` rather than
+    /// treating a GPU failure as fatal.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn read_buffer_blocking(&self, buffer: &wgpu::Buffer, len: usize) -> Vec<f32> {
+    pub fn read_buffer_blocking(&self, buffer: &wgpu::Buffer, len: usize) -> Result<Vec<f32>, String> {
         let slice = buffer.slice(..);
         let (sender, receiver) = std::sync::mpsc::channel();
 
@@ -181,14 +187,16 @@ impl GpuState {
 
         receiver
             .recv()
-            .expect("gpu mapping channel closed before a result arrived")
-            .expect("gpu buffer mapping failed");
+            .map_err(|_| "gpu mapping channel closed before a result arrived".to_string())?
+            .map_err(|error| format!("gpu buffer mapping failed: {:?}", error))?;
 
-        let data = slice.get_mapped_range().expect("gpu buffer mapping failed");
+        let data = slice
+            .get_mapped_range()
+            .map_err(|error| format!("gpu buffer mapping failed: {:?}", error))?;
         let result: Vec<f32> = bytemuck::cast_slice(&data)[..len].to_vec();
         drop(data);
         buffer.unmap();
-        result
+        Ok(result)
     }
 
     /// Non-blocking async readback - wasm32 only. WebGPU buffer mapping
@@ -199,8 +207,15 @@ impl GpuState {
     /// `device.poll()` at all - the browser's own event loop drives GPU
     /// command processing, and polling isn't available/needed on the
     /// WebGPU backend the way it is natively.
+    ///
+    /// Resolves to `Err` - never panics - on a mapping failure, per
+    /// `GpuState::new()`'s own "never panics" contract, extended here per
+    /// RFC-006. This runs inside a detached `spawn_local` task on every
+    /// caller, where a panic would trap the whole WASM instance with no
+    /// recovery path - `Err` lets the caller degrade to CPU fallback
+    /// instead.
     #[cfg(target_arch = "wasm32")]
-    pub async fn read_buffer_async(&self, buffer: &wgpu::Buffer, len: usize) -> Vec<f32> {
+    pub async fn read_buffer_async(&self, buffer: &wgpu::Buffer, len: usize) -> Result<Vec<f32>, String> {
         let slice = buffer.slice(..);
         let state = std::rc::Rc::new(std::cell::RefCell::new(MapReadyState { result: None, waker: None }));
         let callback_state = state.clone();
@@ -215,13 +230,15 @@ impl GpuState {
 
         MapReadyFuture { state: state.clone() }
             .await
-            .expect("gpu buffer mapping failed");
+            .map_err(|error| format!("gpu buffer mapping failed: {:?}", error))?;
 
-        let data = slice.get_mapped_range().expect("gpu buffer mapping failed");
+        let data = slice
+            .get_mapped_range()
+            .map_err(|error| format!("gpu buffer mapping failed: {:?}", error))?;
         let result: Vec<f32> = bytemuck::cast_slice(&data)[..len].to_vec();
         drop(data);
         buffer.unmap();
-        result
+        Ok(result)
     }
 }
 
@@ -352,7 +369,7 @@ mod tests {
         gpu.dispatch("gpu module test dispatch", &pipeline, &bind_group, (1, 1, 1));
         gpu.copy_buffer_to_buffer(&output_buffer, &readback_buffer, byte_len);
 
-        let result = gpu.read_buffer_blocking(&readback_buffer, input_data.len());
+        let result = gpu.read_buffer_blocking(&readback_buffer, input_data.len()).expect("mapping should succeed on a working adapter");
 
         for (index, (input, output)) in input_data.iter().zip(result.iter()).enumerate() {
             assert!(
@@ -363,5 +380,34 @@ mod tests {
                 output
             );
         }
+    }
+
+    #[test]
+    fn read_buffer_blocking_on_a_buffer_never_created_with_map_read_returns_err_not_panic() {
+        // RFC-006 Fix 2: a mapping failure must resolve to `Err`, never
+        // panic - `GpuState::new()`'s own "never panics" contract, now
+        // extended to buffer mapping. Requesting a MAP_READ-mode map on a
+        // buffer that was never created with the `MAP_READ` usage flag is
+        // a deterministic, guaranteed-invalid mapping request (not a flaky
+        // timing-dependent failure), so this reliably exercises the `Err`
+        // path this fix added, in contrast to the crate's own
+        // `a_trivial_pipeline_round_trips...` test above, which exercises
+        // the `Ok` path on a correctly-usaged buffer.
+        let Ok(gpu) = pollster::block_on(GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+
+        let byte_len = 16u64;
+        // Deliberately missing MAP_READ - only COPY_DST, so map_async's
+        // MapMode::Read request must fail.
+        let unmappable_buffer = gpu.create_buffer(
+            "gpu module test unmappable buffer",
+            byte_len,
+            wgpu::BufferUsages::COPY_DST,
+        );
+
+        let result = gpu.read_buffer_blocking(&unmappable_buffer, 4);
+        assert!(result.is_err(), "mapping a buffer with no MAP_READ usage must resolve to Err, not panic or silently succeed");
     }
 }

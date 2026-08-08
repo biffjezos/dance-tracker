@@ -239,7 +239,17 @@ impl Checkerboard {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let raw = gpu.read_buffer_blocking(&readback_buffer, len);
+            let raw = match gpu.read_buffer_blocking(&readback_buffer, len) {
+                Ok(result) => result,
+                Err(_) => {
+                    // RFC-006 Fix 2: readback failure degrades to CPU fallback,
+                    // never panics. pending was never set Some on the native
+                    // (synchronous) path before this point, so clearing it here
+                    // is a harmless no-op that just allows a future retry.
+                    *self.pending.borrow_mut() = None;
+                    return;
+                }
+            };
             let pixels: Vec<u8> = raw.iter().map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8).collect();
             *self.last_gpu_result.borrow_mut() = Some(CompletedCheckerboardJob { fingerprint, pixels, width, height });
             *self.pending.borrow_mut() = None;
@@ -251,7 +261,19 @@ impl Checkerboard {
             let pending = self.pending.clone();
             let last_gpu_result = self.last_gpu_result.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let raw = gpu.read_buffer_async(&readback_buffer, len).await;
+                let raw = match gpu.read_buffer_async(&readback_buffer, len).await {
+                    Ok(result) => result,
+                    Err(_) => {
+                        // RFC-006 Fix 2: readback failure degrades to CPU fallback,
+                        // never panics - clear pending so a future dispatch can retry,
+                        // leave last_gpu_result untouched.
+                        let mut pending_slot = pending.borrow_mut();
+                        if pending_slot.as_ref().is_some_and(|p| p.matches(&fingerprint)) {
+                            *pending_slot = None;
+                        }
+                        return;
+                    }
+                };
                 let pixels: Vec<u8> = raw.iter().map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8).collect();
                 *last_gpu_result.borrow_mut() = Some(CompletedCheckerboardJob {
                     fingerprint: fingerprint.clone(),
@@ -418,8 +440,8 @@ impl Operation for Checkerboard {
                 return Ok(vec![Value::Image(Arc::new(result))]);
             }
 
-            let already_pending = self.pending.borrow().as_ref().is_some_and(|p| p.matches(&fingerprint));
-            if !already_pending {
+            let has_pending = self.pending.borrow().is_some();
+            if !has_pending {
                 self.dispatch_gpu(gpu, fingerprint);
             }
         }
@@ -533,7 +555,32 @@ mod tests {
     }
 
     #[test]
-    fn gpu_checkerboard_matches_cpu_within_tolerance_once_warmed_up() {
+    fn only_one_gpu_dispatch_stays_pending_while_input_keeps_changing() {
+        // RFC-006 Fix 1: an input that changes every tick must not launch a
+        // second concurrent GPU dispatch while one is already in flight -
+        // execute() must leave `pending` exactly as it found it (proven via
+        // `.matches()`, not overwritten by a fresh dispatch's fingerprint).
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        let checkerboard = Checkerboard::new();
+        let already_in_flight = CheckerboardFingerprint { width: 4, height: 4, tile: 1, color_a: Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }, color_b: Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 } };
+        *checkerboard.pending.borrow_mut() = Some(already_in_flight.clone());
+
+        let ctx = Context { gpu: Some(gpu), ..context(4, 4) };
+        let _ = checkerboard.execute(&ctx, &[]).unwrap();
+
+        assert!(
+            checkerboard.pending.borrow().as_ref().unwrap().matches(&already_in_flight),
+            "a second GPU dispatch must not be kicked off while one is already pending"
+        );
+    }
+
+    #[test]
+fn gpu_checkerboard_matches_cpu_within_tolerance_once_warmed_up() {
         let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
             eprintln!("skipping: no GPU adapter available in this environment");
             return;

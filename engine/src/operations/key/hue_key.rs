@@ -242,7 +242,17 @@ impl HueKey {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let pixels = gpu.read_buffer_blocking(&readback_buffer, len);
+            let pixels = match gpu.read_buffer_blocking(&readback_buffer, len) {
+                Ok(result) => result,
+                Err(_) => {
+                    // RFC-006 Fix 2: readback failure degrades to CPU fallback,
+                    // never panics. pending was never set Some on the native
+                    // (synchronous) path before this point, so clearing it here
+                    // is a harmless no-op that just allows a future retry.
+                    *self.pending.borrow_mut() = None;
+                    return;
+                }
+            };
             *self.last_gpu_result.borrow_mut() = Some(CompletedHueKeyJob { fingerprint, pixels, width, height });
             *self.pending.borrow_mut() = None;
         }
@@ -253,7 +263,19 @@ impl HueKey {
             let pending = self.pending.clone();
             let last_gpu_result = self.last_gpu_result.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let pixels = gpu.read_buffer_async(&readback_buffer, len).await;
+                let pixels = match gpu.read_buffer_async(&readback_buffer, len).await {
+                    Ok(result) => result,
+                    Err(_) => {
+                        // RFC-006 Fix 2: readback failure degrades to CPU fallback,
+                        // never panics - clear pending so a future dispatch can retry,
+                        // leave last_gpu_result untouched.
+                        let mut pending_slot = pending.borrow_mut();
+                        if pending_slot.as_ref().is_some_and(|p| p.matches(&fingerprint)) {
+                            *pending_slot = None;
+                        }
+                        return;
+                    }
+                };
                 *last_gpu_result.borrow_mut() = Some(CompletedHueKeyJob {
                     fingerprint: fingerprint.clone(),
                     pixels,
@@ -486,8 +508,8 @@ impl Operation for HueKey {
                 return Ok(vec![Value::FloatImage(Arc::new(result))]);
             }
 
-            let already_pending = self.pending.borrow().as_ref().is_some_and(|p| p.matches(&fingerprint));
-            if !already_pending {
+            let has_pending = self.pending.borrow().is_some();
+            if !has_pending {
                 self.dispatch_gpu(gpu, fingerprint, source_image.clone(), reference_image.clone());
             }
         }
@@ -872,7 +894,32 @@ mod tests {
     }
 
     #[test]
-    fn gpu_hue_key_matches_cpu_within_tolerance_once_warmed_up() {
+    fn only_one_gpu_dispatch_stays_pending_while_input_keeps_changing() {
+        // RFC-006 Fix 1: an input that changes every tick must not launch a
+        // second concurrent GPU dispatch while one is already in flight -
+        // execute() must leave `pending` exactly as it found it (proven via
+        // `.matches()`, not overwritten by a fresh dispatch's fingerprint).
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        let hue_key = HueKey::new();
+        let already_in_flight = HueKeyFingerprint { source: Value::Number(0.0), reference: Value::Number(0.0), target_hue_bits: 120.0f64.to_bits(), threshold_bits: 0.1f64.to_bits() };
+        *hue_key.pending.borrow_mut() = Some(already_in_flight.clone());
+
+        let ctx = Context { gpu: Some(gpu), ..context(2, 1) };
+        let _ = hue_key.execute(&ctx, &[(Input::Source, Value::Image(image(vec![10, 20, 30, 255, 50, 60, 70, 255], 2, 1))), (Input::Reference, Value::Image(image(vec![10, 20, 30, 255, 50, 60, 70, 255], 2, 1)))]).unwrap();
+
+        assert!(
+            hue_key.pending.borrow().as_ref().unwrap().matches(&already_in_flight),
+            "a second GPU dispatch must not be kicked off while one is already pending"
+        );
+    }
+
+    #[test]
+fn gpu_hue_key_matches_cpu_within_tolerance_once_warmed_up() {
         let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
             eprintln!("skipping: no GPU adapter available in this environment");
             return;
