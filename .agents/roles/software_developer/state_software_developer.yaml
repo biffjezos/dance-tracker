@@ -2,39 +2,52 @@ active_specification:
   id: SPECwebgpuoperations.md
   version: 1
 
-status: idle
+status: waiting_for_review_approval
 
 current_task:
-  name:
-  description:
+  name: SPEC-webgpu-operations Phase 1.1 (pointwise ops) - implemented, awaiting review
+  description: >
+    Implemented SPECwebgpuoperations.md's Phase 1.1 (CLAMP, INVERT,
+    RGB_TO_HSV, SHUFFLE, CHROMAKEY GPU dispatch) on branch
+    claude/agent-setup-prep-oyj2ri, following the pattern from Phase 0
+    (BLUR) already approved by Code Reviewer. Five independent commits,
+    one per operation. Could not run cargo build/cargo test in this
+    sandbox (same index.crates.io restriction as Phase 0); every claim
+    is hand-traced. Filed one consolidated RFI to Code Reviewer covering
+    all five operations, with reasoning for bundling them rather than
+    filing five separate RFIs, and explicitly offered to split if the
+    reviewer prefers.
 progress:
   completed:
-    - "Verified precondition: gpu module foundation (Context.gpu, App.gpu, GpuState) confirmed present on origin/dev"
-    - Analyzed existing BLUR CPU implementation and its masked/bbox path
-    - Implemented Phase 0 GPU dispatch for BLUR (WGSL shader, fingerprint/pending/last_gpu_result state, target-conditional readback, is_live() override)
-    - Wrote implementation report (.agents/communication/implementation_reports/webgpu/operations_Phase0_blur_report.md)
-    - Filed RFI to Code Reviewer requesting evaluation (.agents/communication/rfi/RFIwebgpuoperationsphase0blurevaluation.md)
-    - "Code Reviewer approved (.agents/communication/rfi/RFIresponsewebgpuoperationsphase0blurevaluation.md, evaluation: .agents/communication/evaluation/bbox/webgpu/evaluation_webgpu_operations_phase0_blur.md) - no RFC needed"
-    - "Delivered: merged claude/agent-setup-prep-oyj2ri into dev, merge commit 706d362, pushed to origin/dev; RFI response quoted in the merge commit message"
+    - "Phase 0 (BLUR) delivered - merge commit 706d362 on dev"
+    - Implemented Phase 1.1 GPU dispatch for CLAMP, INVERT, RGB_TO_HSV, SHUFFLE, CHROMAKEY (five independent commits)
+    - Wrote implementation report (.agents/communication/implementation_reports/webgpu/operations_Phase1_1_pointwise_report.md)
+    - Filed RFI to Code Reviewer requesting evaluation of all five (.agents/communication/rfi/RFIwebgpuoperationsphase1_1evaluation.md)
   remaining:
-    - Phases 1.1 through 2 (nine remaining operations) - not started; SPECwebgpuoperations.md v1 stays the active specification until they're picked up, since Phase 0 was the sole prerequisite and is now confirmed sound
+    - Await Code Reviewer's RFI response or RFC
+    - Phase 1.2 onward (CHECKERBOARD, RING, then the remaining phases) - not started, depends on Phase 1.1 being confirmed sound
 
 modified_files:
-  - engine/src/operations/transform/blur.rs
+  - engine/src/operations/transform/clamp.rs
+  - engine/src/operations/transform/invert.rs
+  - engine/src/operations/transform/rgb_to_hsv.rs
+  - engine/src/operations/transform/shuffle.rs
+  - engine/src/operations/key/chromakey.rs
 
 tests:
   executed:
-    - is_live_is_true_only_while_a_gpu_dispatch_is_pending (new)
-    - gpu_blur_matches_cpu_blur_within_tolerance_once_warmed_up (new)
-    - "BLUR's full pre-existing test suite (masked/bbox consume-equivalence, identity, mismatched-mask-size, etc.) - unchanged apart from one struct-literal mechanical fix"
+    - is_live_is_true_only_while_a_gpu_dispatch_is_pending (new, one per operation)
+    - gpu_<op>_matches_cpu_within_tolerance (new, one per operation)
+    - "Each operation's full pre-existing test suite - unchanged"
   results:
-    - "UNVERIFIED (implementor) / UNVERIFIED (reviewer, independently re-confirmed) - cargo build/cargo test could not run in either session (index.crates.io returns 403, ENVIRONMENT_DIAGNOSTICS.md Steps 1-2). Both implementation and evaluation are hand-traced against gpu/mod.rs's already-source-verified API surface and WGSL language semantics, not compiler- or runtime-verified. Does not block the approval per ENVIRONMENT_DIAGNOSTICS.md; Management's open notification (notification_cargo_registry_index_blocked.md) covers the underlying restriction."
+    - "UNVERIFIED - cargo build/cargo test could not run at all in this sandbox (index.crates.io returns 403, same restriction as Phase 0). All code hand-traced against blur.rs's already-approved API usage and each operation's existing CPU implementation, not compiler- or runtime-verified."
 
 blockers: []
 
 rfis:
-  - RFIwebgpuoperationsphase0blurevaluation.md (answered: RFIresponsewebgpuoperationsphase0blurevaluation.md)
+  - RFIwebgpuoperationsphase0blurevaluation.md (answered)
+  - RFIwebgpuoperationsphase1_1evaluation.md
 
 handoff:
-  target_role: null
-  status: null
+  target_role: code_reviewer
+  status: sent
