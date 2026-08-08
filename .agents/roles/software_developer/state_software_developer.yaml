@@ -1,27 +1,27 @@
 active_specification:
-  id: SPECwebgpuoperations.md
+  id: SPECghostdelay.md
   version: 1
 
-status: idle
+status: waiting_for_review_approval
 
 current_task:
-  name:
-  description:
+  name: "RFC-005: GHOST DELAY cascading fix"
+  description: "Fix GHOST's DELAY to scale per ghost layer (n * DELAY frames back), per SPEC-GHOST-DELAY / RFC-005. Implemented, pushed, RFI filed to Code Reviewer."
 progress:
   completed:
-    - "Phase 0 (BLUR) delivered - merge commit 706d362 on dev"
-    - "Phase 1.1 (CLAMP, INVERT, RGB_TO_HSV, SHUFFLE, CHROMAKEY) delivered - merge commit b5eb6fe on dev"
-    - "Phase 1.2 (CHECKERBOARD, RING) delivered - merge commit 2914425 on dev"
-    - "Phase 1.3 (ADD, SCREEN, SUBTRACT, MULTIPLY, MIX, HUE_KEY) delivered - merge commit 0942d71 on dev"
-    - "Phase 2 (RESIZE, MOVE) delivered - merge commit 3040e3b on dev"
-    - "SPECwebgpuoperations.md now entirely complete (Phases 0, 1.1, 1.2, 1.3, 2) and merged to dev"
-  remaining: []
+    - "SPECwebgpuoperations.md (Phases 0, 1.1, 1.2, 1.3, 2) complete and merged to dev"
+    - "RFC-005 (GHOST DELAY cascading fix) implemented on engine/src/operations/generators/ghost.rs - awaiting Code Review"
+  remaining:
+    - "RFC-005: Code Reviewer evaluation, then merge to dev on Approval"
 
-modified_files: []
+modified_files:
+  - engine/src/operations/generators/ghost.rs
 
 tests:
-  executed: []
-  results: []
+  executed:
+    - "cargo test --lib generators::ghost (blocked - see notification_cargo_registry_index_blocked.md)"
+  results:
+    - "Unverified: index.crates.io blocked by sandbox network policy (403, not in allowlist); --offline has no local registry cache. Manually traced new test's expected values against the implementation instead - see RFC005_ghost_delay_fix_report.md."
 
 blockers: []
 
@@ -31,7 +31,8 @@ rfis:
   - RFIwebgpuoperationsphase1_2evaluation.md (answered, both approved)
   - RFIwebgpuoperationsphase1_3evaluation.md (answered, all six approved)
   - RFIwebgpuoperationsphase2evaluation.md (answered, both approved)
+  - RFIrfc005ghostdelayreadyformerge.md (open, sent to code_reviewer)
 
 handoff:
-  target_role: null
-  status: null
+  target_role: code_reviewer
+  status: awaiting_review
