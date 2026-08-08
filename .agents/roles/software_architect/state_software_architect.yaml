@@ -1,10 +1,8 @@
 status: idle
 
 handoff:
-  target_role: software_developer
-  specification_id: SPECwebgpuoperations.md
-  version: 1
-  status: sent
+  target_role: null
+  status: null
 
 parked_work:
   - .agents/roles/software_architect/docs/parked_work/PARKED_WORK.md
