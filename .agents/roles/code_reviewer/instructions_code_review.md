@@ -96,57 +96,19 @@ Approve only based on:
 
 # Communication Flow
 
-## Input
+Per `communication_protocol.md`'s "Implementation Review Loop". Evaluate
+directly on the Software Developer's branch — never pull, push, or merge
+`src`/`tests`; you have no write authority there. Respond with Approval or
+RFC, `Target-Role: Software Developer`.
 
-You receive:
-
-- repository state;
-- commit hash or pull request;
-- approved specification;
-- acceptance criteria;
-- architectural guidelines;
-- coding conventions;
-- test results available in the repository or CI.
-
-SOFTWARE DEVELOPER ---> CODE REVIEWER
-
-The Software Developer may provide metadata about the implementation.
-
-The implementation itself is the source of truth.
-
-Do not rely on developer claims.
+Do not rely on developer claims; the implementation itself is the source
+of truth.
 
 ### Input Validation
 
-Before review begins, verify availability of:
-
-- specification;
-- acceptance criteria;
-- implementation changes;
-- test evidence.
-
-If required information is missing:
-
-- do not approve;
-- create an RFI.
-
-## Output
-
-You produce:
-
-- Approval;
-- RFC (Request for Correction);
-- RFI (Request for Information).
-
-Use RFI when required information, evidence, specification, or architectural clarification is unavailable.
-
-CODE REVIEWER ---> SOFTWARE DEVELOPER
-
-After approval:
-
-CODE REVIEWER ---> SOFTWARE DEVELOPER
-
-The Software Developer creates the Pull Request or continues the delivery process.
+Before review begins, verify availability of: specification, acceptance
+criteria, implementation changes, test evidence. Missing: do not approve,
+create an RFI instead.
 
 # Access Control
 
@@ -160,51 +122,18 @@ The reviewer shall:
 - run available verification commands when permitted;
 - explicitly report unavailable evidence.
 
-# Working State
-
 # Execution Protocol
 
-1. Identify assigned role.
-2. Read role instructions.
-3. Perform Session Registration (see below).
-4. Read state definition.
-5. Read working state.
-6. Validate current state.
-7. Resume assigned work:
-   - Check for pending implementation jobs.
-   - Check for pending RFIs / RFC awaiting response.
-8. Update working state after meaningful progress.
+Follow `AGENTS.md`'s Session Protocol. Role tag: `role:code_reviewer`.
+Registry file: `.agents/session_registry/session_registry_code_reviewer.md`.
 
-## Session Registration
-
-Run the Session Registration procedure from
-`.agents/docs/workflow/communication_protocol.md`'s "Session Registry &
-Delivery" section. Your role tag: `role:code_reviewer`. Your registry
-file: `.agents/session_registry/session_registry_code_reviewer.md`.
+Resume assigned work: check for pending implementation jobs (RFIs from the
+Developer per the Implementation Review Loop); check for pending RFIs/RFCs
+awaiting your response.
 
 ---
 
 # The Review Process
-
-## Review Principles
-
-The repository is the source of truth.
-
-Do not approve based on:
-
-- explanations;
-- intentions;
-- promises;
-- implementation reports.
-
-Approve only based on:
-
-- code;
-- tests;
-- documentation;
-- measurable evidence.
-
----
 
 ## Review States
 
@@ -310,35 +239,14 @@ You shall not reject solely because:
 
 # Interaction With Software Architect
 
-The Code Reviewer does not replace the Software Architect.
-
-If you discover:
-
-- specification ambiguity;
-- architectural contradiction;
-- missing design decision;
-
-do not rewrite the architecture.
-
-Request clarification through the established process.
+Do not rewrite the architecture. On specification ambiguity, architectural
+contradiction, or a missing design decision: file an RFI, `Target-Role:
+Software Architect`, per `communication_protocol.md`'s Delivery procedure.
 
 ---
 
 ### Testing Requirements
 
-Verify:
-
-- existing tests;
-- new tests;
-- regression behavior;
-- acceptance criteria evidence.
-
-A passing test suite does not automatically mean approval.
-
-Tests are one source of evidence.
-
----
-
-### Review Output
-
-Prepare and hand-off back to Software Developer either: Approval, RFC, or RFI
+Verify: existing tests, new tests, regression behavior, acceptance
+criteria evidence. A passing test suite does not automatically mean
+approval — one source of evidence, not the only one.

@@ -1,189 +1,121 @@
 # Communication Storage
 
-All inter-agent communication artifacts must be stored in:
-
-`.agents/communication/`
+All inter-agent communication artifacts must be stored in `.agents/communication/`.
 
 Directory structure:
 
 ```
-agents/communication/
+.agents/communication/
 advice/
 adr/
 evaluation/
 notifications/
 rfc/
 rfi/
-specs/
 ```
 
 Rules:
 
 - Communication artifacts are immutable records.
 - Agents must not delete communication artifacts.
-- Resolved artifacts remain available for traceability.
 - State files reference communication artifacts by ID.
 
 # Session Registry & Delivery
 
-This section is the single authoritative description of how a filed
-artifact actually reaches the role it's addressed to. Role instructions
-must not duplicate this procedure — they reference it, and add only
-role-specific escalation policy (who a role is allowed to address, and
-under what circumstances).
-
 ## The registry
 
-`.agents/session_registry/<role_tag>.md` (one file per role) maps a role
-to the CCR session currently embodying it and the trigger that pages that
-session. `.agents/session_registry/_index.md` is a lightweight overview
-and quick-reference table — the procedure lives here, not there.
+`.agents/session_registry/<role_tag>.md` (one file per role) maps a role to
+its CCR session and trigger.
 
-**Source of truth for "is a session alive" is the session tag, checked
-live** via a session listing filtered by `role:<tag>` — not the registry
-file. The registry file is a fast, human-readable pointer (trigger ID,
-last known session ID, last verified date); verify against the live tag
-before trusting a row that looks stale.
+Source of truth for "is a session alive" is a live session listing filtered
+by `role:<tag>`, not the registry file.
 
 ## Session Registration procedure
 
-Every agent role runs this at the start of every session, immediately
-after reading its own role instructions and before reading state. `<role
-tag>` below is that role's own tag (e.g. `role:software_developer`) —
-see the role's own instructions for which tag applies to it.
+Run at the start of every session, immediately after reading role
+instructions, before reading state.
 
-1. Determine your own CCR session ID from the git commit template already
-   present in your system prompt (the `Claude-Session:
-   https://claude.ai/code/session_...` line) — this is authoritative. Do
-   **not** trust a role instructions file's own frontmatter `role`/
-   `role_directory` fields for self-identification: they are
-   hand-maintained and have been wrong before. Your role identity comes
-   from which file Management told you to load, not from metadata inside
-   it.
-2. Tag yourself: `<role tag>`.
+1. Determine your CCR session ID from the `Claude-Session:` line in the git
+   commit template. Do not use a role instructions file's own frontmatter for
+   self-identification.
+2. Tag yourself `role:<own_role>`.
 3. Read `.agents/session_registry/<role_tag>.md`.
-4. Check whether another *live* (running/connected) session already
-   carries the same tag. If one exists and is not this session: do not
-   touch the trigger. Note yourself under "Additional live sessions" in
-   the registry file and stop here — you are an additional concurrent
-   worker, not the pager (see "Running more than one session per role"
-   below).
-5. If no other live session holds the slot, this session is now the
-   pager target:
-   - If the registry file has no trigger ID yet, create one bound to
-     your own session ID (prompt: check `.agents/communication/rfi/`
-     and `.agents/communication/notifications/` for items addressed to
-     your role; daily fallback schedule, unless Management specifies
-     otherwise).
-   - If a trigger ID is recorded but bound to a different session ID
-     than your own, the previous pager session has been replaced —
-     delete the old trigger and create a new one bound to your own
-     session ID, reusing its prompt/schedule.
-   - If the recorded trigger is already bound to your own session ID,
-     nothing to do.
-   - Update the registry file: trigger ID, your session ID, today's date.
-6. Continue with the rest of your role's own Execution Protocol.
+4. If another live session already holds this tag: note yourself under
+   "Additional live sessions" in the registry file, do not touch the
+   trigger, stop.
+5. Otherwise, become the pager:
+   - No trigger recorded: create one bound to your session. Prompt: check
+     `.agents/communication/rfi/` and `.agents/communication/notifications/`
+     for items addressed to your role. Daily fallback schedule.
+   - Trigger recorded but bound to a different or dead session: delete it,
+     create a new one bound to your session, same prompt/schedule.
+   - Trigger already bound to your session: no action.
+   - Update the registry file: trigger ID, session ID, today's date.
+6. Continue with your role's Execution Protocol.
 
 ## Delivery
 
-Filing an artifact (RFI, Notification, RFC, Approval, Implementation
-Report — anything with a `Target-Role`) is not itself delivery. The
-trigger fire is a plain notification, nothing more — it carries no
-content and no artifact pointer. The receiver's own pull of the sender's
-branch is how the artifact is actually found and read. Do both, every
-time, in this order:
-
-1. Commit the actual artifact — an RFI, RFC, Evaluation, Notification,
-   Implementation Report, or whatever type your role's own `outputs`
-   list permits — to `.agents/communication/<type>/` on your own current
-   branch, and push it. This is not optional even for a short answer:
-   the committed file is the permanent record (per Document Life Cycle
-   below) and is the only thing the receiver reads. Do not wait for a PR
-   merge to `dev` first.
+1. Commit the artifact to `.agents/communication/<type>/` on your own
+   current branch. Push. Do not wait for a `dev` merge.
 2. Read the target role's row in `.agents/session_registry/<role_tag>.md`
-   for its trigger ID. Treat this file as a hint, not ground truth — a
-   role's own correction to its row often lands on that role's own
-   working branch before it reaches `dev` (or wherever you're reading
-   from), so the row you see can be stale even shortly after being
-   fixed. If firing the recorded trigger ID fails, or you have any doubt,
-   confirm the live trigger for that role directly (e.g. `list_triggers`
-   cross-referenced against the role's tag) before concluding delivery
-   is impossible.
-3. Call `fire_trigger` on that trigger ID with a notification only —
-   nothing else, no artifact content, no separate asks folded in. State
-   exactly:
-   - sender role and receiver role,
-   - your own session ID and trigger ID (so the receiver can fire back),
-   - your own current branch name.
-   That is the whole payload. The receiver locates and reads the actual
-   artifact itself (see "Receiving a Trigger Fire" below) — the sender
-   does not summarize, quote, or point at a specific file path; the
-   receiver's own pull of `.agents/communication/**` on the stated branch
-   is how the artifact is found.
-4. If the target role's registry row has no trigger ID yet (nobody has
-   run Session Registration for that role), there is nothing to fire —
-   note this as a blocker rather than assuming delivery happened.
+   for its trigger ID. If firing it fails, confirm the live trigger via
+   `list_triggers` cross-referenced against the role's tag.
+3. Call `fire_trigger` on that trigger ID. Payload is exactly: sender role,
+   receiver role, sender session ID, sender trigger ID, sender branch name.
+   No artifact content, no file path.
+4. No trigger ID recorded for the target role: note as a blocker, do not
+   assume delivery happened.
 
-Addressing is not restricted to the primary Communication Flow chain in
-`governance_and_organization.md` — an RFI, RFC, Evaluation, or a Handoff
-(filing the relevant artifact, e.g. an Implementation Report, with
-`Target-Role` set to whoever should act on it next) may go directly to
-whichever role owns the answer, using the same procedure above.
-
-Do not skip this because "the daily fallback will catch it eventually" —
-the fallback exists for missed/failed on-demand delivery, not as the
-primary mechanism.
+Any role may address any role directly for RFI/RFC/Evaluation/Approval/
+Implementation Report — not restricted to `governance_and_organization.md`'s
+default chain.
 
 ## Receiving a Trigger Fire
 
-A trigger firing into your session — on-demand or scheduled fallback
-alike — is itself the instruction to act. Do not wait for Management to
-separately ask whether you received something; that question should
-never need asking. In the same turn the fire arrives:
+Act in the same turn the fire arrives.
 
-1. Read the notification for the sender's role, session ID, trigger ID,
-   and branch name. `git fetch` that branch.
-2. Look under `.agents/communication/**` on that branch for anything
-   addressed `Target-Role: <your role>` that you have not already
-   answered. This is how you find the artifact — the notification itself
-   never names a path or contains content.
-3. Act on it: answer the RFI, evaluate the RFC, acknowledge the
-   Notification, review the Implementation Report — whatever the
-   artifact type calls for per your own role instructions.
-4. Respond in kind, using the same Delivery procedure above: commit your
-   response artifact to your own current branch, then fire the sender's
-   trigger (the session/trigger ID from their notification) with the
-   same bare sender/receiver/session/trigger/branch notification — no
-   content. A reply that only updates your own working state, without
-   firing back, leaves the sender with no way to know you responded
-   short of polling your branch themselves.
-5. Update your own working state to reflect the exchange, per your
-   role's state definition.
+1. Read the notification for sender role, session ID, trigger ID, branch
+   name. `git fetch` that branch.
+2. Scan `.agents/communication/**` on that branch for anything addressed
+   `Target-Role: <your role>` you have not already answered.
+3. Act on it per your role instructions.
+4. Respond via the same Delivery procedure: commit your artifact, fire the
+   sender's trigger with the same bare notification.
+5. Update your working state.
 
-If you are the sender and enough time has passed with no fire back, you
-may independently check the target's branch for a committed response
-before assuming nothing happened — delivery of the *notification* can
-fail silently (a `fire_trigger` call can report success while landing on
-the wrong trigger), but a properly-committed response artifact will
-still be sitting on the responder's branch regardless of whether its own
-notification-back arrived.
+If no fire-back arrives after a reasonable wait, check the target's branch
+directly for a committed response.
+
+## Implementation Review Loop
+
+1. Software Architect → Software Developer: RFC, `Target-Role: Software
+   Developer`, referencing the specification, describing the implementation
+   required.
+2. Software Developer implements on its own branch, pushes. On completion →
+   Code Reviewer: RFI, `Target-Role: Code Reviewer`, referencing the
+   specification and the RFC-ID, asking whether the implementation is ready
+   to merge.
+3. Code Reviewer evaluates directly on the Developer's branch. Never
+   pushes, merges, or modifies `src`/`tests`. Responds:
+   - Ready: Approval, `Target-Role: Software Developer`.
+   - Not ready: RFC, `Target-Role: Software Developer`, describing the
+     required change. Developer fixes and repeats from step 2.
+4. On Approval: Software Developer merges to `dev`, records the merge
+   commit, sets its own working state to idle, then — as the last action —
+   → Software Architect: Implementation Report, `Target-Role: Software
+   Architect`, referencing the Approval-ID and the RFC-ID.
+5. Software Architect discovers the Implementation Report per "Receiving a
+   Trigger Fire" and closes out the RFC.
 
 ## Running more than one session per role concurrently
 
-The procedure above makes a *second* session for a role an additional
-worker (tagged, but without the trigger), not a competing pager — it
-does not by itself let either of two Developer sessions pick up an RFI.
-That needs a claim-based queue on top of this, **not yet built, build
-when actually needed**:
+A second session for a role is an additional worker, not a competing pager.
+Not yet built, build when needed:
 
-- RFIs/Notifications remain files in `.agents/communication/{rfi,
-  notifications}/`.
-- Add a `Claimed-By:` field (session ID + timestamp). A session intending
-  to answer one sets this field first and commits, then re-reads to
-  confirm its own claim actually won (optimistic locking).
-- The wake-up trigger for a multi-session role switches from
-  `persistent_session_id` to `create_new_session_on_fire: true`, so each
-  firing can be picked up by whichever fresh triage session spins up.
+- Add `Claimed-By:` (session ID + timestamp) to an RFI/Notification before
+  answering it; re-read to confirm the claim won.
+- Switch the role's trigger from `persistent_session_id` to
+  `create_new_session_on_fire: true`.
 
 # Document Life Cycle
 
@@ -263,14 +195,10 @@ Reviewer notes:
 
 ## Notification
 
-A Notification reports a finding the sender has already diagnosed - there
-is no open question for the receiving role to investigate, only something
-to act on or acknowledge. Used primarily for infrastructure, environment,
-sandbox, or tooling conditions that block work regardless of how correct
-the code or specification is - conditions no specification change can
-fix, so they do not belong in an RFI to the Software Architect. See
-`.agents/docs/ENVIRONMENT_DIAGNOSTICS.md` for how to distinguish a
-genuine restriction from a misdiagnosis before filing one.
+Reports a finding the sender has already diagnosed. Used for
+infrastructure, environment, sandbox, or tooling conditions that block
+work regardless of code or specification correctness. See
+`.agents/docs/ENVIRONMENT_DIAGNOSTICS.md` before filing one.
 
 NOTIFICATION-ID:
 Created:
