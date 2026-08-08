@@ -1,5 +1,7 @@
 // src/operations/key/chromakey.rs
 use std::any::Any;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::compositor::{
@@ -11,9 +13,123 @@ use crate::compositor::{
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
+    value::value_ptr_eq,
     Value,
 };
 use crate::graphics::{Color, FloatImage};
+use crate::gpu::GpuState;
+
+// GPU compute shader - SPECwebgpuoperations.md's Phase 1.1. Only the
+// unmasked path is GPU-accelerated (the blanket rule). Same
+// `array<vec4<u32>, 2>` uniform shape as SHUFFLE (six values: width,
+// height, KEY_COLOR's r/g/b, THRESHOLD) - the three float values are
+// packed via `f32::to_bits()`/`bitcast<f32>()` rather than a
+// `#[derive(Pod)]` struct, so no new bytemuck cargo feature is needed
+// (same reasoning as BLUR's params buffer).
+const CHROMAKEY_SHADER: &str = r#"
+    @group(0) @binding(0) var<storage, read> input: array<f32>;
+    @group(0) @binding(1) var<storage, read_write> output: array<f32>;
+    @group(0) @binding(2) var<uniform> params: array<vec4<u32>, 2>;
+
+    @compute @workgroup_size(8, 8, 1)
+    fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+        let width = params[0].x;
+        let height = params[0].y;
+        let key_r = bitcast<f32>(params[0].z);
+        let key_g = bitcast<f32>(params[0].w);
+        let key_b = bitcast<f32>(params[1].x);
+        let threshold = bitcast<f32>(params[1].y);
+
+        if (id.x >= width || id.y >= height) {
+            return;
+        }
+
+        let idx = (id.y * width + id.x) * 4u;
+        let r = input[idx];
+        let g = input[idx + 1u];
+        let b = input[idx + 2u];
+        let a = input[idx + 3u];
+
+        let dr = r - key_r;
+        let dg = g - key_g;
+        let db = b - key_b;
+        let distance = sqrt(dr * dr + dg * dg + db * db) / sqrt(3.0);
+
+        output[idx] = r;
+        output[idx + 1u] = g;
+        output[idx + 2u] = b;
+        output[idx + 3u] = select(a, 0.0, distance <= threshold);
+    }
+"#;
+
+struct ChromaKeyGpuPipeline {
+    pipeline: wgpu::ComputePipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+}
+
+fn build_chromakey_pipeline(gpu: &GpuState) -> ChromaKeyGpuPipeline {
+    let shader = gpu.create_shader(CHROMAKEY_SHADER);
+
+    let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("chromakey bind group layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let pipeline = gpu.create_compute_pipeline("chromakey pipeline", &shader, "main", &[&bind_group_layout]);
+
+    ChromaKeyGpuPipeline { pipeline, bind_group_layout }
+}
+
+#[derive(Clone)]
+struct ChromaKeyFingerprint {
+    source: Value,
+    key_color: Color,
+    threshold: u64, // f64::to_bits() - Color already derives PartialEq (via #[derive]), but f64 has no total Eq; bit-pattern comparison avoids that
+}
+
+impl ChromaKeyFingerprint {
+    fn matches(&self, other: &ChromaKeyFingerprint) -> bool {
+        self.key_color == other.key_color && self.threshold == other.threshold && value_ptr_eq(&self.source, &other.source)
+    }
+}
+
+struct CompletedChromaKeyJob {
+    fingerprint: ChromaKeyFingerprint,
+    pixels: Vec<f32>,
+    width: u32,
+    height: u32,
+}
 
 /// What an unconnected SOURCE shows: a flat, obviously-fake magenta - a
 /// mask-producing node has nothing to key "removal" against, so the usual
@@ -28,6 +144,11 @@ const PLACEHOLDER_COLOR: Color = Color { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };
 pub struct ChromaKey {
     pub key_color: Color,
     pub threshold: f64,
+    // GPU-backed dispatch state - see blur.rs's identical fields for the
+    // full rationale.
+    gpu_pipeline: RefCell<Option<ChromaKeyGpuPipeline>>,
+    pending: Rc<RefCell<Option<ChromaKeyFingerprint>>>,
+    last_gpu_result: Rc<RefCell<Option<CompletedChromaKeyJob>>>,
 }
 
 impl ChromaKey {
@@ -35,6 +156,87 @@ impl ChromaKey {
         Self {
             key_color: Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 },
             threshold: 0.3,
+            gpu_pipeline: RefCell::new(None),
+            pending: Rc::new(RefCell::new(None)),
+            last_gpu_result: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Mirrors `Blur::dispatch_gpu` exactly in structure.
+    fn dispatch_gpu(&self, gpu: Arc<GpuState>, fingerprint: ChromaKeyFingerprint, source: FloatImage) {
+        let width = source.width;
+        let height = source.height;
+        let len = source.pixels.len();
+        let byte_len = (len * std::mem::size_of::<f32>()) as u64;
+
+        {
+            let mut pipeline_slot = self.gpu_pipeline.borrow_mut();
+            if pipeline_slot.is_none() {
+                *pipeline_slot = Some(build_chromakey_pipeline(&gpu));
+            }
+        }
+
+        let input_buffer = gpu.upload("chromakey input", &source.pixels, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+        let output_buffer = gpu.create_buffer(
+            "chromakey output",
+            byte_len,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        );
+        let threshold_f32: f32 = f64::from_bits(fingerprint.threshold) as f32;
+        let params: [u32; 8] = [
+            width, height, fingerprint.key_color.r.to_bits(), fingerprint.key_color.g.to_bits(),
+            fingerprint.key_color.b.to_bits(), threshold_f32.to_bits(), 0, 0,
+        ];
+        let params_buffer = gpu.upload("chromakey params", &params, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+
+        let readback_buffer = gpu.create_buffer(
+            "chromakey readback",
+            byte_len,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        );
+
+        {
+            let pipeline_slot = self.gpu_pipeline.borrow();
+            let pipeline = pipeline_slot.as_ref().expect("just built above");
+
+            let bind_group = gpu.create_bind_group("chromakey bind group", &pipeline.bind_group_layout, &[
+                wgpu::BindGroupEntry { binding: 0, resource: input_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: output_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: params_buffer.as_entire_binding() },
+            ]);
+
+            let workgroups_x = width.div_ceil(8);
+            let workgroups_y = height.div_ceil(8);
+            gpu.dispatch("chromakey dispatch", &pipeline.pipeline, &bind_group, (workgroups_x, workgroups_y, 1));
+        }
+
+        gpu.copy_buffer_to_buffer(&output_buffer, &readback_buffer, byte_len);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let pixels = gpu.read_buffer_blocking(&readback_buffer, len);
+            *self.last_gpu_result.borrow_mut() = Some(CompletedChromaKeyJob { fingerprint, pixels, width, height });
+            *self.pending.borrow_mut() = None;
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            *self.pending.borrow_mut() = Some(fingerprint.clone());
+            let pending = self.pending.clone();
+            let last_gpu_result = self.last_gpu_result.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let pixels = gpu.read_buffer_async(&readback_buffer, len).await;
+                *last_gpu_result.borrow_mut() = Some(CompletedChromaKeyJob {
+                    fingerprint: fingerprint.clone(),
+                    pixels,
+                    width,
+                    height,
+                });
+                let mut pending_slot = pending.borrow_mut();
+                if pending_slot.as_ref().is_some_and(|p| p.matches(&fingerprint)) {
+                    *pending_slot = None;
+                }
+            });
         }
     }
 
@@ -174,12 +376,15 @@ impl Operation for ChromaKey {
         }
     }
 
+    // See blur.rs's identical override for the full rationale.
+    fn is_live(&self) -> bool {
+        self.pending.borrow().is_some()
+    }
+
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
             return Ok(vec![Value::Image(crate::graphics::U8Image::solid(PLACEHOLDER_COLOR, ctx.meta.width, ctx.meta.height))]);
         };
-
-        let source = FloatImage::from_value(value, ctx)?;
 
         let mask = find_input(inputs, Input::Mask)
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
@@ -198,7 +403,8 @@ impl Operation for ChromaKey {
         // Only this operation's own wired MASK is in scope here - not
         // deriving a box from CHROMA KEY's own keyed-out alpha, which is
         // the excluded, content-derived Phase 4 (see PARKED_WORK.md).
-        let keyed = if mask.is_some() {
+        if let Some(mask) = &mask {
+            let source = FloatImage::from_value(value, ctx)?;
             let natural_box = find_bbox(&ctx.input_bboxes, Input::Source)
                 .unwrap_or_else(|| Rect::full(source.width, source.height));
             let mask_box = find_bbox(&ctx.input_bboxes, Input::Mask)
@@ -210,14 +416,39 @@ impl Operation for ChromaKey {
             let key_color = self.key_color;
             let threshold = self.threshold;
 
-            crate::graphics::compute_within_bbox(width, source.height, work_area, pixels, |x, y| {
+            let keyed = crate::graphics::compute_within_bbox(width, source.height, work_area, pixels, |x, y| {
                 Self::key_single_pixel(pixels, key_color, threshold, x, y, width)
-            })
-        } else {
-            Self::key_pixels(&source.pixels, self.key_color, self.threshold)
-        };
+            });
+            let keyed = crate::graphics::apply_mask(&source.pixels, keyed, Some(mask), width, source.height)?;
 
-        let keyed = crate::graphics::apply_mask(&source.pixels, keyed, mask.as_ref(), source.width, source.height)?;
+            return Ok(vec![Value::FloatImage(Arc::new(FloatImage { pixels: keyed, width, height: source.height }))]);
+        }
+
+        // Unmasked path: try GPU first when available.
+        if let Some(gpu) = ctx.gpu.clone() {
+            let fingerprint = ChromaKeyFingerprint {
+                source: value.clone(),
+                key_color: self.key_color,
+                threshold: self.threshold.to_bits(),
+            };
+
+            let cached = self.last_gpu_result.borrow().as_ref()
+                .filter(|completed| completed.fingerprint.matches(&fingerprint))
+                .map(|completed| FloatImage { pixels: completed.pixels.clone(), width: completed.width, height: completed.height });
+
+            if let Some(result) = cached {
+                return Ok(vec![Value::FloatImage(Arc::new(result))]);
+            }
+
+            let already_pending = self.pending.borrow().as_ref().is_some_and(|p| p.matches(&fingerprint));
+            if !already_pending {
+                let source = FloatImage::from_value(value, ctx)?;
+                self.dispatch_gpu(gpu, fingerprint, source);
+            }
+        }
+
+        let source = FloatImage::from_value(value, ctx)?;
+        let keyed = Self::key_pixels(&source.pixels, self.key_color, self.threshold);
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels: keyed,
@@ -570,5 +801,62 @@ mod tests {
         let off_pixels = as_u8_pixels(&off_values[0]);
 
         assert_eq!(on_pixels, off_pixels, "bbox consumption on vs off must produce pixel-identical output");
+    }
+
+    // --- WebGPU Phase 1.1 (SPECwebgpuoperations.md) ---
+
+    #[test]
+    fn is_live_is_true_only_while_a_gpu_dispatch_is_pending() {
+        let chromakey = ChromaKey::new();
+        assert!(!chromakey.is_live());
+
+        *chromakey.pending.borrow_mut() = Some(ChromaKeyFingerprint {
+            source: Value::Number(0.0),
+            key_color: Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 },
+            threshold: 0.3f64.to_bits(),
+        });
+        assert!(chromakey.is_live());
+
+        *chromakey.pending.borrow_mut() = None;
+        assert!(!chromakey.is_live());
+    }
+
+    #[test]
+    fn gpu_chromakey_matches_cpu_within_tolerance_once_warmed_up() {
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        let width = 6;
+        let height = 4;
+        // A mix of near-key-color and far-from-key-color pixels so both
+        // branches of the select() are exercised.
+        let pixels: Vec<u8> = (0..(width * height))
+            .flat_map(|n| {
+                if n % 3 == 0 {
+                    [10, 245, 10, 255] // close to default key_color (pure green)
+                } else {
+                    let v = ((n * 43) % 256) as u8;
+                    [v, v.wrapping_add(80), v.wrapping_add(160), 255]
+                }
+            })
+            .collect();
+        let input = image(pixels, width, height);
+
+        let cpu_chromakey = ChromaKey::new();
+        let cpu_values = cpu_chromakey
+            .execute(&context(width, height), &[(Input::Source, Value::Image(input.clone()))])
+            .unwrap();
+        let cpu_result = as_u8_pixels(&cpu_values[0]);
+
+        let gpu_chromakey = ChromaKey::new();
+        let gpu_ctx = Context { gpu: Some(gpu), ..context(width, height) };
+        let _ = gpu_chromakey.execute(&gpu_ctx, &[(Input::Source, Value::Image(input.clone()))]).unwrap();
+        let gpu_values = gpu_chromakey.execute(&gpu_ctx, &[(Input::Source, Value::Image(input.clone()))]).unwrap();
+        let gpu_result = as_u8_pixels(&gpu_values[0]);
+
+        assert_eq!(cpu_result, gpu_result);
     }
 }
