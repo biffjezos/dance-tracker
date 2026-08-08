@@ -1,5 +1,7 @@
 // src/operations/transform/blur.rs
 use std::any::Any;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::compositor::{
@@ -11,9 +13,139 @@ use crate::compositor::{
     Operation,
     OperationDescriptor,
     metadata::{InputDescriptor, OperationCategory, OperationMetadata, OutputKind, ParameterDescriptor, ParameterKind, PIXEL_KINDS},
+    value::value_ptr_eq,
     Value,
 };
 use crate::graphics::FloatImage;
+use crate::gpu::GpuState;
+
+// GPU compute shader for BLUR's unmasked path - see
+// SPECwebgpuoperations.md's Phase 0 and SPECwebgpucomputebackend-1.md's
+// "the pattern every GPU-backed operation follows". Single-pass 2D window
+// average (not the CPU path's separable two-pass), deliberately: per
+// blur_single_pixel's own doc comment, a separable box blur's two-pass
+// average is mathematically identical to the single-pass 2D window
+// average over the same window, so this is a correct (if not maximally
+// fast) "naive per-invocation neighbor read" first cut, exactly what the
+// spec explicitly allows for Phase 0 rather than requiring workgroup-
+// shared-memory tiling up front. Edge handling matches blur_single_pixel
+// exactly: clamp the window to the frame, average only the pixels that
+// exist (no wraparound, no out-of-frame zero-padding).
+const BLUR_SHADER: &str = r#"
+    @group(0) @binding(0) var<storage, read> input: array<f32>;
+    @group(0) @binding(1) var<storage, read_write> output: array<f32>;
+    @group(0) @binding(2) var<uniform> params: vec4<u32>;
+
+    @compute @workgroup_size(8, 8, 1)
+    fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+        let width = params.x;
+        let height = params.y;
+        let radius = params.z;
+
+        if (id.x >= width || id.y >= height) {
+            return;
+        }
+
+        let x_start = select(id.x - radius, 0u, id.x < radius);
+        let x_end = min(id.x + radius, width - 1u);
+        let y_start = select(id.y - radius, 0u, id.y < radius);
+        let y_end = min(id.y + radius, height - 1u);
+
+        var sum = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+        var count: f32 = 0.0;
+
+        for (var yi = y_start; yi <= y_end; yi = yi + 1u) {
+            let row = yi * width;
+            for (var xi = x_start; xi <= x_end; xi = xi + 1u) {
+                let idx = (row + xi) * 4u;
+                sum = sum + vec4<f32>(input[idx], input[idx + 1u], input[idx + 2u], input[idx + 3u]);
+                count = count + 1.0;
+            }
+        }
+
+        let out_idx = (id.y * width + id.x) * 4u;
+        let avg = sum / count;
+        output[out_idx] = avg.x;
+        output[out_idx + 1u] = avg.y;
+        output[out_idx + 2u] = avg.z;
+        output[out_idx + 3u] = avg.w;
+    }
+"#;
+
+/// Lazily built the first time `ctx.gpu` is `Some` - see the pattern
+/// spec's "gpu_pipeline: RefCell<Option<OpGpuPipeline>>". Operation-owned,
+/// not shared: lives here, next to Blur, not in the `gpu` module.
+struct BlurGpuPipeline {
+    pipeline: wgpu::ComputePipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+}
+
+fn build_blur_pipeline(gpu: &GpuState) -> BlurGpuPipeline {
+    let shader = gpu.create_shader(BLUR_SHADER);
+
+    let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("blur bind group layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let pipeline = gpu.create_compute_pipeline("blur pipeline", &shader, "main", &[&bind_group_layout]);
+
+    BlurGpuPipeline { pipeline, bind_group_layout }
+}
+
+/// Captured from the *wired* `Value` (via `find_input`), before
+/// `FloatImage::from_value` clones it out of its `Arc` - see the pattern
+/// spec's "Fingerprint, precisely" section. Compared via `value_ptr_eq`,
+/// the same function `RenderExecutor`'s own cross-tick cache uses.
+#[derive(Clone)]
+struct BlurFingerprint {
+    source: Value,
+    radius_px: u32,
+}
+
+impl BlurFingerprint {
+    fn matches(&self, other: &BlurFingerprint) -> bool {
+        self.radius_px == other.radius_px && value_ptr_eq(&self.source, &other.source)
+    }
+}
+
+struct CompletedBlurJob {
+    fingerprint: BlurFingerprint,
+    pixels: Vec<f32>,
+    width: u32,
+    height: u32,
+}
 
 /// A simple separable box blur.
 ///
@@ -21,11 +153,29 @@ use crate::graphics::FloatImage;
 /// radius_px > 0 applies a box kernel of width (2 * radius + 1).
 pub struct Blur {
     pub radius_px: u32,
+    // GPU-backed dispatch state - see SPECwebgpucomputebackend-1.md's "The
+    // pattern every GPU-backed operation follows". Only ever consulted/
+    // mutated from the unmasked path (the blanket rule in
+    // SPECwebgpuoperations.md: GPU dispatch only ever replaces the
+    // unmasked, full-frame path). `pending`/`last_gpu_result` are `Rc`,
+    // not a bare `RefCell`, because the wasm32 async readback task
+    // (`wasm_bindgen_futures::spawn_local`) needs a handle to the same
+    // cell that outlives the `&self` borrow of the `execute()` call that
+    // spawned it - an `Rc` clone gives it that without requiring `self`
+    // itself to be `'static`.
+    gpu_pipeline: RefCell<Option<BlurGpuPipeline>>,
+    pending: Rc<RefCell<Option<BlurFingerprint>>>,
+    last_gpu_result: Rc<RefCell<Option<CompletedBlurJob>>>,
 }
 
 impl Blur {
     pub fn new() -> Self {
-        Self { radius_px: 0 }
+        Self {
+            radius_px: 0,
+            gpu_pipeline: RefCell::new(None),
+            pending: Rc::new(RefCell::new(None)),
+            last_gpu_result: Rc::new(RefCell::new(None)),
+        }
     }
 
     /// Apply a separable box blur to an RGBA buffer, in float - so
@@ -171,6 +321,94 @@ impl Blur {
             .grow(self.radius_px as i32)
             .intersect(&Rect::full(ctx.meta.width, ctx.meta.height))
     }
+
+    /// Encodes and submits a fresh GPU dispatch for `fingerprint`, then
+    /// resolves it per target - see SPECwebgpucomputebackend-1.md's
+    /// "Target-conditional dispatch, not two designs". Upload/dispatch/
+    /// copy are all ordinary synchronous wgpu calls on both targets (only
+    /// buffer *readback* genuinely differs): native backends support a
+    /// blocking read, so this resolves `last_gpu_result` directly within
+    /// this same call, and `pending` is never observably left `Some`.
+    /// wasm32 cannot block, so it hands the async readback to
+    /// `wasm_bindgen_futures::spawn_local`, records `pending` until that
+    /// resolves, and only the `Rc`-shared cells (not `self`) are captured
+    /// by the spawned task.
+    fn dispatch_gpu(&self, gpu: Arc<GpuState>, fingerprint: BlurFingerprint, source: FloatImage) {
+        let width = source.width;
+        let height = source.height;
+        let radius = fingerprint.radius_px;
+        let len = source.pixels.len();
+        let byte_len = (len * std::mem::size_of::<f32>()) as u64;
+
+        {
+            let mut pipeline_slot = self.gpu_pipeline.borrow_mut();
+            if pipeline_slot.is_none() {
+                *pipeline_slot = Some(build_blur_pipeline(&gpu));
+            }
+        }
+
+        let input_buffer = gpu.upload("blur input", &source.pixels, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
+        let output_buffer = gpu.create_buffer(
+            "blur output",
+            byte_len,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        );
+        // vec4<u32> in the shader - 16 bytes, no internal padding, so a
+        // plain [u32; 4] uploads with matching layout directly (same Pod
+        // array usage already relied on by gpu/mod.rs's own test).
+        let params: [u32; 4] = [width, height, radius, 0];
+        let params_buffer = gpu.upload("blur params", &params, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+
+        let readback_buffer = gpu.create_buffer(
+            "blur readback",
+            byte_len,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        );
+
+        {
+            let pipeline_slot = self.gpu_pipeline.borrow();
+            let pipeline = pipeline_slot.as_ref().expect("just built above");
+
+            let bind_group = gpu.create_bind_group("blur bind group", &pipeline.bind_group_layout, &[
+                wgpu::BindGroupEntry { binding: 0, resource: input_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: output_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: params_buffer.as_entire_binding() },
+            ]);
+
+            let workgroups_x = width.div_ceil(8);
+            let workgroups_y = height.div_ceil(8);
+            gpu.dispatch("blur dispatch", &pipeline.pipeline, &bind_group, (workgroups_x, workgroups_y, 1));
+        }
+
+        gpu.copy_buffer_to_buffer(&output_buffer, &readback_buffer, byte_len);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let pixels = gpu.read_buffer_blocking(&readback_buffer, len);
+            *self.last_gpu_result.borrow_mut() = Some(CompletedBlurJob { fingerprint, pixels, width, height });
+            *self.pending.borrow_mut() = None;
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            *self.pending.borrow_mut() = Some(fingerprint.clone());
+            let pending = self.pending.clone();
+            let last_gpu_result = self.last_gpu_result.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let pixels = gpu.read_buffer_async(&readback_buffer, len).await;
+                *last_gpu_result.borrow_mut() = Some(CompletedBlurJob {
+                    fingerprint: fingerprint.clone(),
+                    pixels,
+                    width,
+                    height,
+                });
+                let mut pending_slot = pending.borrow_mut();
+                if pending_slot.as_ref().is_some_and(|p| p.matches(&fingerprint)) {
+                    *pending_slot = None;
+                }
+            });
+        }
+    }
 }
 
 impl Default for Blur {
@@ -245,12 +483,24 @@ impl Operation for Blur {
         }
     }
 
+    // A pending GPU dispatch must force re-execution so a just-completed
+    // result actually gets picked up - see SPECwebgpucomputebackend-1.md's
+    // "Required correctness detail". Without this, RenderExecutor's
+    // cross-tick cache would call execute() exactly once on a static
+    // upstream graph; if that one call fell back to CPU (GPU not ready
+    // yet), it would never re-run to notice the GPU result arriving,
+    // staying stuck on CPU forever. Native's blocking dispatch resolves
+    // within the same execute() call, so `pending` is never left `Some`
+    // there in practice - this only actually forces a re-tick on wasm32,
+    // but the check itself is target-independent, same as the field.
+    fn is_live(&self) -> bool {
+        self.pending.borrow().is_some()
+    }
+
     fn execute(&self, ctx: &Context, inputs: &[(Input, Value)]) -> Result<Vec<Value>, OperationError> {
         let Some(value) = find_input(inputs, Input::Source) else {
             return Ok(vec![Value::Image(crate::graphics::U8Image::missing(ctx.meta.width, ctx.meta.height))]);
         };
-
-        let source = FloatImage::from_value(value, ctx)?;
 
         // Resolved once up front - MASK is independent of which concrete
         // Value variant SOURCE turns out to be.
@@ -258,18 +508,19 @@ impl Operation for Blur {
             .map(|v| crate::graphics::resolve_pixels(v, ctx))
             .transpose()?;
 
-        // Phase 3 of BBOX_CONVENTIONS.md: with a MASK wired, apply_mask
-        // below blends every pixel outside the relevant region straight
-        // back to `original` anyway - so restrict the actual blur compute
-        // to the intersection of MASK's own reported box and this node's
-        // own natural bbox (SOURCE's box grown by radius - see
-        // natural_bbox()'s own doc comment for why the growth is required
-        // here, not just SOURCE's raw box), skipping the rest instead of
-        // running the full two-pass blur over the whole frame
-        // unconditionally. Without a MASK, there's nothing to restrict
-        // against - every pixel matters - so the original full-frame path
-        // is used unchanged.
-        let blurred = if mask.is_some() {
+        // Blanket rule (SPECwebgpuoperations.md): GPU dispatch only ever
+        // replaces the *unmasked* full-frame path. With a MASK wired, this
+        // is the exact same masked path as before this phase, byte-for-
+        // byte - apply_mask below blends every pixel outside the relevant
+        // region straight back to `original` anyway, so restricting the
+        // actual blur compute to the intersection of MASK's own reported
+        // box and this node's own natural bbox (SOURCE's box grown by
+        // radius - see natural_bbox()'s own doc comment for why the
+        // growth is required here, not just SOURCE's raw box) skips the
+        // rest instead of running the full two-pass blur unconditionally.
+        if let Some(mask) = &mask {
+            let source = FloatImage::from_value(value, ctx)?;
+
             let natural_box = self.natural_bbox(ctx, &ctx.input_bboxes);
             let mask_box = find_bbox(&ctx.input_bboxes, Input::Mask)
                 .unwrap_or_else(|| Rect::full(source.width, source.height));
@@ -280,14 +531,42 @@ impl Operation for Blur {
             let height = source.height;
             let pixels = &source.pixels;
 
-            crate::graphics::compute_within_bbox(width, height, work_area, pixels, |x, y| {
+            let blurred = crate::graphics::compute_within_bbox(width, height, work_area, pixels, |x, y| {
                 Self::blur_single_pixel(pixels, width, height, radius, x, y)
-            })
-        } else {
-            Self::blur_pixels_static( &source.pixels, source.width, source.height, self.radius_px, )
-        };
+            });
+            let blurred = crate::graphics::apply_mask(&source.pixels, blurred, Some(mask), width, height)?;
 
-        let blurred = crate::graphics::apply_mask(&source.pixels, blurred, mask.as_ref(), source.width, source.height)?;
+            return Ok(vec![Value::FloatImage(Arc::new(FloatImage { pixels: blurred, width, height }))]);
+        }
+
+        // Unmasked path: try GPU first when available and there's
+        // actually something to blur (RADIUS=0 is a trivial identity -
+        // not worth a dispatch).
+        if let Some(gpu) = ctx.gpu.clone() {
+            if self.radius_px > 0 {
+                let fingerprint = BlurFingerprint { source: value.clone(), radius_px: self.radius_px };
+
+                let cached = self.last_gpu_result.borrow().as_ref()
+                    .filter(|completed| completed.fingerprint.matches(&fingerprint))
+                    .map(|completed| FloatImage { pixels: completed.pixels.clone(), width: completed.width, height: completed.height });
+
+                if let Some(result) = cached {
+                    return Ok(vec![Value::FloatImage(Arc::new(result))]);
+                }
+
+                let already_pending = self.pending.borrow().as_ref().is_some_and(|p| p.matches(&fingerprint));
+                if !already_pending {
+                    let source = FloatImage::from_value(value, ctx)?;
+                    self.dispatch_gpu(gpu, fingerprint, source);
+                }
+                // Fall through to the CPU path for this tick - either a
+                // fresh dispatch was just kicked off, or one is already
+                // in flight; neither has a result ready yet.
+            }
+        }
+
+        let source = FloatImage::from_value(value, ctx)?;
+        let blurred = Self::blur_pixels_static(&source.pixels, source.width, source.height, self.radius_px);
 
         Ok(vec![Value::FloatImage(Arc::new(FloatImage {
             pixels: blurred,
@@ -775,7 +1054,7 @@ mod tests {
         let source_value = PreviewExecutor::default().execute(&graph, source_id, &ctx).unwrap().into_iter().next().unwrap();
         let mask_value = PreviewExecutor::default().execute(&graph, move_id, &ctx).unwrap().into_iter().next().unwrap();
 
-        let blur_off = Blur { radius_px: 1 };
+        let blur_off = Blur { radius_px: 1, ..Blur::new() };
         let off_values = blur_off.execute(&ctx, &[
             (Input::Source, source_value),
             (Input::Mask, mask_value),
@@ -783,5 +1062,81 @@ mod tests {
         let off_pixels = as_u8_pixels(&off_values[0]);
 
         assert_eq!(on_pixels, off_pixels, "bbox consumption on vs off must produce pixel-identical output");
+    }
+
+    // --- WebGPU Phase 0 (SPECwebgpuoperations.md / SPECwebgpucomputebackend-1.md) ---
+
+    #[test]
+    fn is_live_is_true_only_while_a_gpu_dispatch_is_pending() {
+        // Direct unit test of is_live()'s own read-through logic (per
+        // SPECwebgpucomputebackend-1.md's "Required correctness detail"),
+        // independent of whether a real dispatch is actually in flight -
+        // native's blocking dispatch resolves synchronously within
+        // dispatch_gpu() itself, so `pending` is never observably `Some`
+        // there in a real run; this regression coverage is what every
+        // per-operation phase is required to have regardless.
+        let blur = Blur::new();
+        assert!(!blur.is_live(), "no dispatch in flight yet - must not force re-execution");
+
+        *blur.pending.borrow_mut() = Some(BlurFingerprint { source: Value::Number(0.0), radius_px: 3 });
+        assert!(blur.is_live(), "a pending GPU dispatch must force re-execution so a just-completed result gets picked up");
+
+        *blur.pending.borrow_mut() = None;
+        assert!(!blur.is_live(), "once nothing is pending, normal cross-tick caching should resume");
+    }
+
+    #[test]
+    fn gpu_blur_matches_cpu_blur_within_tolerance_once_warmed_up() {
+        // Numerical-tolerance GPU-vs-CPU test - see
+        // SPECwebgpucomputebackend-1.md's "Numerical tolerance". Skips
+        // gracefully with no adapter available, the same precedent
+        // gpu/mod.rs's own test already establishes for this sandbox/CI
+        // environment.
+        let Ok(gpu) = pollster::block_on(crate::gpu::GpuState::new()) else {
+            eprintln!("skipping: no GPU adapter available in this environment");
+            return;
+        };
+        let gpu = Arc::new(gpu);
+
+        let width = 6;
+        let height = 5;
+        let pixels: Vec<u8> = (0..(width * height))
+            .flat_map(|n| {
+                let v = ((n * 37) % 256) as u8;
+                [v, v.wrapping_add(50), v.wrapping_add(100), 255]
+            })
+            .collect();
+        let input = image(pixels, width, height);
+
+        let mut cpu_blur = Blur::new();
+        cpu_blur.set_parameter("RADIUS", Value::Number(2.0)).unwrap();
+        let cpu_values = cpu_blur
+            .execute(&context(width, height), &[(Input::Source, Value::Image(input.clone()))])
+            .unwrap();
+        let Value::FloatImage(cpu_result) = &cpu_values[0] else { panic!("expected a float image") };
+
+        let mut gpu_blur = Blur::new();
+        gpu_blur.set_parameter("RADIUS", Value::Number(2.0)).unwrap();
+        let gpu_ctx = Context { gpu: Some(gpu), ..context(width, height) };
+
+        // First call: no cached GPU result yet - kicks off a dispatch
+        // (native resolves it synchronously inside dispatch_gpu) and
+        // falls back to CPU for this tick regardless.
+        let _ = gpu_blur.execute(&gpu_ctx, &[(Input::Source, Value::Image(input.clone()))]).unwrap();
+        // Second call, same fingerprint (same wired Arc, same radius):
+        // the now-completed GPU result is cached and used directly.
+        let gpu_values = gpu_blur.execute(&gpu_ctx, &[(Input::Source, Value::Image(input.clone()))]).unwrap();
+        let Value::FloatImage(gpu_result) = &gpu_values[0] else { panic!("expected a float image") };
+
+        assert_eq!(cpu_result.pixels.len(), gpu_result.pixels.len());
+        for (index, (cpu_px, gpu_px)) in cpu_result.pixels.iter().zip(gpu_result.pixels.iter()).enumerate() {
+            assert!(
+                (cpu_px - gpu_px).abs() < 1e-4,
+                "channel {}: cpu={}, gpu={}",
+                index,
+                cpu_px,
+                gpu_px
+            );
+        }
     }
 }
