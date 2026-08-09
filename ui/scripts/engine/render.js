@@ -74,14 +74,30 @@ function updateGamutWarning(outOfGamut) {
     if (warning) warning.hidden = !outOfGamut;
 }
 
+// Reflects App::active_backend() (RFC-010) - reused the status bar's
+// former FPS slot, per PARKED_WORK.md's own note that field was already
+// slated for removal. Read every tick, independent of output-panel
+// visibility: unlike the gamut warning (specific to the OUTPUT canvas's
+// current content), which backend is active is global app state that
+// should stay honest even while the output panel is hidden.
+function updateBackendIndicator(backend) {
+    const indicator = document.getElementById("backend-indicator");
+    if (indicator) indicator.innerText = " BACKEND: " + backend;
+}
+
 function loop() {
+    const wasmApp = getWasmApp();
+
     const liveOutputTitle = document.getElementById("live-output-title");
     if (liveOutputTitle) {
         liveOutputTitle.innerText = LIVE_OUTPUT_PREFIX + (liveNodeId !== null ? liveNodeLabel : "NONE");
     }
 
+    if (wasmApp) {
+        updateBackendIndicator(wasmApp.active_backend());
+    }
+
     if (isPanelVisible("output")) {
-        const wasmApp = getWasmApp();
         const outputNodeId = liveNodeId;
         const masterCanvas = document.getElementById("master-layer");
 
