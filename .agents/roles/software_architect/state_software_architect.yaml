@@ -2,8 +2,8 @@ status: idle
 
 handoff:
   target_role: software_developer
-  specification_id: SPEC-OUTPUT-RENDER-V1 (bugfix: RFC-009, unplayable mp4 + empty file on second recording)
-  version: 1
+  specification_id: SPEC-webgpu-compute-backend (correction: adapter pre-flight check + backend indicator, RFC-010, CRITICAL)
+  version: 3
   status: sent
 
 parked_work:
