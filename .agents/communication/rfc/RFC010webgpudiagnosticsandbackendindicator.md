@@ -26,23 +26,48 @@ throwing a raw, unguarded JS `TypeError` that bypasses `wgpu`'s own
 `.map_err(...)` on `request_adapter()` never gets a chance to see this
 failure, because it doesn't surface as an `Err` at all.
 
-**Two distinct root causes could produce this exact symptom, and this
-must be determined as part of the work, not assumed:**
+**Update, same day, before this RFC reached implementation:** Management
+has clarified WebGPU **did** work earlier in this investigation — real
+available-feature output in the JS console, and the GPU genuinely under
+load (the original fan-noise report that started this whole
+investigation). That rules out "this machine never supported WebGPU."
+See the spec's own "Correction to this correction" for the full
+reasoning — summarized here:
 
-1. Management's browser/machine genuinely has no usable WebGPU adapter
-   (unsupported hardware/driver/OS, disabled flag, virtualized display,
-   etc.) — a real platform limitation no code change here can override.
+**Three distinct root causes could produce this exact symptom — check
+them in this order, not the order they were originally listed in:**
+
+1. **(Check first — fastest, no code required, fits the actual timeline)**
+   The browser self-disabled/blocklisted WebGPU for this profile after
+   repeated GPU-process instability caused by the original unbounded-
+   dispatch overload bug (RFC-006's own root cause, now fixed) — a real,
+   documented Chromium self-protection mechanism. **If this is the real
+   cause, ask Management to check `chrome://gpu` (or their browser's
+   equivalent) for WebGPU's status/blocklist entries and try clearing the
+   GPU cache or restarting the browser before writing any code** — this
+   may already be the whole fix, with nothing to implement beyond Part B
+   below (which is required regardless, as defense-in-depth for other
+   users/machines).
 2. `Cargo.toml`'s bare `wgpu = "30.0.0"` (no explicit `features = [...]`)
-   is missing a fallback backend (e.g. WebGL2) that a properly-configured
-   build would have available.
+   is missing a fallback backend (e.g. WebGL2) — possible, but a poor fit
+   for the observed timeline (would have failed from the very first run,
+   not after previously working).
+3. Some other browser/machine genuinely has no usable WebGPU adapter at
+   all (unsupported hardware/driver/OS, disabled flag, virtualized
+   display) — ruled out for Management's own machine specifically (see
+   above), but a real category Part B below must still handle correctly
+   for any other user.
 
 Required Change:
 
 ## Part A — investigate which root cause is real (do this first)
 
-In a session with real `crates.io`/docs network access (this Architect's
-own sandbox does not have it — see
-`notification_cargo_registry_index_blocked.md`): run `cargo tree -p wgpu
+**Start with Scenario 1 above** — ask Management to check `chrome://gpu`
+before doing anything else; this needs no code and may resolve the
+immediate problem directly. Only if that doesn't explain it: in a session
+with real `crates.io`/docs network access (this Architect's own sandbox
+does not have it — see `notification_cargo_registry_index_blocked.md`):
+run `cargo tree -p wgpu
 --edges features` or read `wgpu` 30.0.0's actual `Cargo.toml`/docs to
 determine its default feature set for the `wasm32-unknown-unknown`
 target, specifically whether a WebGL2 fallback backend is included by

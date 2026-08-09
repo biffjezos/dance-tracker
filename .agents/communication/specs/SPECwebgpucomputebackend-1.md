@@ -6,8 +6,9 @@
      .agents/roles/software_architect/docs/specifications/SPECwebgpucomputebackend-1.md
      (Software Architect). -->
 
-<!-- Corrected again 2026-08-09: see this file's own "Correction — 2026-08-09"
-     (adapter/device pre-flight check + status bar backend indicator) and RFC-010. -->
+<!-- Corrected again 2026-08-09 (twice same day): see "Correction to this
+     correction" - Management confirmed WebGPU worked before, browser
+     self-blocklisting after crashes is now the leading hypothesis. RFC-010. -->
 
 
 **Decision: GPU-backed operations use one-tick-latency pipelined dispatch, not same-tick blocking reads.** On a given tick, a GPU-backed operation returns the most recently *completed* GPU result (or falls back to CPU if none exists yet), and separately kicks off a fresh async GPU job for the current inputs, to be consumed on some future tick. This is a standard pattern for integrating async GPU work into a synchronous per-frame loop, and it fits precedent already in this codebase:
@@ -204,33 +205,70 @@ handle as gracefully as its own logged message implies), not a mistake in
 this codebase's own `GpuState::new()`, which does everything correctly
 with the `Result` it's actually given the chance to see.
 
-**Two genuinely different underlying situations produce the exact same
-symptom, and this codebase cannot currently tell them apart — this
-matters and must be determined, not assumed:**
+**Correction to this correction, same day, before RFC-010 even reached
+implementation — recorded here rather than silently edited, per this
+project's own rule that communication artifacts are immutable and
+specifications must not be silently changed to match new information
+without saying so:** the paragraph below originally listed "this
+browser/machine has no WebGPU support at all" as a live, undetermined
+possibility. Management has since confirmed WebGPU **was** working
+earlier in this same investigation — real available-feature output in
+the JS console, and the GPU genuinely under load (the fan noise that
+started this entire investigation was, in part, real GPU work
+happening). That directly rules out "never supported" as an explanation.
+Scenario 1 below is kept in the numbered list for completeness (a real
+category of failure this codebase must still handle honestly, in
+general, for other users/machines) but is **not believed to be what's
+happening on Management's own machine** — see Scenario 3, added below,
+which fits the actual observed timeline.
+
+**Three genuinely different underlying situations can produce the exact
+same symptom. This codebase cannot currently tell them apart on its own
+— this matters and must be determined, not assumed:**
 
 1. **This specific browser/machine has no WebGPU support at all**
    (disabled, unsupported OS/GPU/driver combination, a remote/virtualized
    display, an older browser version, WebGPU behind a disabled flag —
-   many real, common cases). In this scenario, **no code change in this
-   repository can make real GPU compute happen** — this is a hard
-   platform limitation, not a bug this team can fix. The correct,
+   many real, common cases in general). In this scenario, **no code
+   change in this repository can make real GPU compute happen** — this is
+   a hard platform limitation, not a bug this team can fix. The correct,
    complete deliverable here is: no uncaught error, a clean internal
    `Err`, and clear, honest, visible confirmation that the app is running
-   on CPU — not a promise that GPU will somehow start working.
+   on CPU — not a promise that GPU will somehow start working. **Ruled
+   out for Management's own machine** (see above) but must still be
+   handled correctly for any other user/browser that genuinely lacks
+   WebGPU — Part B's pre-flight check (below) handles this scenario
+   regardless of which one turns out to be true here.
 2. **`Cargo.toml`'s bare `wgpu = "30.0.0"` (no explicit `features = [...]`)
    resolves to a feature set that's missing something load-bearing** —
    e.g. a WebGL2-based fallback backend that a differently-configured
    build would have used instead of only attempting native WebGPU. This
-   is genuinely fixable if true. **This cannot be confirmed from this
-   sandbox** (no `crates.io`/docs access — see
-   `notification_cargo_registry_index_blocked.md`) and must be
-   investigated by whoever implements this: run `cargo tree -p wgpu
-   --edges features` (or equivalent) in a session with real network
-   access, read what `wgpu 30.0.0`'s default features actually enable,
-   and determine whether an explicit `features = ["webgl"]` (or
-   equivalent) addition is available and would change the outcome on
-   Management's actual machine. Report which of scenario 1 or 2 is real,
-   with evidence — don't guess and don't silently pick one.
+   is genuinely fixable if true, but doesn't fit the observed timeline
+   well either (a missing feature flag would have failed from the very
+   first run, not after previously working) — kept as a secondary
+   possibility, not the leading one.
+3. **(Leading hypothesis, added after Management's clarification) The
+   browser itself disabled/blocklisted WebGPU for this profile after
+   repeated GPU-process instability, caused by the original (now-fixed
+   by RFC-006) unbounded-dispatch overload bug.** Chromium-based browsers
+   have a real, documented self-protection mechanism: after enough
+   GPU-process crashes tied to a feature, that feature gets added to an
+   internal workarounds/blocklist for the current profile and stops being
+   offered — until the GPU cache is cleared, the blocklist resets, or the
+   browser/profile is reset. This fits the actual timeline exactly: GPU
+   worked and was overloaded (RFC-006's own root cause, very plausibly
+   crashing the GPU process repeatedly under that load) → GPU now
+   unavailable. **If this is the real cause, it may not require a code
+   change to resolve at all** — check `chrome://gpu` (or the equivalent
+   internals page for whatever browser Management is using) for WebGPU's
+   listed status and any blocklist entries, and try clearing the GPU
+   cache / fully restarting the browser, before assuming a code fix is
+   required.
+
+Whoever picks this up: **check Scenario 3 first** (fastest, no code
+required, directly matches the reported timeline) before spending time on
+Scenario 2's `cargo tree` investigation. Report which of the three is
+real, with evidence — don't guess and don't silently pick one.
 
 **Required change, regardless of which scenario turns out to be true —
 this part is unconditional:**
