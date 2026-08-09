@@ -30,6 +30,8 @@ use crate::operations::sources::ImageSource;
 
 use crate::renderer::to_render_frame;
 use crate::resources::manager::ResourceManager;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 #[wasm_bindgen]
@@ -60,7 +62,26 @@ pub struct App {
     // Context.gpu's doc comment. Never awaited inline in boot() (see
     // ui/scripts/app.js) so a machine with no WebGPU support, or any
     // other init failure, never blocks or breaks app startup.
-    gpu: Option<Arc<crate::gpu::GpuState>>,
+    //
+    // Rc<RefCell<...>>, not a plain field - RFC-007. init_gpu's actual
+    // GPU negotiation must never touch &self/&mut self across its
+    // .await: wasm-bindgen holds a JS-visible object-borrow guard on
+    // `self` for as long as any Future capturing it is still being
+    // polled, including at every suspended .await point. A raw JS
+    // exception escaping mid-poll (a real observed failure mode: a
+    // browser's adapter/device request throwing directly from generated
+    // glue rather than resolving to a Rust Result::Err) then bypasses
+    // the normal poll-return path that would otherwise release that
+    // guard, leaving it stuck "checked out" forever and permanently
+    // breaking every other method call on this same App object. Cloning
+    // this Rc out and doing the actual async work against the clone
+    // (never against self) means no failure inside init_gpu's .await -
+    // clean Err or raw JS throw alike - can ever hold a wasm-bindgen
+    // borrow of self open. Mirrors the same Rc<RefCell<...>>
+    // interior-mutability pattern every GPU-backed operation already
+    // uses for its own cross-tick state (e.g. blur.rs's
+    // pending/last_gpu_result).
+    gpu: Rc<RefCell<Option<Arc<crate::gpu::GpuState>>>>,
 }
 
 #[wasm_bindgen]
@@ -80,7 +101,7 @@ impl App {
             start_time_ms: now_ms(),
             output_out_of_gamut: false,
             system_menus,
-            gpu: None,
+            gpu: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -95,13 +116,27 @@ impl App {
     /// this is the entire "GPU first, CPU fallback" behavior, with no
     /// COMPUTE MODE switch or mode-selection UI needed (see
     /// SPECwebgpucomputebackend2.md's "Out of scope").
-    pub async fn init_gpu(&mut self) -> Result<(), JsValue> {
-        let gpu = crate::gpu::GpuState::new()
-            .await
-            .map_err(|error| JsValue::from_str(&error))?;
+    ///
+    /// Deliberately NOT `async fn init_gpu(&mut self)` - see `gpu`
+    /// field's own doc comment (RFC-007) for why holding any
+    /// wasm-bindgen object-borrow of `self` across the `GpuState::new()`
+    /// `.await` is unsafe here. Only `self.gpu` (an `Rc` clone, not a
+    /// borrow) is touched before the returned `Promise`'s inner future
+    /// starts running; the future itself captures that clone, never
+    /// `self`, so `self`'s own borrow guard is released the instant this
+    /// synchronous function returns, well before `GpuState::new()` ever
+    /// starts polling.
+    pub fn init_gpu(&self) -> js_sys::Promise {
+        let gpu_cell = self.gpu.clone();
 
-        self.gpu = Some(Arc::new(gpu));
-        Ok(())
+        wasm_bindgen_futures::future_to_promise(async move {
+            let gpu = crate::gpu::GpuState::new()
+                .await
+                .map_err(|error| JsValue::from_str(&error))?;
+
+            *gpu_cell.borrow_mut() = Some(Arc::new(gpu));
+            Ok(JsValue::UNDEFINED)
+        })
     }
 
     // debug: temp
@@ -558,10 +593,14 @@ impl App {
             },
             resources: self.resources.clone(),
             input_bboxes: Vec::new(),
-            // A plain clone, never `.expect()`'d - None is an expected,
-            // common state (GPU not yet available/never available), not
-            // an error to unwrap past. See Context.gpu's own doc comment.
-            gpu: self.gpu.clone(),
+            // A plain clone of the inner Option, never `.expect()`'d -
+            // None is an expected, common state (GPU not yet available/
+            // never available), not an error to unwrap past. See
+            // Context.gpu's own doc comment. self.gpu is an
+            // Rc<RefCell<...>> (RFC-007) - borrow() here is a short-lived,
+            // synchronous, non-async borrow scoped to this one statement,
+            // nothing like the unsafe cross-.await borrow RFC-007 fixed.
+            gpu: self.gpu.borrow().clone(),
         }
     }
 
