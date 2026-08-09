@@ -139,6 +139,23 @@ impl App {
         })
     }
 
+    /// "GPU" if a real `GpuState` has successfully initialized, "CPU"
+    /// otherwise - read by `ui/scripts/engine/render.js`'s `loop()` every
+    /// tick to drive the status bar's backend indicator (RFC-010). Reads
+    /// the exact same `Rc<RefCell<Option<Arc<GpuState>>>>>` RFC-007
+    /// already introduced - no new state. Reports "does at least one
+    /// successfully-initialized GPU handle exist," not "is the GPU
+    /// actively computing this exact tick" - see this method's own
+    /// RFC/spec entry for why that distinction is the correct, sufficient
+    /// answer to "is WebGPU being used at all right now."
+    pub fn active_backend(&self) -> String {
+        if self.gpu.borrow().is_some() {
+            "GPU".to_string()
+        } else {
+            "CPU".to_string()
+        }
+    }
+
     // debug: temp
     #[wasm_bindgen]
     pub fn debug_operations(&self) -> Result<JsValue, JsValue> {

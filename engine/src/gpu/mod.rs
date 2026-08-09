@@ -23,6 +23,75 @@
 
 use wgpu::util::DeviceExt;
 
+/// Pre-flight check, asking the browser directly whether a real WebGPU
+/// adapter exists, before `GpuState::new()` ever touches `wgpu::Instance`
+/// - see RFC-010 / SPEC-webgpu-compute-backend's "Correction — 2026-08-09".
+/// `wgpu` 30.0.0's own webgpu backend has a known null-adapter edge case:
+/// on a browser reporting no usable adapter, it logs "Failed to create
+/// WebGPU Context Provider" and then still calls
+/// `adapter.request_device(...)` on that `null` result internally,
+/// throwing a raw, unguarded JS `TypeError` that bypasses `wgpu`'s own
+/// `Result`-returning API entirely - `GpuState::new()`'s existing
+/// `.map_err(...)` on `request_adapter()` never gets a chance to see
+/// this failure, because it never reaches that `Result` boundary at all.
+/// Confirming a real adapter exists here first means `wgpu`'s own
+/// (separate) request on the same browser, same tick, is overwhelmingly
+/// unlikely to hit that null case.
+///
+/// Deliberately reads `navigator.gpu`/calls `requestAdapter()` via
+/// `js_sys::Reflect`/`js_sys::Function` rather than typed `web_sys::Gpu`/
+/// `GpuAdapter` bindings: this codebase's sandbox has no `crates.io`/docs
+/// access to confirm those specific web-sys WebGPU bindings' exact shape
+/// (`Option`-wrapped vs. not, which web-sys version introduced them) -
+/// `Reflect`/`Function`/`Promise` are long-stable `js-sys` primitives
+/// with no such ambiguity, and safely represent "property doesn't exist"
+/// as a plain `JsValue` (`undefined`) rather than risking a conversion
+/// failure of their own on a browser that doesn't implement the WebGPU
+/// IDL member at all - the exact class of failure this check exists to
+/// avoid in the first place.
+///
+/// `wasm32`-only, same split this file's readback functions already use:
+/// `web_sys`/`wasm_bindgen_futures` call into JS-host externs that don't
+/// exist to link against on a native build - native `wgpu` (Vulkan/Metal/
+/// DX12) has no browser/`navigator` concept to pre-check in the first
+/// place, so this is skipped entirely there (see the `#[cfg]`-gated call
+/// site in `GpuState::new()` below).
+#[cfg(target_arch = "wasm32")]
+async fn check_web_gpu_available() -> Result<(), String> {
+    use wasm_bindgen::JsCast;
+
+    let window = web_sys::window().ok_or_else(|| "no global window object".to_string())?;
+    let navigator = window.navigator();
+
+    let gpu = js_sys::Reflect::get(&navigator, &wasm_bindgen::JsValue::from_str("gpu"))
+        .map_err(|_| "failed to read navigator.gpu".to_string())?;
+    if gpu.is_undefined() || gpu.is_null() {
+        return Err("WebGPU not supported by this browser".to_string());
+    }
+
+    let request_adapter = js_sys::Reflect::get(&gpu, &wasm_bindgen::JsValue::from_str("requestAdapter"))
+        .map_err(|_| "failed to read navigator.gpu.requestAdapter".to_string())?;
+    let request_adapter: js_sys::Function = request_adapter
+        .dyn_into()
+        .map_err(|_| "navigator.gpu.requestAdapter is not a function".to_string())?;
+
+    let promise = request_adapter
+        .call0(&gpu)
+        .map_err(|_| "navigator.gpu.requestAdapter() threw".to_string())?;
+    let promise: js_sys::Promise = promise
+        .dyn_into()
+        .map_err(|_| "navigator.gpu.requestAdapter() did not return a Promise".to_string())?;
+
+    let adapter = wasm_bindgen_futures::JsFuture::from(promise)
+        .await
+        .map_err(|_| "navigator.gpu.requestAdapter() rejected".to_string())?;
+    if adapter.is_null() || adapter.is_undefined() {
+        return Err("No compatible GPU adapter available".to_string());
+    }
+
+    Ok(())
+}
+
 pub struct GpuState {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -37,6 +106,12 @@ impl GpuState {
     /// turns this into a plain `None` rather than surfacing an error to
     /// the user.
     pub async fn new() -> Result<Self, String> {
+        // RFC-010: never let wgpu's own null-adapter path get reached at
+        // all - see check_web_gpu_available's own doc comment. wasm32
+        // only - no browser/navigator concept exists to pre-check natively.
+        #[cfg(target_arch = "wasm32")]
+        check_web_gpu_available().await?;
+
         let instance = wgpu::Instance::default();
 
         let adapter = instance
