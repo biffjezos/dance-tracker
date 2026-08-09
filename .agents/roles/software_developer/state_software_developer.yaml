@@ -2,27 +2,25 @@ active_specification:
   id: SPECwebgpucomputebackend-1.md
   version: 1
 
-status: waiting_for_review_approval
+status: idle
 
 current_task:
-  name: "RFC-007 (critical): App.gpu borrow lockup fix"
-  description: "Fix init_gpu's async fn(&mut self) holding a wasm-bindgen self-borrow across .await, which a raw JS throw mid-poll left permanently stuck, bricking the whole app. Implemented, pushed, RFI filed to Code Reviewer."
+  name:
+  description:
 progress:
   completed:
     - "SPECwebgpuoperations.md (Phases 0, 1.1, 1.2, 1.3, 2) complete and merged to dev"
     - "RFC-005 (GHOST DELAY cascading fix) implemented, approved by Code Reviewer (evaluation_rfc005_ghost_delay_fix.md), merged to dev - merge commit f1b4678"
     - "RFC-006 (GPU dispatch overload/panic fix) implemented, approved by Code Reviewer (evaluation_rfc006_gpu_dispatch_fix.md), merged to dev - merge commit 0259406"
-    - "RFC-007 (critical: App.gpu borrow lockup) implemented in engine/src/app.rs - awaiting Code Review"
-  remaining:
-    - "RFC-007: Code Reviewer evaluation, then merge to dev on Approval"
+    - "RFC-007 (critical: App.gpu borrow lockup) implemented, approved by Code Reviewer (evaluation_rfc007_gpu_borrow_lockup_fix.md), merged to dev - merge commit ae8259c. Neither role could reach a wasm32 build/browser in this sandbox to verify AC2 at runtime - both recommended Management confirm against a real build given critical severity."
+  remaining: []
 
-modified_files:
-  - engine/src/app.rs
+modified_files: []
 
 tests:
   executed: []
   results:
-    - "Unverified, two compounding reasons: (1) index.crates.io blocked by sandbox network policy, same as RFC-005/006 precedent; (2) app.rs is #![cfg(target_arch = \"wasm32\")]-gated with zero existing tests - excluded from native cargo test even with working network, and this repo has no committed wasm32 build script to verify it any other way. Flagged as an open acceptance-criterion gap (RFC-007's AC2) in the RFI to Code Reviewer, recommending Management verify against a real browser build before considering RFC-007 fully closed."
+    - "Unverified by both Software Developer and Code Reviewer: index.crates.io blocked by sandbox network policy (same restriction blocks a wasm32 target build too, confirmed independently by Code Reviewer); app.rs is #![cfg(target_arch = \"wasm32\")]-gated with zero existing tests and no committed wasm32 build script in this repo. AC2 (other App methods survive an init_gpu failure) reasoned through by both roles via borrow-lifetime tracing, not executed. Flagged to Software Architect/Management for real-browser confirmation."
 
 blockers: []
 
@@ -34,8 +32,8 @@ rfis:
   - RFIwebgpuoperationsphase2evaluation.md (answered, both approved)
   - RFIrfc005ghostdelayreadyformerge.md (answered, approved by Code Reviewer)
   - RFIrfc006gpudispatchreadyformerge.md (answered, approved by Code Reviewer)
-  - RFIrfc007gpuborrowlockupreadyformerge.md (open, sent to code_reviewer)
+  - RFIrfc007gpuborrowlockupreadyformerge.md (answered, approved by Code Reviewer, browser-verification caveat)
 
 handoff:
-  target_role: code_reviewer
-  status: awaiting_review
+  target_role: null
+  status: null
