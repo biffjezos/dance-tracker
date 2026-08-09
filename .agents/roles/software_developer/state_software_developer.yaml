@@ -2,11 +2,11 @@ active_specification:
   id: SPECwebgpucomputebackend-1.md
   version: 1
 
-status: delivering
+status: idle
 
 current_task:
-  name: "RFC-010 (critical): WebGPU adapter diagnostics + backend indicator"
-  description: "Part A (investigate root cause) inconclusive - no crates.io access. Part B (pre-flight adapter check via js_sys::Reflect, wasm32-only) and Part C (BACKEND status bar indicator, reusing the freed FPS slot) implemented. Merging directly to dev per Management's explicit instruction to review this round in place of the Code Reviewer."
+  name:
+  description:
 progress:
   completed:
     - "SPECwebgpuoperations.md (Phases 0, 1.1, 1.2, 1.3, 2) complete and merged to dev"
@@ -16,7 +16,7 @@ progress:
     - "RFI-002 (Software Architect: can this session close RFC-007-class browser-verification gaps itself) answered - not from within this session: wasm32 target and npm registry are both blocked (static.rust-lang.org, registry.npmjs.org), same egress-allowlist class as the existing crates.io restriction, even though chromedriver/Chromium are already present. Filed NOTIFICATION-002 to Management with diagnostic evidence and a concrete fix recommendation (vendor wasm32 rust-std + a bundled wasm-bindgen-cli)."
     - "RFC-008 (SPEC-OUTPUT-RENDER-V1: OUTPUT menu, RENDER operation, EDIT+EXECUTE) implemented, approved by Code Reviewer (evaluation_rfc008_output_render_v1.md - independently re-derived all three flagged items), merged to dev - merge commit 398557a"
     - "RFC-009 (Recorder mp4/codec fix + cross-session chunk race) implemented, approved by Code Reviewer (evaluation_rfc009_recorder_mp4_fix.md - independently reproduced the bug and the fix from scratch with their own headless-Chromium harness), merged to dev - merge commit bdd4a15. Real external-player confirmation still needed from Management per RFC-009's own AC4."
-    - "RFC-010 (critical: WebGPU adapter diagnostics + BACKEND indicator) implemented in engine/src/gpu/mod.rs, engine/src/app.rs, engine/Cargo.toml, and the status bar - Part A inconclusive (no crates.io access to inspect wgpu's feature tree), Parts B/C complete. Merging directly to dev per Management's own instruction, bypassing the Code Reviewer step this one round."
+    - "RFC-010 (critical: WebGPU adapter diagnostics + BACKEND indicator) implemented and merged to dev - merge commit 74de951. Reviewed directly by Management in place of the Code Reviewer, per explicit instruction. Part A (root cause of the adapter-null crash) remains open - no crates.io access to inspect wgpu's feature tree. Parts B (pre-flight check) and C (status bar indicator) complete but real-browser confirmation still required before RFC-010 is considered closed, per its own AC5."
   remaining: []
 
 modified_files: []
@@ -43,5 +43,5 @@ rfis:
   - RFIrfc009recorderfixreadyformerge.md (answered, approved by Code Reviewer, independently re-reproduced)
 
 handoff:
-  target_role: management
-  status: sent
+  target_role: null
+  status: null
