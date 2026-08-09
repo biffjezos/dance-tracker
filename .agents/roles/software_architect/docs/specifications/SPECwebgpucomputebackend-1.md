@@ -37,6 +37,29 @@ This is the reusable boundary the user asked for: everything that knows about wg
 
 **Explicitly do not do what the removed attempt did here:** its version of this exact function had `compute: self.compute.clone().expect("Compute backend not initialized")` — an `.expect()` that panics on *every* render tick until GPU init resolves (which may be never, or may race the first tick). `App.gpu` must be read with a plain `.clone()`; `None` is an expected, common, non-error state, not something to unwrap past.
 
+**Correction — 2026-08-08: `App.gpu: Option<Arc<GpuState>>` as a plain
+field on `App` violates this section's own "never blocks or breaks app
+startup" claim.** Found via a Management bug report (app permanently
+stops responding to any interaction after a WebGPU init failure). Full
+detail: RFC-007 (`.agents/communication/rfc/RFC007initgpuborrowlockup.md`).
+Summary: `init_gpu(&mut self)`'s `async fn` desugaring holds a
+`wasm-bindgen`-guarded mutable borrow of `self` for its entire body,
+including across the `.await` on `GpuState::new()`. A raw JS exception
+escaping mid-poll there (confirmed: a browser adapter/device request that
+throws directly from generated glue rather than resolving to a Rust
+`Result::Err`) bypasses the normal poll-return path that releases that
+borrow — leaving it stuck "checked out" for the rest of the page's life,
+which then makes `wasm-bindgen` correctly refuse every subsequent call
+into *any* method on the same `App` object, not just GPU-related ones.
+Corrected design: `App.gpu` must be `Rc<RefCell<Option<Arc<GpuState>>>>`,
+not a plain field — mirroring the `Rc<RefCell<...>>>` interior-mutability
+pattern every GPU-backed operation already uses for its own cross-tick
+state (`pending`/`last_gpu_result`). `init_gpu` clones the `Rc` out and
+does its actual async work against that clone, never against `&mut self`
+directly, so no failure inside the `.await` — clean `Err` or raw JS throw
+alike — can ever leave a `wasm-bindgen` object-borrow stuck. See RFC-007
+for the full required change and acceptance criteria.
+
 ### The pattern every GPU-backed operation follows
 
 This is the reusable recipe — every operation specified in `SPEC-webgpu-operations.md` (and any added after it) implements this shape rather than re-deriving it. Named generically here (`Op`/`PendingJob`/`CompletedJob`) since these types are **operation-owned, not shared** — each operation defines its own, in its own file, next to its own struct, matching `Ghost`'s interior-mutability idiom (`RefCell<VecDeque<...>>` in `operations/generators/ghost.rs`):

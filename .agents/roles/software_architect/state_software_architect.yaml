@@ -2,8 +2,8 @@ status: idle
 
 handoff:
   target_role: software_developer
-  specification_id: SPEC-webgpu-compute-backend (correction)
-  version: 1
+  specification_id: SPEC-webgpu-compute-backend (correction: App.gpu borrow lockup, RFC-007)
+  version: 2
   status: sent
 
 parked_work:
