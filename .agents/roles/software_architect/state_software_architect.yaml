@@ -21,6 +21,7 @@ rfis:
   - .agents/communication/rfi/RFIresponsetechnicaladvisorspecslocation.md
   - .agents/communication/rfi/RFI002rfc007browserverificationgap.md
   - .agents/communication/rfi/RFIresponserfc007browserverificationconfirmed.md
+  - .agents/communication/rfi/RFIresponserfc006browserverificationconfirmed.md
 
 adrs: []
 
