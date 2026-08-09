@@ -1,10 +1,8 @@
 status: idle
 
 handoff:
-  target_role: software_developer
-  specification_id: SPEC-webgpu-compute-backend (correction: App.gpu borrow lockup, RFC-007)
-  version: 2
-  status: accepted
+  target_role: null
+  status: null
 
 parked_work:
   - .agents/roles/software_architect/docs/parked_work/PARKED_WORK.md
@@ -22,6 +20,7 @@ rfis:
   - .agents/communication/rfi/RFItechnicaladvisorworkflowtestspecslocation.md
   - .agents/communication/rfi/RFIresponsetechnicaladvisorspecslocation.md
   - .agents/communication/rfi/RFI002rfc007browserverificationgap.md
+  - .agents/communication/rfi/RFIresponserfc007browserverificationconfirmed.md
 
 adrs: []
 
