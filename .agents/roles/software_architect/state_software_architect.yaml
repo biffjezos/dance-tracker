@@ -21,6 +21,7 @@ rfis:
   - .agents/communication/rfi/RFI001responsewebgpucomputebackend.md
   - .agents/communication/rfi/RFItechnicaladvisorworkflowtestspecslocation.md
   - .agents/communication/rfi/RFIresponsetechnicaladvisorspecslocation.md
+  - .agents/communication/rfi/RFI002rfc007browserverificationgap.md
 
 adrs: []
 
