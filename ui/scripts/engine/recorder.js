@@ -22,9 +22,28 @@ export class Recorder {
                     [audioTrack]);
             }
             let stream = new MediaStream(tracks);
-            this.chunks = [];
+            // Own, private array for this recording session - deliberately
+            // not read back off `this.chunks` inside ondataavailable below.
+            // `this.chunks` is still assigned (stop() needs a synchronous
+            // way to grab the current session's array), but the handler
+            // closure captures `sessionChunks` directly, so a later
+            // session's start() reassigning `this.chunks` to a fresh array
+            // can never retroactively redirect where this handler writes -
+            // see RFC-009 Finding 2.
+            const sessionChunks = [];
+            this.chunks = sessionChunks;
             let options = {};
-            if (MediaRecorder.isTypeSupported("video/mp4")) {
+            // Explicit codec strings first, not just a bare container
+            // check - MediaRecorder.isTypeSupported("video/mp4") can be
+            // true while still producing a stream with no clearly-signaled
+            // codec or a fragmented (non-faststart) layout that plays back
+            // fine in a <video> element but many external players reject.
+            // See RFC-009 Finding 1.
+            if (MediaRecorder.isTypeSupported("video/mp4;codecs=avc1.42E01E")) {
+                options.mimeType = "video/mp4;codecs=avc1.42E01E";
+            } else if (MediaRecorder.isTypeSupported("video/mp4;codecs=avc1")) {
+                options.mimeType = "video/mp4;codecs=avc1";
+            } else if (MediaRecorder.isTypeSupported("video/mp4")) {
                 options.mimeType = "video/mp4";
             } else if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")) {
                 options.mimeType = "video/webm;codecs=vp9";
@@ -34,7 +53,7 @@ export class Recorder {
             this.recorder = new MediaRecorder(stream, options);
             this.recorder.ondataavailable = event => {
                 if (event.data.size > 0) {
-                    this.chunks.push(event.data);
+                    sessionChunks.push(event.data);
                 }
             };
             this.recorder.start();
@@ -51,9 +70,16 @@ export class Recorder {
     stop() {
         if (!this.recorder || !this.recording) return true;
         let mimeType = this.recorder.mimeType;
+        // Captured synchronously, here, before any later start() call can
+        // reassign `this.chunks` to a different session's array - onstop
+        // below (firing asynchronously, possibly after a new session has
+        // already begun) must build this session's Blob from exactly this
+        // reference, never by re-reading `this.chunks` at fire time. See
+        // RFC-009 Finding 2.
+        const sessionChunks = this.chunks;
         this.recorder.onstop = () => {
             try {
-                let blob = new Blob(this.chunks, {
+                let blob = new Blob(sessionChunks, {
                     type: mimeType
                 });
                 let url = URL.createObjectURL(blob);

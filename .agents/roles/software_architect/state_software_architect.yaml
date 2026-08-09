@@ -2,7 +2,7 @@ status: idle
 
 handoff:
   target_role: software_developer
-  specification_id: SPEC-OUTPUT-RENDER-V1
+  specification_id: SPEC-OUTPUT-RENDER-V1 (bugfix: RFC-009, unplayable mp4 + empty file on second recording)
   version: 1
   status: sent
 

@@ -2,11 +2,11 @@ active_specification:
   id: SPECoutputrenderv1.md
   version: 1
 
-status: idle
+status: waiting_for_review_approval
 
 current_task:
-  name:
-  description:
+  name: "RFC-009: Recorder unplayable mp4 + cross-session chunk race"
+  description: "Fix codec negotiation (explicit avc1 strings before bare video/mp4) and give each recording session its own private chunks array. Implemented, pushed, RFI filed to Code Reviewer."
 progress:
   completed:
     - "SPECwebgpuoperations.md (Phases 0, 1.1, 1.2, 1.3, 2) complete and merged to dev"
@@ -15,15 +15,19 @@ progress:
     - "RFC-007 (critical: App.gpu borrow lockup) implemented, approved by Code Reviewer (evaluation_rfc007_gpu_borrow_lockup_fix.md), merged to dev - merge commit ae8259c. Confirmed working by Management in a real browser rebuild - RFC-007 closed by Software Architect."
     - "RFI-002 (Software Architect: can this session close RFC-007-class browser-verification gaps itself) answered - not from within this session: wasm32 target and npm registry are both blocked (static.rust-lang.org, registry.npmjs.org), same egress-allowlist class as the existing crates.io restriction, even though chromedriver/Chromium are already present. Filed NOTIFICATION-002 to Management with diagnostic evidence and a concrete fix recommendation (vendor wasm32 rust-std + a bundled wasm-bindgen-cli)."
     - "RFC-008 (SPEC-OUTPUT-RENDER-V1: OUTPUT menu, RENDER operation, EDIT+EXECUTE) implemented, approved by Code Reviewer (evaluation_rfc008_output_render_v1.md - independently re-derived all three flagged items), merged to dev - merge commit 398557a"
-  remaining: []
+    - "RFC-009 (Recorder mp4/codec fix + cross-session chunk race) implemented in ui/scripts/engine/recorder.js - awaiting Code Review. Empirically reproduced the original bug and confirmed the fix eliminates it via a real headless-Chromium before/after test (this sandbox's Chromium was previously noted in NOTIFICATION-002 as present but useless without a wasm32 build - this RFC is pure JS, so it was usable here)."
+  remaining:
+    - "RFC-009: Code Reviewer evaluation, then merge to dev on Approval"
 
-modified_files: []
+modified_files:
+  - ui/scripts/engine/recorder.js
 
 tests:
   executed:
-    - "node --check on nodeEditContexts.js and output.js - both pass"
+    - "node --check on recorder.js - pass"
+    - "Real headless-Chromium before/after test (throwaway harness, not committed): 5 runs each against original and fixed code, zero-gap back-to-back recording sessions"
   results:
-    - "Rust unverified by both Software Developer and Code Reviewer: index.crates.io blocked, same precedent as RFC-005/006/007. No JS test harness exists in this repo at all (confirmed independently by Code Reviewer, not just cited) and no live browser click-through possible either, since the app needs the compiled WASM module (NOTIFICATION-002). New Rust tests written but not executed; manual click-path trace done instead, independently re-verified by Code Reviewer - see RFC008_output_render_v1_report.md and evaluation_rfc008_output_render_v1.md."
+    - "Fix 2 (chunk race) empirically confirmed: original code corrupted session 2's file into a concatenation of two complete MP4 streams (5/5 runs, ~3674 bytes each time), verified by hand-parsing the MP4 box structure; fixed code produced two clean, independent, correctly-sized files (5/5 runs, session 2 always exactly 1736 bytes, single clean box sequence). Fix 1 (codec negotiation) mechanically correct but its real-world benefit unverified - this sandbox's Chromium has no H.264 encoder, so the ordering change doesn't alter the negotiated result on this platform (falls through to bare video/mp4 either way, which this platform silently implements as VP9-in-MP4). Also found: the resulting file is a fragmented MP4 (moof/mdat boxes) both before and after the fix - flagged per RFC-009's own contingency as an open question for Management's real-browser confirmation (does avc1 negotiation on a real machine also fix fragmentation, or is remuxing still needed). See RFC009_recorder_mp4_fix_report.md."
 
 blockers: []
 
@@ -38,7 +42,8 @@ rfis:
   - RFIrfc007gpuborrowlockupreadyformerge.md (answered, approved by Code Reviewer, browser-verification caveat)
   - RFI002rfc007browserverificationgap.md (answered, not closeable from this session, routed to Management via NOTIFICATION-002)
   - RFIrfc008outputrenderreadyformerge.md (answered, approved by Code Reviewer)
+  - RFIrfc009recorderfixreadyformerge.md (open, sent to code_reviewer)
 
 handoff:
-  target_role: null
-  status: null
+  target_role: code_reviewer
+  status: awaiting_review
