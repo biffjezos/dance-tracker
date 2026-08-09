@@ -615,6 +615,30 @@ function renderInputSteppers(menuManager, nodeEntry, nodeId) {
     });
 }
 
+/**
+ * RENDER's edit context (SPEC-OUTPUT-RENDER-V1). RENDER declares zero
+ * inputs and zero parameters, so renderGenericEditContext already
+ * renders nothing but the standard node-nav header for it - called
+ * first here so RENDER stays consistent with every other node's header/
+ * navigation rather than reimplementing it. The only bespoke addition is
+ * one EXECUTE button, which dispatches the same "toggleRecord" event
+ * `ui/scripts/features/output.js`'s existing listener already handles
+ * (start/stop the Recorder, download on stop) - v1 has no other
+ * settings, so EXECUTE is this context's entire addition over the
+ * generic (empty) screen.
+ */
+function renderRenderEditContext(menuManager, nodeEntry) {
+    renderGenericEditContext(menuManager, nodeEntry);
+
+    const row = startParamRow(menuManager);
+    const executeButton = document.createElement("button");
+    executeButton.innerText = "EXECUTE";
+    executeButton.onclick = () => {
+        window.dispatchEvent(new CustomEvent("toggleRecord"));
+    };
+    row.appendChild(executeButton);
+}
+
 // Register all known edit contexts
 // These map node kinds to their respective edit UIs. video/camera sources
 // currently declare no parameters or inputs (supports_edit() is false for
@@ -622,3 +646,4 @@ function renderInputSteppers(menuManager, nodeEntry, nodeId) {
 // actually have something to edit need a registration here, and the
 // generic default below is enough for all of them today.
 nodeEditContextRegistry.registerDefault(renderGenericEditContext);
+nodeEditContextRegistry.register("render", renderRenderEditContext);

@@ -92,6 +92,10 @@ pub enum OperationCategory {
     // Produces a Number (or several), never pixels - distinct from
     // Generator, which always means "produces an Image".
     Animation,
+    // Exists purely for its side effect (v1: RENDER, a trigger for the
+    // browser's existing Recorder) - produces no pixel/number value
+    // meant for anything downstream, unlike every other variant here.
+    Output,
 }
 
 impl OperationCategory {
@@ -106,6 +110,7 @@ impl OperationCategory {
             OperationCategory::Reference => "reference",
             OperationCategory::Color => "color",
             OperationCategory::Animation => "animation",
+            OperationCategory::Output => "output",
         }
     }
 }
