@@ -2,7 +2,7 @@ status: idle
 
 handoff:
   target_role: software_developer
-  specification_id: SPEC-GHOST-DELAY
+  specification_id: SPEC-webgpu-compute-backend (correction)
   version: 1
   status: sent
 

@@ -11,6 +11,35 @@ session that hasn't seen this file before can tell, at a glance, whether
 an item is genuinely blocked or just unstarted, and whether any code
 already in the tree belongs to it before touching that code).
 
+## GHOST DELAY multiplication lacks the same overflow guard as its capacity calc
+
+**Work:** 0.25h · **Complexity:** 1/6
+**Depends on:** Nothing - unimplemented fix, not blocked. Flagged by the
+Code Reviewer while approving RFC-005/SPEC-GHOST-DELAY (the GHOST DELAY
+cascading fix, merged to `dev` in `f1b4678`) as a non-blocking observation,
+not a defect in that change itself.
+**Existing non-functional code:** None - this is a real, already-shipped
+line, not a stub.
+
+`engine/src/operations/generators/ghost.rs`'s `render_with_cutout` computes
+`self.delayed_cutout(n as u64 * self.delay)` with a plain `*`, while
+`record_history`'s capacity calc one function away uses
+`(self.ghost_count as u64).saturating_mul(self.delay).saturating_add(1)`
+specifically because `GHOST_COUNT`/`DELAY` are both user-editable
+`Number` parameters with no fixed upper bound (`max: None` in
+`parameters()`). The same reasoning applies to the multiplication in the
+render loop: an extreme `DELAY` could overflow `n * self.delay` - a debug
+build panics, a release build wraps to an arbitrary `u64` that
+`delayed_cutout`'s own `saturating_sub` would then silently clamp against
+history length instead of behaving as `n * DELAY`. Not reachable through
+the UI's ordinary number-stepper interaction, hence low severity and not
+blocking - but the same guard that already exists one line away should
+cover this one too, for consistency rather than urgency.
+
+Fix: change `n as u64 * self.delay` to `(n as u64).saturating_mul(self.delay)`
+in `render_with_cutout`'s loop. Pick this up opportunistically next time
+`ghost.rs` is touched, rather than as a standalone RFC.
+
 ## Stale DFS state causes false-positive cycle flags in graph validation
 
 **Work:** 1.5h · **Complexity:** 3/6
