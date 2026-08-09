@@ -53,10 +53,16 @@ it lands (an empty-parameters `Render` operation with a bare EXECUTE
 button) - this item is additive parameters/UI on top of that, not a
 rewrite.
 
-Add the deferred RENDER settings and finish the status-bar cleanup
-Management asked for (removing `STATUS`/`FPS` alongside the `REC` field
-RENDER v1 already removes, per Management's own "obsolete... may be
-removed" note) once the open questions above have real answers.
+Add the deferred RENDER settings (the `FPS` parameter above is RENDER's
+own export-framerate setting, still fully open) and finish the status-bar
+cleanup Management asked for once the open questions above have real
+answers. Note: the status bar's dead `FPS` *field* (a different thing
+from RENDER's `FPS` parameter above — this one is the UI slot, not a
+graph-node setting) is no longer part of this item as of RFC-010
+(`.agents/communication/rfc/RFC010webgpudiagnosticsandbackendindicator.md`)
+— that slot is being repurposed to show the active compute backend
+(GPU/CPU), not simply removed. Only `STATUS` remains open here for the
+eventual status-bar redesign.
 
 ## GHOST DELAY multiplication lacks the same overflow guard as its capacity calc
 

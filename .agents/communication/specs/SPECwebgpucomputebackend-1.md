@@ -6,8 +6,9 @@
      .agents/roles/software_architect/docs/specifications/SPECwebgpucomputebackend-1.md
      (Software Architect). -->
 
-<!-- Corrected again 2026-08-08: see this file's own "Correction — 2026-08-08"
-     (App boot section) and RFC-007. -->
+<!-- Corrected again 2026-08-09 (twice same day): see "Correction to this
+     correction" - Management confirmed WebGPU worked before, browser
+     self-blocklisting after crashes is now the leading hypothesis. RFC-010. -->
 
 
 **Decision: GPU-backed operations use one-tick-latency pipelined dispatch, not same-tick blocking reads.** On a given tick, a GPU-backed operation returns the most recently *completed* GPU result (or falls back to CPU if none exists yet), and separately kicks off a fresh async GPU job for the current inputs, to be consumed on some future tick. This is a standard pattern for integrating async GPU work into a synchronous per-frame loop, and it fits precedent already in this codebase:
@@ -161,3 +162,192 @@ untouched (silently continuing on CPU fallback), never a panic.
 
 RFC-006 has the full required-change list (all 16 operations sharing this
 pattern) and acceptance criteria.
+
+## Correction — 2026-08-09: adapter/device request throws an uncaught JS error instead of resolving `Err`, and this spec's own AC2 was never actually met
+
+Filed against this spec's "`gpu` module" section (line ~28: `GpuState::new()`
+"this is the one place `wgpu::Instance`/`request_adapter`/`request_device`
+are called") and this spec's own Acceptance Criterion 2 ("App boots and
+is fully usable on a machine with no WebGPU support at all, with **zero
+errors surfaced to the user**"). Management reported, again, on a build
+that already includes RFC-007's fix:
+
+```
+dance_tracker_engine.js:623 Failed to create WebGPU Context Provider
+dance_tracker_engine.js:627 Uncaught TypeError: Cannot read properties of null (reading 'requestDevice')
+```
+
+**Honest status, stated plainly per Management's standing instruction
+against half-measures and quiet workarounds:** RFC-007 fixed the
+*consequence* of this error (a `wasm-bindgen` object-borrow lockup that
+bricked the whole app) — it explicitly never claimed to fix the error
+itself, and said so in its own text. That was correct scoping for a
+critical, app-breaking bug at the time, but it left this spec's own AC2
+genuinely unmet, and left the real question — why does adapter/device
+request fail *at all* on Management's machine — uninvestigated. This
+correction closes that gap.
+
+**What "Failed to create WebGPU Context Provider" tells us:** this is
+`wgpu`'s own webgpu-backend log line, printed when
+`navigator.gpu.requestAdapter()` resolves to `null`/`undefined` — i.e.
+the browser itself is reporting no usable WebGPU adapter, not a
+transient or ambiguous failure. `GpuState::new()`
+(`engine/src/gpu/mod.rs`) already correctly awaits `instance.request_adapter(...)`
+and maps a clean `Err` via `.map_err(...)`  — but this particular failure
+mode never reaches that `Result` boundary at all: `wgpu` 30.0.0's webgpu
+backend logs the failure and then still proceeds to call
+`adapter.request_device(...)` on the `null` result internally, which
+throws a raw, unguarded JS `TypeError` from generated glue
+(`__wbg_requestDevice_...`) — bypassing `wgpu`'s own `Result`-returning
+API surface entirely. This is best understood as an upstream `wgpu`
+defect (or at minimum a null-adapter edge case its webgpu backend doesn't
+handle as gracefully as its own logged message implies), not a mistake in
+this codebase's own `GpuState::new()`, which does everything correctly
+with the `Result` it's actually given the chance to see.
+
+**Correction to this correction, same day, before RFC-010 even reached
+implementation — recorded here rather than silently edited, per this
+project's own rule that communication artifacts are immutable and
+specifications must not be silently changed to match new information
+without saying so:** the paragraph below originally listed "this
+browser/machine has no WebGPU support at all" as a live, undetermined
+possibility. Management has since confirmed WebGPU **was** working
+earlier in this same investigation — real available-feature output in
+the JS console, and the GPU genuinely under load (the fan noise that
+started this entire investigation was, in part, real GPU work
+happening). That directly rules out "never supported" as an explanation.
+Scenario 1 below is kept in the numbered list for completeness (a real
+category of failure this codebase must still handle honestly, in
+general, for other users/machines) but is **not believed to be what's
+happening on Management's own machine** — see Scenario 3, added below,
+which fits the actual observed timeline.
+
+**Three genuinely different underlying situations can produce the exact
+same symptom. This codebase cannot currently tell them apart on its own
+— this matters and must be determined, not assumed:**
+
+1. **This specific browser/machine has no WebGPU support at all**
+   (disabled, unsupported OS/GPU/driver combination, a remote/virtualized
+   display, an older browser version, WebGPU behind a disabled flag —
+   many real, common cases in general). In this scenario, **no code
+   change in this repository can make real GPU compute happen** — this is
+   a hard platform limitation, not a bug this team can fix. The correct,
+   complete deliverable here is: no uncaught error, a clean internal
+   `Err`, and clear, honest, visible confirmation that the app is running
+   on CPU — not a promise that GPU will somehow start working. **Ruled
+   out for Management's own machine** (see above) but must still be
+   handled correctly for any other user/browser that genuinely lacks
+   WebGPU — Part B's pre-flight check (below) handles this scenario
+   regardless of which one turns out to be true here.
+2. **`Cargo.toml`'s bare `wgpu = "30.0.0"` (no explicit `features = [...]`)
+   resolves to a feature set that's missing something load-bearing** —
+   e.g. a WebGL2-based fallback backend that a differently-configured
+   build would have used instead of only attempting native WebGPU. This
+   is genuinely fixable if true, but doesn't fit the observed timeline
+   well either (a missing feature flag would have failed from the very
+   first run, not after previously working) — kept as a secondary
+   possibility, not the leading one.
+3. **(Leading hypothesis, added after Management's clarification) The
+   browser itself disabled/blocklisted WebGPU for this profile after
+   repeated GPU-process instability, caused by the original (now-fixed
+   by RFC-006) unbounded-dispatch overload bug.** Chromium-based browsers
+   have a real, documented self-protection mechanism: after enough
+   GPU-process crashes tied to a feature, that feature gets added to an
+   internal workarounds/blocklist for the current profile and stops being
+   offered — until the GPU cache is cleared, the blocklist resets, or the
+   browser/profile is reset. This fits the actual timeline exactly: GPU
+   worked and was overloaded (RFC-006's own root cause, very plausibly
+   crashing the GPU process repeatedly under that load) → GPU now
+   unavailable. **If this is the real cause, it may not require a code
+   change to resolve at all** — check `chrome://gpu` (or the equivalent
+   internals page for whatever browser Management is using) for WebGPU's
+   listed status and any blocklist entries, and try clearing the GPU
+   cache / fully restarting the browser, before assuming a code fix is
+   required.
+
+Whoever picks this up: **check Scenario 3 first** (fastest, no code
+required, directly matches the reported timeline) before spending time on
+Scenario 2's `cargo tree` investigation. Report which of the three is
+real, with evidence — don't guess and don't silently pick one.
+
+**Required change, regardless of which scenario turns out to be true —
+this part is unconditional:**
+
+Stop letting `wgpu`'s internal null-adapter path ever get reached at all.
+Before calling `crate::gpu::GpuState::new()`, perform this codebase's
+**own** pre-flight adapter check, using `web_sys`'s WebGPU bindings
+directly (new `Cargo.toml` features required: `Gpu`, `GpuAdapter`, and
+`Navigator` if not already implied by the existing `Window` feature):
+
+1. `web_sys::window().navigator().gpu()` — if this is `undefined`/`None`,
+   the browser has no WebGPU API at all. Return a clean, controlled
+   `Err("WebGPU not supported by this browser")` immediately. Never call
+   into `wgpu` at all in this case.
+2. If `Navigator.gpu` exists, call `.request_adapter()` on it directly
+   (via `wasm_bindgen_futures::JsFuture` wrapping the returned `Promise`,
+   the same pattern `read_buffer_async` already uses for a different
+   Promise) and check whether the resolved value is `null`. If so, return
+   a clean, controlled `Err("No compatible GPU adapter available")`.
+   Never call into `wgpu`'s `request_adapter`/`request_device` in this
+   case either.
+3. Only when this pre-flight check finds a genuine, non-null adapter,
+   proceed to let `wgpu::Instance::request_adapter()`/`request_device()`
+   run as they do today. Since this pre-check and `wgpu`'s own
+   (separate) request happen on the same browser, same tick, a
+   pre-confirmed-available adapter makes it overwhelmingly unlikely
+   `wgpu`'s own internal call hits the null case at all.
+
+This closes the actual reported symptom — the raw, uncaught,
+developer-console-only `TypeError` — for **both** scenarios above: if
+scenario 1 is real, the app now fails cleanly and says so, honestly, with
+a real message this codebase controls, instead of a confusing browser
+internals crash. If scenario 2 is real and gets fixed at the `Cargo.toml`
+level, this pre-flight check still costs nothing and remains correct
+defense-in-depth against any *other* browser where WebGPU genuinely isn't
+available.
+
+**Also required — status bar backend visibility, per Management's direct
+request, and connecting to already-parked work rather than adding a new
+disconneted field:** `PARKED_WORK.md` already has an open item (added
+alongside RFC-008/SPEC-OUTPUT-RENDER-V1) noting the status bar's dead
+`FPS` field is slated for removal. Reuse that freed slot — don't add a
+new, ninth status bar element — to show the actual active compute
+backend, live:
+
+- New `App` method, e.g. `pub fn active_backend(&self) -> String`
+  returning `"GPU"` if `self.gpu.borrow().is_some()`, `"CPU"` otherwise
+  (reads the exact same `Rc<RefCell<Option<Arc<GpuState>>>>>` RFC-007
+  already introduced — no new state).
+  Note this reports "does at least one successfully-initialized GPU
+  handle exist," not "is the GPU actively computing this exact tick" —
+  precise enough to answer Management's actual question ("is WebGPU
+  being used at all right now") without needing per-tick dispatch
+  telemetry, which is a different, larger feature not asked for here.
+- `ui/scripts/engine/render.js`'s `loop()` (already reads
+  `wasmApp.is_output_out_of_gamut()` every tick, the exact same shape of
+  call) reads this each tick and writes `"BACKEND: GPU"` /
+  `"BACKEND: CPU"` into the status bar slot the `FPS` field's removal
+  frees up.
+- This must reflect reality honestly at every point in the app's
+  lifecycle: `"BACKEND: CPU"` from boot until (and unless) `init_gpu()`'s
+  pre-flight-checked negotiation actually succeeds — no premature "GPU"
+  label before a real `GpuState` exists, no stale label if it later fails.
+
+**What this correction does and does not promise, stated explicitly per
+Management's own standing instruction against overclaiming:** this
+guarantees no more uncaught console errors from adapter/device
+negotiation, and guarantees the status bar always honestly reflects
+whether GPU is actually active. It does **not** guarantee GPU will become
+active on any specific machine — that depends entirely on which of
+scenario 1 or 2 above is true, which is not yet known and must be
+determined and reported as part of implementing this, not assumed away.
+
+Related specifications: `SPEC-webgpu-operations.md` (every GPU-backed
+operation reads the same `Context.gpu`, unaffected by this correction).
+`SPEC-OUTPUT-RENDER-V1`'s parked status-bar cleanup item (`PARKED_WORK.md`)
+is the origin of the freed `FPS` slot this correction reuses — implement
+that field's removal as part of this work, not as a separate pass, since
+they touch the same status bar element.
+
+Full required-change detail and acceptance criteria: RFC-010
+(`.agents/communication/rfc/RFC010webgpudiagnosticsandbackendindicator.md`).
