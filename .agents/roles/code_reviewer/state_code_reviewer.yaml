@@ -23,6 +23,7 @@ rfis:
   - "RFI-webgpu-operations-phase2-resampling-eval - answered, approved, closes SPECwebgpuoperations.md entirely (RFIresponsewebgpuoperationsphase2evaluation.md)"
   - "ADD Phase 3 bbox migration (RFC-002) - retroactive evaluation, approved (evaluation_bbox_phase3_add.md)"
   - "RFI-RFC-005-READY (GHOST DELAY cascading fix) - answered, approved, non-blocking overflow-guard finding noted (RFIresponserfc005ghostdelayreadyformerge.md, evaluation_rfc005_ghost_delay_fix.md)"
+  - "RFI-RFC-006-READY (GPU dispatch overload/panic fix, high priority) - answered, approved, non-blocking indentation-artifact finding noted (RFIresponserfc006gpudispatchreadyformerge.md, evaluation_rfc006_gpu_dispatch_fix.md)"
 
 handoff:
   target_role: null
