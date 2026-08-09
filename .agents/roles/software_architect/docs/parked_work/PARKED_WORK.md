@@ -11,6 +11,53 @@ session that hasn't seen this file before can tell, at a glance, whether
 an item is genuinely blocked or just unstarted, and whether any code
 already in the tree belongs to it before touching that code).
 
+## RENDER v2: FILE_NAME, FORMAT, RESOLUTION, FPS, COMPRESSOR, FROM/TO, and the status-bar redesign
+
+**Work:** 8h · **Complexity:** 4/6 (higher if FROM/TO is required to be
+frame-accurate - see dependency below)
+**Depends on:** RENDER v1 (SPEC-OUTPUT-RENDER-V1, RFC-008) landing
+first - this is everything Management explicitly deferred from that
+round, not a prerequisite for it. Several open questions listed below
+are genuine unknowns, not just unstarted work:
+- `FILE_NAME` needs `ParameterKind::Text` to actually render in the EDIT
+  screen - today `nodeEditContexts.js`'s shared Enum/Text branch requires
+  a non-empty `options` list, so Text silently renders nothing. Needs a
+  UI mechanism (likely extending the existing `onDirectEdit`
+  click-to-type pattern already built for NUMBER over to TEXT).
+- `FROM`/`TO` cannot be frame-accurate today - video playback is a live,
+  browser-owned `HTMLVideoElement` (continuous seconds via `currentTime`,
+  no discrete frame indexing) - see PARKED_WORK's own "Frame-accurate
+  video decode (ProRes)" and "Frame-exact transport controls" entries
+  above. Open question for whoever picks this up: ship a time-based
+  (seconds) FROM/TO now (imprecise, and undefined for parametric
+  GENERATE/ANIMATE nodes which have no inherent duration), or block on
+  the ProRes work landing first. Not decided.
+- `RESOLUTION`: open question whether RENDER reuses the single existing
+  global resolution (`set_resolution`/`applyOutputSize`, `output.js`) or
+  needs an independent export resolution - the compositor only supports
+  one resolution today, shared by preview and output.
+- `FPS`: open question what preset list constitutes "standard historic/
+  modern" framerates - not decided, needs a product answer.
+- `FORMAT`/`COMPRESSOR`: today's `Recorder` (`recorder.js`) already
+  prefers `video/mp4` when the browser supports it, falling back to
+  webm - a real selector UI needs deciding what choices are actually
+  meaningful given `MediaRecorder.isTypeSupported` is what's really
+  gating availability, not a free choice.
+- The status-bar redesign (`[from][current][to]` left/right,
+  `[resolution]` center) depends on FROM/TO existing, and its own layout
+  was never confirmed with Management - specifically whether the
+  symmetric left/right triplets mean one per canvas (PREVIEW vs OUTPUT)
+  or something else.
+**Existing non-functional code:** None yet beyond RENDER v1 itself once
+it lands (an empty-parameters `Render` operation with a bare EXECUTE
+button) - this item is additive parameters/UI on top of that, not a
+rewrite.
+
+Add the deferred RENDER settings and finish the status-bar cleanup
+Management asked for (removing `STATUS`/`FPS` alongside the `REC` field
+RENDER v1 already removes, per Management's own "obsolete... may be
+removed" note) once the open questions above have real answers.
+
 ## GHOST DELAY multiplication lacks the same overflow guard as its capacity calc
 
 **Work:** 0.25h · **Complexity:** 1/6
