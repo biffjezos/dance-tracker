@@ -25,6 +25,7 @@ rfis:
   - "RFI-RFC-005-READY (GHOST DELAY cascading fix) - answered, approved, non-blocking overflow-guard finding noted (RFIresponserfc005ghostdelayreadyformerge.md, evaluation_rfc005_ghost_delay_fix.md)"
   - "RFI-RFC-006-READY (GPU dispatch overload/panic fix, high priority) - answered, approved, non-blocking indentation-artifact finding noted (RFIresponserfc006gpudispatchreadyformerge.md, evaluation_rfc006_gpu_dispatch_fix.md)"
   - "RFI-RFC-007-READY (App.gpu wasm-bindgen borrow lockup, critical) - answered, approved with browser-verification caveat carried to Management (RFIresponserfc007gpuborrowlockupreadyformerge.md, evaluation_rfc007_gpu_borrow_lockup_fix.md)"
+  - "RFI-RFC-008-READY (OUTPUT menu + RENDER node v1, new feature) - answered, approved, all three developer-flagged items independently re-derived and confirmed correct (RFIresponserfc008outputrenderreadyformerge.md, evaluation_rfc008_output_render_v1.md)"
 
 handoff:
   target_role: null
