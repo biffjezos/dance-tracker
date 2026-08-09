@@ -4,6 +4,7 @@ pub mod compose;
 pub mod generators;
 pub mod inventory;
 pub mod key;
+pub mod output;
 pub mod register;
 pub mod sources;
 pub mod transform;

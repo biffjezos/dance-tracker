@@ -1,12 +1,12 @@
 active_specification:
-  id: SPECwebgpucomputebackend-1.md
+  id: SPECoutputrenderv1.md
   version: 1
 
-status: idle
+status: waiting_for_review_approval
 
 current_task:
-  name:
-  description:
+  name: "RFC-008: OUTPUT menu + RENDER node v1"
+  description: "New OperationCategory::Output, Render operation, bespoke EDIT+EXECUTE context reactivating the existing Recorder, REC status-bar field removed. Implemented, pushed, RFI filed to Code Reviewer."
 progress:
   completed:
     - "SPECwebgpuoperations.md (Phases 0, 1.1, 1.2, 1.3, 2) complete and merged to dev"
@@ -14,14 +14,25 @@ progress:
     - "RFC-006 (GPU dispatch overload/panic fix) implemented, approved by Code Reviewer (evaluation_rfc006_gpu_dispatch_fix.md), merged to dev - merge commit 0259406"
     - "RFC-007 (critical: App.gpu borrow lockup) implemented, approved by Code Reviewer (evaluation_rfc007_gpu_borrow_lockup_fix.md), merged to dev - merge commit ae8259c. Confirmed working by Management in a real browser rebuild - RFC-007 closed by Software Architect."
     - "RFI-002 (Software Architect: can this session close RFC-007-class browser-verification gaps itself) answered - not from within this session: wasm32 target and npm registry are both blocked (static.rust-lang.org, registry.npmjs.org), same egress-allowlist class as the existing crates.io restriction, even though chromedriver/Chromium are already present. Filed NOTIFICATION-002 to Management with diagnostic evidence and a concrete fix recommendation (vendor wasm32 rust-std + a bundled wasm-bindgen-cli)."
-  remaining: []
+    - "RFC-008 (SPEC-OUTPUT-RENDER-V1: OUTPUT menu, RENDER operation, EDIT+EXECUTE) implemented across engine and ui - awaiting Code Review"
+  remaining:
+    - "RFC-008: Code Reviewer evaluation, then merge to dev on Approval"
 
-modified_files: []
+modified_files:
+  - engine/src/compositor/metadata.rs
+  - engine/src/operations/mod.rs
+  - engine/src/operations/output/mod.rs
+  - engine/src/operations/output/render.rs
+  - ui/scripts/engine/nodeEditContexts.js
+  - ui/scripts/features/output.js
+  - ui/templates/partials/statusbar.hbs
+  - ui/index.html
 
 tests:
-  executed: []
+  executed:
+    - "node --check on nodeEditContexts.js and output.js - both pass"
   results:
-    - "Unverified by both Software Developer and Code Reviewer: index.crates.io blocked by sandbox network policy (same restriction blocks a wasm32 target build too, confirmed independently by Code Reviewer); app.rs is #![cfg(target_arch = \"wasm32\")]-gated with zero existing tests and no committed wasm32 build script in this repo. AC2 (other App methods survive an init_gpu failure) reasoned through by both roles via borrow-lifetime tracing, not executed. Flagged to Software Architect/Management for real-browser confirmation."
+    - "Rust unverified: index.crates.io blocked, same precedent as RFC-005/006/007. No live browser click-through possible either - the app needs the compiled WASM module, which hits the same blocked wasm32 toolchain path (NOTIFICATION-002). New Rust tests written (descriptor/metadata/parameters/supports_edit/execute-stub/graph-validity) but not executed; manual click-path trace done instead - see RFC008_output_render_v1_report.md. Two spec-research gaps found and resolved myself (missing supports_edit() mention, a statusbar index-shift regression, and index.html needing a hand-edit since npm install also fails) - all flagged in the report for Code Reviewer attention."
 
 blockers: []
 
@@ -35,7 +46,8 @@ rfis:
   - RFIrfc006gpudispatchreadyformerge.md (answered, approved by Code Reviewer)
   - RFIrfc007gpuborrowlockupreadyformerge.md (answered, approved by Code Reviewer, browser-verification caveat)
   - RFI002rfc007browserverificationgap.md (answered, not closeable from this session, routed to Management via NOTIFICATION-002)
+  - RFIrfc008outputrenderreadyformerge.md (open, sent to code_reviewer)
 
 handoff:
-  target_role: null
-  status: null
+  target_role: code_reviewer
+  status: awaiting_review
