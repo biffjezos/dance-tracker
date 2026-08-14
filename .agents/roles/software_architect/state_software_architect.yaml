@@ -2,9 +2,9 @@ status: idle
 
 handoff:
   target_role: software_developer
-  specification_id: SPEC-webgpu-compute-backend (correction: adapter pre-flight check + backend indicator, RFC-010, CRITICAL)
+  specification_id: SPEC-webgpu-compute-backend (RFC-010 implemented, Part A root-cause still open, awaiting Management real-browser verification)
   version: 3
-  status: sent
+  status: accepted
 
 parked_work:
   - .agents/roles/software_architect/docs/parked_work/PARKED_WORK.md
@@ -24,7 +24,9 @@ rfis:
   - .agents/communication/rfi/RFI002rfc007browserverificationgap.md
   - .agents/communication/rfi/RFIresponserfc007browserverificationconfirmed.md
   - .agents/communication/rfi/RFIresponserfc006browserverificationconfirmed.md
+  - .agents/communication/rfi/RFIresponserfi002wasm32verificationgap.md
 
 adrs: []
 
-notifications: []
+notifications:
+  - .agents/communication/notifications/notification_wasm32_target_and_npm_registry_blocked.md (open, owner: management)
